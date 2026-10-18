@@ -1,4 +1,4 @@
-/* Seidr v1.0.4 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Seidr v1.0.5 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.4";
+  Seidr.VERSION = "1.0.5";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1642,31 +1642,46 @@
     if (cluster.hub === character.MemberNumber) return 1;
     return 0;
   }
-  function seidrHoldFrontDraw(bucket, args) {
+  function seidrHoldFrontCharacter(args) {
     if (!seidrInRoomLoop || !seidrFrontCapture) return false;
     var rank = seidrFrontRank(args[0]);
     if (!rank) return false;
-    seidrFrontCapture[bucket].push({ rank, args: Array.prototype.slice.call(args) });
+    seidrFrontCapture.characters.push({ rank, args: Array.prototype.slice.call(args) });
     return true;
   }
   function seidrReplayFront(captured) {
-    if (!captured) return;
-    function replay(list, fn) {
-      if (!fn || !list || !list.length) return;
-      list.sort(function(a, b) {
-        return a.rank - b.rank;
-      });
-      for (var i = 0; i < list.length; i++) {
-        try {
-          fn.apply(null, list[i].args);
-        } catch (e) {
-          console.warn("[Seidr] front draw", e);
-        }
+    if (!captured || !captured.characters || !captured.characters.length) return;
+    var fn = typeof DrawCharacter === "function" ? DrawCharacter : null;
+    if (!fn) return;
+    var list = captured.characters.slice().sort(function(a, b) {
+      return a.rank - b.rank;
+    });
+    for (var i = 0; i < list.length; i++) {
+      try {
+        fn.apply(null, list[i].args);
+      } catch (e) {
+        console.warn("[Seidr] front draw", e);
       }
     }
-    replay(captured.characters, typeof DrawCharacter === "function" ? DrawCharacter : null);
-    replay(captured.status, typeof DrawStatus === "function" ? DrawStatus : null);
-    replay(captured.overlays, typeof ChatRoomCharacterViewDrawOverlay === "function" ? ChatRoomCharacterViewDrawOverlay : null);
+  }
+  function seidrStatusCoords(character, x, y, zoom) {
+    if (!character || typeof character.MemberNumber !== "number") return null;
+    if (!seidrInCluster(character)) return null;
+    var nat = seidrNatural[character.MemberNumber];
+    if (!nat || typeof nat.X !== "number" || typeof nat.Y !== "number") return null;
+    return {
+      X: nat.X,
+      Y: nat.Y,
+      Zoom: typeof nat.Zoom === "number" ? nat.Zoom : zoom
+    };
+  }
+  function seidrApplyStatusNatural(args) {
+    var coords = seidrStatusCoords(args[0], args[1], args[2], args[3]);
+    if (!coords) return args;
+    args[1] = coords.X;
+    args[2] = coords.Y;
+    args[3] = coords.Zoom;
+    return args;
   }
   var seidrSuppressArousalMember = null;
   Seidr.installDraw = function() {
@@ -1685,18 +1700,16 @@
     });
     Seidr.hookFunction("DrawCharacter", 1, function(args, next) {
       if (!seidrInRoomLoop) return next(args);
-      if (seidrHoldFrontDraw("characters", args)) return;
+      if (seidrHoldFrontCharacter(args)) return;
       return next(args);
     });
     Seidr.hookFunction("DrawStatus", 1, function(args, next) {
       if (!seidrInRoomLoop) return next(args);
-      if (seidrHoldFrontDraw("status", args)) return;
-      return next(args);
+      return next(seidrApplyStatusNatural(args));
     });
     Seidr.hookFunction("ChatRoomCharacterViewDrawOverlay", 1, function(args, next) {
       if (!seidrInRoomLoop) return next(args);
-      if (seidrHoldFrontDraw("overlays", args)) return;
-      return next(args);
+      return next(seidrApplyStatusNatural(args));
     });
     Seidr.hookFunction("ChatRoomCharacterViewLoopCharacters", 5, function(args, next) {
       if (!seidrViewActive()) return next(args);
@@ -1727,7 +1740,7 @@
       };
       var previous = seidrFrontCapture;
       var previousLoop = seidrInRoomLoop;
-      seidrFrontCapture = { characters: [], status: [], overlays: [] };
+      seidrFrontCapture = { characters: [] };
       seidrInRoomLoop = true;
       var result;
       try {
@@ -1766,6 +1779,7 @@
     natural: seidrNatural,
     sharedCenter: seidrSharedCenter,
     drawPose: seidrDrawPose,
+    statusCoords: seidrStatusCoords,
     clusterOrder: seidrClusterOrder,
     reorder: seidrReorderDrawlist
   };

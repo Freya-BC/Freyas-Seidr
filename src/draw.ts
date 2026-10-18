@@ -156,9 +156,10 @@ function seidrDrawPose(character, x, y, zoom) {
 }
 
 /**
- * Pose is applied once in ChatRoomCharacterViewLoopCharacters (FAM-style) so
- * DrawCharacter (name/arousal), DrawStatus, and DrawOverlay (BCX/WCE) share CharX/Y.
- * Outside that loop (action dialog portrait, etc.) seats stay natural.
+ * Pose is applied once in ChatRoomCharacterViewLoopCharacters so DrawCharacter
+ * (name/arousal) and hitboxes use pulled seats. Echo offsets only DrawCharacter —
+ * DrawStatus / DrawOverlay (WCE, mod icons) stay at natural seats so later
+ * background redraws do not wipe them. Outside the room loop, args stay as-is.
  */
 var seidrInRoomLoop = false;
 var seidrFrontCapture = null;
@@ -173,31 +174,52 @@ function seidrFrontRank(character) {
 	return 0;
 }
 
-/** Capture already-posed args for hub/cuddle z-order; do not re-offset. */
-function seidrHoldFrontDraw(bucket, args) {
+/** Capture already-posed DrawCharacter args for hub/cuddle z-order. */
+function seidrHoldFrontCharacter(args) {
 	if (!seidrInRoomLoop || !seidrFrontCapture) return false;
 	var rank = seidrFrontRank(args[0]);
 	if (!rank) return false;
-	seidrFrontCapture[bucket].push({ rank: rank, args: Array.prototype.slice.call(args) });
+	seidrFrontCapture.characters.push({ rank: rank, args: Array.prototype.slice.call(args) });
 	return true;
 }
 
 function seidrReplayFront(captured) {
-	if (!captured) return;
-	function replay(list, fn) {
-		if (!fn || !list || !list.length) return;
-		list.sort(function (a, b) { return a.rank - b.rank; });
-		for (var i = 0; i < list.length; i++) {
-			try {
-				fn.apply(null, list[i].args);
-			} catch (e) {
-				console.warn("[Seidr] front draw", e);
-			}
+	if (!captured || !captured.characters || !captured.characters.length) return;
+	var fn = typeof DrawCharacter === "function" ? DrawCharacter : null;
+	if (!fn) return;
+	var list = captured.characters.slice().sort(function (a, b) { return a.rank - b.rank; });
+	for (var i = 0; i < list.length; i++) {
+		try {
+			fn.apply(null, list[i].args);
+		} catch (e) {
+			console.warn("[Seidr] front draw", e);
 		}
 	}
-	replay(captured.characters, typeof DrawCharacter === "function" ? DrawCharacter : null);
-	replay(captured.status, typeof DrawStatus === "function" ? DrawStatus : null);
-	replay(captured.overlays, typeof ChatRoomCharacterViewDrawOverlay === "function" ? ChatRoomCharacterViewDrawOverlay : null);
+}
+
+/**
+ * Echo parity: status / mod overlay coords use the natural seat, not the pull pose.
+ * Returns null when the character is not clustered or natural seat is unknown.
+ */
+function seidrStatusCoords(character, x, y, zoom) {
+	if (!character || typeof character.MemberNumber !== "number") return null;
+	if (!seidrInCluster(character)) return null;
+	var nat = seidrNatural[character.MemberNumber];
+	if (!nat || typeof nat.X !== "number" || typeof nat.Y !== "number") return null;
+	return {
+		X: nat.X,
+		Y: nat.Y,
+		Zoom: typeof nat.Zoom === "number" ? nat.Zoom : zoom,
+	};
+}
+
+function seidrApplyStatusNatural(args) {
+	var coords = seidrStatusCoords(args[0], args[1], args[2], args[3]);
+	if (!coords) return args;
+	args[1] = coords.X;
+	args[2] = coords.Y;
+	args[3] = coords.Zoom;
+	return args;
 }
 
 /** MemberNumber whose arousal meter click should be suppressed (clustered holds). */
@@ -213,18 +235,16 @@ Seidr.installDraw = function () {
 
 	Seidr.hookFunction("DrawCharacter", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
-		if (seidrHoldFrontDraw("characters", args)) return;
+		if (seidrHoldFrontCharacter(args)) return;
 		return next(args);
 	});
 	Seidr.hookFunction("DrawStatus", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
-		if (seidrHoldFrontDraw("status", args)) return;
-		return next(args);
+		return next(seidrApplyStatusNatural(args));
 	});
 	Seidr.hookFunction("ChatRoomCharacterViewDrawOverlay", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
-		if (seidrHoldFrontDraw("overlays", args)) return;
-		return next(args);
+		return next(seidrApplyStatusNatural(args));
 	});
 
 	Seidr.hookFunction("ChatRoomCharacterViewLoopCharacters", 5, function (args, next) {
@@ -239,7 +259,7 @@ Seidr.installDraw = function () {
 				var list = ChatRoomCharacterDrawlist;
 				var character = list && list[charIdx];
 				if (character && typeof character.MemberNumber === "number") {
-					// Natural seats for hitboxes / shared center; pose for every UI draw.
+					// Natural seats for status/mod icons + shared center; pose for art/hitboxes.
 					seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom };
 					var pose = seidrDrawPose(character, charX, charY, zoom);
 					if (pose) {
@@ -253,7 +273,7 @@ Seidr.installDraw = function () {
 		};
 		var previous = seidrFrontCapture;
 		var previousLoop = seidrInRoomLoop;
-		seidrFrontCapture = { characters: [], status: [], overlays: [] };
+		seidrFrontCapture = { characters: [] };
 		seidrInRoomLoop = true;
 		var result;
 		try {
@@ -297,6 +317,7 @@ Seidr._draw = {
 	natural: seidrNatural,
 	sharedCenter: seidrSharedCenter,
 	drawPose: seidrDrawPose,
+	statusCoords: seidrStatusCoords,
 	clusterOrder: seidrClusterOrder,
 	reorder: seidrReorderDrawlist,
 };
