@@ -1,0 +1,17 @@
+{
+	"id": "Seidr",
+	"icon": "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png",
+	"name": "Seidr",
+	"description": "Cuddle, Pull Left/Right, Leave, and undress clothing as Bondage Club activities, with L/R/C slot badges and Echo-aware poses.",
+	"author": "Freya",
+	"repository": "https://github.com/Freya-BC/Freyas-Seidr",
+	"website": "https://freya-bc.github.io/Freyas-Seidr/",
+	"tags": ["enhancements"],
+	"type": "script",
+	"versions": [
+		{
+			"distribution": "stable",
+			"source": "https://freya-bc.github.io/Freyas-Seidr/loader.js"
+		}
+	]
+}
