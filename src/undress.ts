@@ -404,13 +404,27 @@ function seidrUndressBuildChat(act, actor, acted, selfRun) {
 	return seidrUndressFillTemplate(template, clothing, possessive);
 }
 
+/** Write pronoun-correct dialog into ActivityDictionary so Club does not use stale "their". */
+function seidrUndressWriteDialogCache(act: any, selfRun: boolean, text: string) {
+	if (!act || !text || typeof ActivityDictionaryLoad !== "function") return;
+	try {
+		const cache = ActivityDictionaryLoad();
+		if (!cache || !cache.cache) return;
+		const zone = act.zone || "ItemTorso";
+		const key = (selfRun ? "ChatSelf-" : "ChatOther-") + zone + "-" + act.name;
+		cache.cache[key] = text;
+	} catch (e) { /* ignore */ }
+}
+
 function seidrUndressPrepareChat(actor, acted, act) {
 	if (!act || !act.undress) return;
 	var selfRun = !!(actor && acted && actor.MemberNumber === acted.MemberNumber);
+	var text = seidrUndressBuildChat(act, actor, acted, selfRun);
 	seidrPendingUndressChat = {
 		name: act.name,
-		text: seidrUndressBuildChat(act, actor, acted, selfRun),
+		text: text,
 	};
+	seidrUndressWriteDialogCache(act, selfRun, text);
 }
 
 function seidrUndressConsumePending(activityName) {
@@ -478,8 +492,10 @@ function seidrUndressWriteLabels(cache, character) {
 		var zone = act.zone;
 		cache.cache["Label-ChatOther-" + zone + "-" + act.name] = label;
 		cache.cache["Label-ChatSelf-" + zone + "-" + act.name] = label;
-		cache.cache["ChatOther-" + zone + "-" + act.name] = act.chat;
-		cache.cache["ChatSelf-" + zone + "-" + act.name] = act.chatSelf || act.chat;
+		// Do not cache ChatOther/ChatSelf dialog here — static chatSelf bakes "their".
+		// Pronoun-correct lines are written in seidrUndressPrepareChat at send time.
+		delete cache.cache["ChatOther-" + zone + "-" + act.name];
+		delete cache.cache["ChatSelf-" + zone + "-" + act.name];
 	});
 }
 

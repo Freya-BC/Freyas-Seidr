@@ -35,7 +35,3 @@ npm run build:gist     # same, then PATCH bookmark gist
 ```
 
 Requires Node 18+. Source is TypeScript (`src/`) with `bc-stubs`. Build bumps `Seidr.VERSION` (or `SEIDR_RELEASE=1` for `1.0.0`), emits userscript + IIFE + loader + bookmark.
-
-## BCX
-
-Hooks go through `bcModSdk` when present (see `src/core/sdk.ts`). Prefer loading with BCX so Club globals are never raw-wrapped.

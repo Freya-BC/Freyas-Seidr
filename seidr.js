@@ -1,4 +1,4 @@
-/* Seidr v1.0.3 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Seidr v1.0.4 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.3";
+  Seidr.VERSION = "1.0.4";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -774,13 +774,26 @@
     }
     return seidrUndressFillTemplate(template, clothing, possessive);
   }
+  function seidrUndressWriteDialogCache(act, selfRun, text) {
+    if (!act || !text || typeof ActivityDictionaryLoad !== "function") return;
+    try {
+      const cache = ActivityDictionaryLoad();
+      if (!cache || !cache.cache) return;
+      const zone = act.zone || "ItemTorso";
+      const key = (selfRun ? "ChatSelf-" : "ChatOther-") + zone + "-" + act.name;
+      cache.cache[key] = text;
+    } catch (e) {
+    }
+  }
   function seidrUndressPrepareChat(actor, acted, act) {
     if (!act || !act.undress) return;
     var selfRun = !!(actor && acted && actor.MemberNumber === acted.MemberNumber);
+    var text = seidrUndressBuildChat(act, actor, acted, selfRun);
     seidrPendingUndressChat = {
       name: act.name,
-      text: seidrUndressBuildChat(act, actor, acted, selfRun)
+      text
     };
+    seidrUndressWriteDialogCache(act, selfRun, text);
   }
   function seidrUndressConsumePending(activityName) {
     if (!seidrPendingUndressChat || seidrPendingUndressChat.name !== activityName) return "";
@@ -844,8 +857,8 @@
       var zone = act.zone;
       cache.cache["Label-ChatOther-" + zone + "-" + act.name] = label;
       cache.cache["Label-ChatSelf-" + zone + "-" + act.name] = label;
-      cache.cache["ChatOther-" + zone + "-" + act.name] = act.chat;
-      cache.cache["ChatSelf-" + zone + "-" + act.name] = act.chatSelf || act.chat;
+      delete cache.cache["ChatOther-" + zone + "-" + act.name];
+      delete cache.cache["ChatSelf-" + zone + "-" + act.name];
     });
   }
   function seidrUndressRefreshLabels() {
