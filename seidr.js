@@ -1,4 +1,4 @@
-/* Seidr v1.0.0 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Seidr v1.0.3 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.0";
+  Seidr.VERSION = "1.0.3";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -591,27 +591,38 @@
     }
     return false;
   }
+  function seidrPronounPossessiveFromKey(key) {
+    const raw = String(key || "").replace(/[\/_\-\s]/g, "");
+    if (!raw) return null;
+    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "her";
+    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "his";
+    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "their";
+    return null;
+  }
   function seidrPronounPossessive(character) {
+    if (!character) return "their";
     try {
-      if (typeof CharacterPronoun === "function") {
-        var p = CharacterPronoun(character, "Possessive", false);
-        if (p) return String(p).trim().toLowerCase();
-      }
-      if (character && typeof character.GetPronouns === "function") {
-        var key = String(character.GetPronouns() || "").replace(/[\/_\-\s]/g, "");
-        if (/^sheher$/i.test(key) || /^she$/i.test(key)) return "her";
-        if (/^hehim$/i.test(key) || /^he$/i.test(key)) return "his";
-        if (/^theythem$/i.test(key) || /^they$/i.test(key)) return "their";
-      }
-      if (typeof InventoryGet === "function" && character) {
-        var item = InventoryGet(character, "Pronouns");
-        var name = item && item.Asset && item.Asset.Name;
-        var raw = String(name || "").replace(/[\/_\-\s]/g, "");
-        if (/^sheher$/i.test(raw)) return "her";
-        if (/^hehim$/i.test(raw)) return "his";
-        if (/^theythem$/i.test(raw)) return "their";
+      if (typeof character.GetPronouns === "function") {
+        const mapped = seidrPronounPossessiveFromKey(character.GetPronouns());
+        if (mapped) return mapped;
       }
     } catch (e) {
+    }
+    try {
+      if (typeof InventoryGet === "function") {
+        const item = InventoryGet(character, "Pronouns");
+        const name = item && item.Asset && item.Asset.Name;
+        const mapped = seidrPronounPossessiveFromKey(name);
+        if (mapped) return mapped;
+      }
+    } catch (e2) {
+    }
+    try {
+      if (typeof CharacterPronoun === "function") {
+        const p = String(CharacterPronoun(character, "Possessive", false) || "").trim().toLowerCase();
+        if (p === "her" || p === "his" || p === "their") return p;
+      }
+    } catch (e3) {
     }
     return "their";
   }
@@ -859,6 +870,7 @@
   Seidr.undressConsumePending = seidrUndressConsumePending;
   Seidr.undressBuildChat = seidrUndressBuildChat;
   Seidr.undressFillTemplate = seidrUndressFillTemplate;
+  Seidr.undressPronounPossessive = seidrPronounPossessive;
   Seidr.undressStrip = seidrUndressStrip;
   Seidr.undressStripDeferred = seidrUndressStripDeferred;
   Seidr.undressWriteLabels = seidrUndressWriteLabels;
