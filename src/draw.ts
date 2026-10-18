@@ -155,17 +155,10 @@ function seidrDrawPose(character, x, y, zoom) {
 	return null;
 }
 
-function seidrApplyDrawOffset(args) {
-	var pose = seidrDrawPose(args[0], args[1], args[2], args[3]);
-	if (!pose) return;
-	args[1] = pose.X;
-	args[2] = pose.Y;
-	args[3] = pose.Zoom;
-}
-
 /**
- * Echo only offsets DrawCharacter inside ChatRoomCharacterViewLoopCharacters.
- * Outside that loop (action dialog portrait, etc.) the body stays at its normal seat.
+ * Pose is applied once in ChatRoomCharacterViewLoopCharacters (FAM-style) so
+ * DrawCharacter (name/arousal), DrawStatus, and DrawOverlay (BCX/WCE) share CharX/Y.
+ * Outside that loop (action dialog portrait, etc.) seats stay natural.
  */
 var seidrInRoomLoop = false;
 var seidrFrontCapture = null;
@@ -180,11 +173,11 @@ function seidrFrontRank(character) {
 	return 0;
 }
 
+/** Capture already-posed args for hub/cuddle z-order; do not re-offset. */
 function seidrHoldFrontDraw(bucket, args) {
 	if (!seidrInRoomLoop || !seidrFrontCapture) return false;
 	var rank = seidrFrontRank(args[0]);
 	if (!rank) return false;
-	seidrApplyDrawOffset(args);
 	seidrFrontCapture[bucket].push({ rank: rank, args: Array.prototype.slice.call(args) });
 	return true;
 }
@@ -221,19 +214,16 @@ Seidr.installDraw = function () {
 	Seidr.hookFunction("DrawCharacter", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
 		if (seidrHoldFrontDraw("characters", args)) return;
-		seidrApplyDrawOffset(args);
 		return next(args);
 	});
 	Seidr.hookFunction("DrawStatus", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
 		if (seidrHoldFrontDraw("status", args)) return;
-		seidrApplyDrawOffset(args);
 		return next(args);
 	});
 	Seidr.hookFunction("ChatRoomCharacterViewDrawOverlay", 1, function (args, next) {
 		if (!seidrInRoomLoop) return next(args);
 		if (seidrHoldFrontDraw("overlays", args)) return;
-		seidrApplyDrawOffset(args);
 		return next(args);
 	});
 
@@ -242,14 +232,24 @@ Seidr.installDraw = function () {
 		try { seidrReorderDrawlist(); } catch (e) { /* ignore */ }
 		var original = args[0];
 		args[0] = function (charIdx, charX, charY, space, zoom) {
+			var drawX = charX;
+			var drawY = charY;
+			var drawZoom = zoom;
 			try {
 				var list = ChatRoomCharacterDrawlist;
 				var character = list && list[charIdx];
 				if (character && typeof character.MemberNumber === "number") {
+					// Natural seats for hitboxes / shared center; pose for every UI draw.
 					seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom };
+					var pose = seidrDrawPose(character, charX, charY, zoom);
+					if (pose) {
+						drawX = pose.X;
+						drawY = pose.Y;
+						drawZoom = pose.Zoom;
+					}
 				}
 			} catch (e) { /* ignore */ }
-			return original(charIdx, charX, charY, space, zoom);
+			return original(charIdx, drawX, drawY, space, drawZoom);
 		};
 		var previous = seidrFrontCapture;
 		var previousLoop = seidrInRoomLoop;
