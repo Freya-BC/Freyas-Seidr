@@ -47,8 +47,7 @@ export function rmChatAdminDrawButton() {
 	if (!rmChatAdminBtnAllowed()) return;
 	if (typeof DrawButton !== "function") return;
 	const r = getEntryButtonRect();
-	const icon = Seidr.LOGO_URL || "Icons/Preference.png";
-	DrawButton(r.x, r.y, r.w, r.h, "", "White", icon);
+	DrawButton(r.x, r.y, r.w, r.h, "", "White", "Icons/Preference.png");
 	try {
 		if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h)
 			&& typeof DrawButtonHover === "function") {

@@ -1,4 +1,4 @@
-/* Seidr v1.0.16 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.17 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.16";
+  Seidr.VERSION = "1.0.17";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3491,8 +3491,7 @@
     if (!rmChatAdminBtnAllowed()) return;
     if (typeof DrawButton !== "function") return;
     const r = getEntryButtonRect();
-    const icon = Seidr.LOGO_URL || "Icons/Preference.png";
-    DrawButton(r.x, r.y, r.w, r.h, "", "White", icon);
+    DrawButton(r.x, r.y, r.w, r.h, "", "White", "Icons/Preference.png");
     try {
       if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h) && typeof DrawButtonHover === "function") {
         DrawButtonHover(r.x, r.y, r.w, r.h, "Room Manager");
