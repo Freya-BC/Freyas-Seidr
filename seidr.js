@@ -1,4 +1,4 @@
-/* Seidr v1.0.5 — page-context IIFE. Bookmark gist / FUSAM sibling. */
+/* Seidr v1.0.6 — page-context IIFE. Bookmark gist / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.5";
+  Seidr.VERSION = "1.0.6";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1633,6 +1633,14 @@
   }
   var seidrInRoomLoop = false;
   var seidrFrontCapture = null;
+  function seidrApplyDrawPose(args) {
+    var pose = seidrDrawPose(args[0], args[1], args[2], args[3]);
+    if (!pose) return args;
+    args[1] = pose.X;
+    args[2] = pose.Y;
+    args[3] = pose.Zoom;
+    return args;
+  }
   function seidrFrontRank(character) {
     if (!character || typeof character.MemberNumber !== "number") return 0;
     if (seidrInEcho(character)) return 0;
@@ -1700,6 +1708,7 @@
     });
     Seidr.hookFunction("DrawCharacter", 1, function(args, next) {
       if (!seidrInRoomLoop) return next(args);
+      seidrApplyDrawPose(args);
       if (seidrHoldFrontCharacter(args)) return;
       return next(args);
     });
@@ -1719,24 +1728,15 @@
       }
       var original = args[0];
       args[0] = function(charIdx, charX, charY, space, zoom) {
-        var drawX = charX;
-        var drawY = charY;
-        var drawZoom = zoom;
         try {
           var list = ChatRoomCharacterDrawlist;
           var character = list && list[charIdx];
           if (character && typeof character.MemberNumber === "number") {
             seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom };
-            var pose = seidrDrawPose(character, charX, charY, zoom);
-            if (pose) {
-              drawX = pose.X;
-              drawY = pose.Y;
-              drawZoom = pose.Zoom;
-            }
           }
         } catch (e) {
         }
-        return original(charIdx, drawX, drawY, space, drawZoom);
+        return original(charIdx, charX, charY, space, zoom);
       };
       var previous = seidrFrontCapture;
       var previousLoop = seidrInRoomLoop;
