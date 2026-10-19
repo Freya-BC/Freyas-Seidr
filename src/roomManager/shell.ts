@@ -2,7 +2,7 @@
 import { Seidr } from "../seidr";
 import { rmInjectStyles } from "./styles";
 import { rmGetStore, rmSaveStore } from "./storage";
-import { rmIsAdmin, rmInLiveRoom, rmOnChatAdmin } from "./roomApply";
+import { rmIsAdmin } from "./roomApply";
 import { rmRefreshUi, rmBuildPanelBody } from "./ui";
 import { seidrGetSettings } from "../settings/storage";
 import type { RmLauncherPosition } from "../settings/model";
@@ -112,14 +112,6 @@ function makeDraggable(el: HTMLElement, onEnd?: () => void) {
 	el.addEventListener("pointercancel", up);
 }
 
-function rmChatAdminCreateMode(): boolean {
-	try {
-		const mode = (window as any).ChatAdminMode;
-		if (mode === "create" || mode === "Create") return true;
-	} catch (e) { /* ignore */ }
-	return rmOnChatAdmin() && !rmInLiveRoom();
-}
-
 function setBtnXY(x: number, y: number) {
 	if (!btn) return;
 	const maxX = Math.max(8, window.innerWidth - BTN - 8);
@@ -173,27 +165,16 @@ function placeBtnDefault() {
 		setBtnXY(sessionBtnPos.x, sessionBtnPos.y);
 		return;
 	}
-	if (rmOnChatAdmin()) {
-		const save = document.querySelector("#ChatAdmin button, button[name='Save']");
-		// Prefer left of InputName / Save region
-		const name = document.getElementById("InputName");
-		const anchor = name || (save as HTMLElement | null);
-		const create = rmChatAdminCreateMode();
-		if (anchor) {
-			const r = anchor.getBoundingClientRect();
-			const preferredTop = create
-				? Math.min(r.top, window.innerHeight * 0.28)
-				: r.top;
-			setBtnXY(r.left - BTN - 8, preferredTop);
-			return;
-		}
-		if (create) {
-			setBtnXY(window.innerWidth - BTN - PAD, window.innerHeight * 0.28);
-			return;
-		}
-	}
 	const settings = seidrGetSettings();
 	applyLauncherPosition(settings.launcherPosition || "chatTop");
+}
+
+function rmOnChatRoomScreen(): boolean {
+	try {
+		return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatRoom";
+	} catch (e) {
+		return false;
+	}
 }
 
 export function rmClearSessionBtnPos() {
@@ -338,16 +319,15 @@ export function rmUpdateLauncherVisibility() {
 	const enabled = seidrGetSettings().roomManagerEnabled !== false;
 	if (!Seidr.SHOW_ROOM_MANAGER || !enabled) {
 		if (btn) btn.classList.remove("seidr-rm-visible");
-		rmClosePanel();
 		return;
 	}
 	rmEnsureShell();
-	const show = rmIsAdmin() || rmOnChatAdmin();
+	// Floating ⌂ only in normal chat view (not Preference / ChatAdmin / etc.).
+	const show = rmOnChatRoomScreen() && rmIsAdmin();
 	if (btn) {
 		btn.classList.toggle("seidr-rm-visible", show);
 		if (show) placeBtnDefault();
 	}
-	if (!show) rmClosePanel();
 }
 
 export function rmOpenPanel() {

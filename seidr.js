@@ -1,4 +1,4 @@
-/* Seidr v1.0.14 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.15 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.14";
+  Seidr.VERSION = "1.0.15";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3209,14 +3209,6 @@
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
   }
-  function rmChatAdminCreateMode() {
-    try {
-      const mode = window.ChatAdminMode;
-      if (mode === "create" || mode === "Create") return true;
-    } catch (e) {
-    }
-    return rmOnChatAdmin() && !rmInLiveRoom();
-  }
   function setBtnXY(x, y) {
     if (!btn) return;
     const maxX = Math.max(8, window.innerWidth - BTN - 8);
@@ -3278,24 +3270,15 @@
       setBtnXY(sessionBtnPos.x, sessionBtnPos.y);
       return;
     }
-    if (rmOnChatAdmin()) {
-      const save = document.querySelector("#ChatAdmin button, button[name='Save']");
-      const name = document.getElementById("InputName");
-      const anchor = name || save;
-      const create = rmChatAdminCreateMode();
-      if (anchor) {
-        const r = anchor.getBoundingClientRect();
-        const preferredTop = create ? Math.min(r.top, window.innerHeight * 0.28) : r.top;
-        setBtnXY(r.left - BTN - 8, preferredTop);
-        return;
-      }
-      if (create) {
-        setBtnXY(window.innerWidth - BTN - PAD, window.innerHeight * 0.28);
-        return;
-      }
-    }
     const settings = seidrGetSettings();
     applyLauncherPosition(settings.launcherPosition || "chatTop");
+  }
+  function rmOnChatRoomScreen() {
+    try {
+      return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatRoom";
+    } catch (e) {
+      return false;
+    }
   }
   function rmClearSessionBtnPos() {
     sessionBtnPos = null;
@@ -3423,16 +3406,14 @@
     const enabled = seidrGetSettings().roomManagerEnabled !== false;
     if (!Seidr.SHOW_ROOM_MANAGER || !enabled) {
       if (btn) btn.classList.remove("seidr-rm-visible");
-      rmClosePanel();
       return;
     }
     rmEnsureShell();
-    const show = rmIsAdmin() || rmOnChatAdmin();
+    const show = rmOnChatRoomScreen() && rmIsAdmin();
     if (btn) {
       btn.classList.toggle("seidr-rm-visible", show);
       if (show) placeBtnDefault();
     }
-    if (!show) rmClosePanel();
   }
   function rmOpenPanel() {
     rmEnsureShell();
@@ -3472,6 +3453,46 @@
   Seidr.rmClearSessionBtnPos = rmClearSessionBtnPos;
   Seidr.rmEnterLiveRoomPlacement = rmEnterLiveRoomPlacement;
 
+  // src/roomManager/chatAdminBtn.ts
+  var BTN_X = 1065;
+  var BTN_Y = 840;
+  var BTN_W = 250;
+  var BTN_H = 65;
+  function rmChatAdminBtnAllowed() {
+    if (!rmIsShown()) return false;
+    if (seidrGetSettings().roomManagerEnabled === false) return false;
+    try {
+      if (typeof ChatAdminPreviewBackgroundMode !== "undefined" && ChatAdminPreviewBackgroundMode) {
+        return false;
+      }
+    } catch (e) {
+    }
+    try {
+      if (!ChatAdminData || !ChatAdminBackgroundList) return false;
+    } catch (e) {
+      return false;
+    }
+    return true;
+  }
+  function rmChatAdminDrawButton() {
+    if (!rmChatAdminBtnAllowed()) return;
+    if (typeof DrawButton !== "function") return;
+    DrawButton(BTN_X, BTN_Y, BTN_W, BTN_H, "Room Manager", "White");
+  }
+  function rmChatAdminClickButton() {
+    if (!rmChatAdminBtnAllowed()) return false;
+    try {
+      if (typeof MouseIn === "function" && MouseIn(BTN_X, BTN_Y, BTN_W, BTN_H)) {
+        rmOpenPanel();
+        return true;
+      }
+    } catch (e) {
+    }
+    return false;
+  }
+  Seidr.rmChatAdminDrawButton = rmChatAdminDrawButton;
+  Seidr.rmChatAdminClickButton = rmChatAdminClickButton;
+
   // src/roomManager/index.ts
   var installed = false;
   var tick = null;
@@ -3491,10 +3512,21 @@
     Seidr.tryHook("ChatAdminRun", "ChatAdminRun", 12, function(args, next) {
       const ret = next(args);
       try {
+        rmChatAdminDrawButton();
+      } catch (e) {
+      }
+      try {
         rmUpdateLauncherVisibility();
       } catch (e) {
       }
       return ret;
+    });
+    Seidr.tryHook("ChatAdminClick", "ChatAdminClick", 20, function(args, next) {
+      try {
+        if (rmChatAdminClickButton()) return;
+      } catch (e) {
+      }
+      return next(args);
     });
     Seidr.tryHook("ChatAdminExit", "ChatAdminExit", 0, function(args, next) {
       try {
