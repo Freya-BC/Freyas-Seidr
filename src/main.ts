@@ -9,6 +9,8 @@ import "./core/sdk";
 import "./activities";
 import "./draw";
 import "./net";
+import "./roomManager/index";
+import "./settings/index";
 
 const session = (window.__SeidrSession = window.__SeidrSession || { hubs: {} });
 
@@ -26,7 +28,11 @@ Seidr.prepareReload = function () {
 	}
 	Seidr._booted = false;
 	Seidr._hookState = {};
-	["seidr-styles", "seidr-loaded"].forEach(function (id) {
+	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles"].forEach(function (id) {
+		const node = document.getElementById(id);
+		if (node && node.parentNode) node.parentNode.removeChild(node);
+	});
+	["seidr-rm-root", "seidr-settings-root"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
@@ -88,12 +94,23 @@ function installHooks() {
 	Seidr.installActivities();
 	Seidr.installDraw();
 	Seidr.installNet();
+	if (typeof Seidr.installRoomManager === "function") {
+		try { Seidr.installRoomManager(); } catch (e) { console.warn("[Seidr] Room Manager", e); }
+	}
+	if (typeof Seidr.installSeidrSettings === "function") {
+		try { Seidr.installSeidrSettings(); } catch (e) { console.warn("[Seidr] Settings", e); }
+	}
+}
+
+function ready(): boolean {
+	return typeof Player !== "undefined" && !!Player && Player.MemberNumber != null
+		&& typeof ActivityFemale3DCG !== "undefined"
+		&& typeof PreferenceRegisterExtensionSetting === "function";
 }
 
 function boot() {
 	if (Seidr._booted) return;
-	if (typeof Player === "undefined" || !Player || Player.MemberNumber == null) return;
-	if (typeof ActivityFemale3DCG === "undefined") return;
+	if (!ready()) return;
 	Seidr._booted = true;
 	injectStyle();
 	installHooks();
@@ -105,7 +122,7 @@ function boot() {
 }
 
 function wait() {
-	if (typeof Player !== "undefined" && Player && Player.MemberNumber != null && typeof ActivityFemale3DCG !== "undefined") {
+	if (ready()) {
 		boot();
 		return;
 	}

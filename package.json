@@ -1,13 +1,14 @@
 {
 	"name": "seidr",
-	"version": "1.0.6",
+	"version": "1.0.13",
 	"private": true,
 	"description": "Bondage Club cuddle / pull / undress activities \u2014 Seidr",
 	"scripts": {
 		"typecheck": "tsc --noEmit",
 		"bundle": "node tools/esbuild.mjs",
 		"build": "npm run typecheck && SEIDR_SKIP_GIST=1 python3 tools/build-userscript.py",
-		"build:gist": "npm run typecheck && python3 tools/build-userscript.py",
+		"publish:dev": "npm run typecheck && python3 tools/build-userscript.py",
+		"publish:release": "npm run typecheck && python3 tools/publish-release.py",
 		"test": "npm run bundle && node --test tests/*.test.js"
 	},
 	"devDependencies": {
