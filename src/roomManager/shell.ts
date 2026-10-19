@@ -200,7 +200,50 @@ export function rmClearSessionBtnPos() {
 	sessionBtnPos = null;
 }
 
+let enterPlaceTimers: ReturnType<typeof setTimeout>[] = [];
+
+function clearEnterPlaceTimers() {
+	enterPlaceTimers.forEach(function (t) { clearTimeout(t); });
+	enterPlaceTimers = [];
+}
+
+function isChatAnchorPos(pos: string): boolean {
+	return pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom";
+}
+
+function chatLogReady(): boolean {
+	const r = chatLogRect();
+	return !!(r && r.width > 40);
+}
+
+/** After ChatAdmin → live room: apply settings position; retry Chat* until chat DOM exists. */
+export function rmEnterLiveRoomPlacement() {
+	clearEnterPlaceTimers();
+	rmClearSessionBtnPos();
+	rmEnsureShell();
+	rmUpdateLauncherVisibility();
+	placeBtnDefault();
+
+	const pos = seidrGetSettings().launcherPosition || "chatTop";
+	if (!isChatAnchorPos(pos) || chatLogReady()) return;
+
+	const delays = [100, 300, 800];
+	delays.forEach(function (ms, i) {
+		enterPlaceTimers.push(setTimeout(function () {
+			if (sessionBtnPos) {
+				clearEnterPlaceTimers();
+				return;
+			}
+			const last = i === delays.length - 1;
+			if (!chatLogReady() && !last) return;
+			placeBtnDefault();
+			if (chatLogReady() || last) clearEnterPlaceTimers();
+		}, ms));
+	});
+}
+
 export function rmOnSettingsChanged() {
+	clearEnterPlaceTimers();
 	rmClearSessionBtnPos();
 	rmUpdateLauncherVisibility();
 }
@@ -342,3 +385,4 @@ Seidr.rmOpenPanel = rmOpenPanel;
 Seidr.rmClosePanel = rmClosePanel;
 Seidr.rmOnSettingsChanged = rmOnSettingsChanged;
 Seidr.rmClearSessionBtnPos = rmClearSessionBtnPos;
+Seidr.rmEnterLiveRoomPlacement = rmEnterLiveRoomPlacement;

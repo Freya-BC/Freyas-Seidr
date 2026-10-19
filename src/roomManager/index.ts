@@ -2,7 +2,7 @@
 import { Seidr } from "../seidr";
 import { rmIsShown } from "./model";
 import { rmInvalidateStore } from "./storage";
-import { rmEnsureShell, rmUpdateLauncherVisibility, rmDestroyShell, rmClosePanel } from "./shell";
+import { rmEnsureShell, rmUpdateLauncherVisibility, rmDestroyShell, rmClosePanel, rmEnterLiveRoomPlacement } from "./shell";
 
 let installed = false;
 let tick: ReturnType<typeof setInterval> | null = null;
@@ -30,12 +30,12 @@ export function rmInstall() {
 	Seidr.tryHook("ChatAdminExit", "ChatAdminExit", 0, function (args, next) {
 		try { rmClosePanel(); } catch (e) { /* ignore */ }
 		const ret = next(args);
-		try { rmUpdateLauncherVisibility(); } catch (e) { /* ignore */ }
+		try { rmEnterLiveRoomPlacement(); } catch (e) { /* ignore */ }
 		return ret;
 	});
 	Seidr.tryHook("ChatRoomLoad", "ChatRoomLoad", 5, function (args, next) {
 		const ret = next(args);
-		try { rmUpdateLauncherVisibility(); } catch (e) { /* ignore */ }
+		try { rmEnterLiveRoomPlacement(); } catch (e) { /* ignore */ }
 		return ret;
 	});
 	Seidr.tryHook("ChatRoomSync", "ChatRoomSync", 0, function (args, next) {

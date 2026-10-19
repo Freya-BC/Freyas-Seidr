@@ -1,4 +1,4 @@
-/* Seidr v1.0.13 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.14 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.13";
+  Seidr.VERSION = "1.0.14";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3300,7 +3300,44 @@
   function rmClearSessionBtnPos() {
     sessionBtnPos = null;
   }
+  var enterPlaceTimers = [];
+  function clearEnterPlaceTimers() {
+    enterPlaceTimers.forEach(function(t) {
+      clearTimeout(t);
+    });
+    enterPlaceTimers = [];
+  }
+  function isChatAnchorPos(pos) {
+    return pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom";
+  }
+  function chatLogReady() {
+    const r = chatLogRect();
+    return !!(r && r.width > 40);
+  }
+  function rmEnterLiveRoomPlacement() {
+    clearEnterPlaceTimers();
+    rmClearSessionBtnPos();
+    rmEnsureShell();
+    rmUpdateLauncherVisibility();
+    placeBtnDefault();
+    const pos = seidrGetSettings().launcherPosition || "chatTop";
+    if (!isChatAnchorPos(pos) || chatLogReady()) return;
+    const delays = [100, 300, 800];
+    delays.forEach(function(ms, i) {
+      enterPlaceTimers.push(setTimeout(function() {
+        if (sessionBtnPos) {
+          clearEnterPlaceTimers();
+          return;
+        }
+        const last = i === delays.length - 1;
+        if (!chatLogReady() && !last) return;
+        placeBtnDefault();
+        if (chatLogReady() || last) clearEnterPlaceTimers();
+      }, ms));
+    });
+  }
   function rmOnSettingsChanged() {
+    clearEnterPlaceTimers();
     rmClearSessionBtnPos();
     rmUpdateLauncherVisibility();
   }
@@ -3433,6 +3470,7 @@
   Seidr.rmClosePanel = rmClosePanel;
   Seidr.rmOnSettingsChanged = rmOnSettingsChanged;
   Seidr.rmClearSessionBtnPos = rmClearSessionBtnPos;
+  Seidr.rmEnterLiveRoomPlacement = rmEnterLiveRoomPlacement;
 
   // src/roomManager/index.ts
   var installed = false;
@@ -3465,7 +3503,7 @@
       }
       const ret = next(args);
       try {
-        rmUpdateLauncherVisibility();
+        rmEnterLiveRoomPlacement();
       } catch (e) {
       }
       return ret;
@@ -3473,7 +3511,7 @@
     Seidr.tryHook("ChatRoomLoad", "ChatRoomLoad", 5, function(args, next) {
       const ret = next(args);
       try {
-        rmUpdateLauncherVisibility();
+        rmEnterLiveRoomPlacement();
       } catch (e) {
       }
       return ret;
