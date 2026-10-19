@@ -1,4 +1,4 @@
-/* Seidr v1.0.15 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.16 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.15";
+  Seidr.VERSION = "1.0.16";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3454,35 +3454,57 @@
   Seidr.rmEnterLiveRoomPlacement = rmEnterLiveRoomPlacement;
 
   // src/roomManager/chatAdminBtn.ts
-  var BTN_X = 1065;
-  var BTN_Y = 840;
-  var BTN_W = 250;
-  var BTN_H = 65;
-  function rmChatAdminBtnAllowed() {
-    if (!rmIsShown()) return false;
-    if (seidrGetSettings().roomManagerEnabled === false) return false;
+  function hasBcx() {
     try {
+      return typeof window.bcx !== "undefined" && window.bcx != null;
+    } catch (e) {
+      return false;
+    }
+  }
+  function getEntryButtonRect() {
+    const size = 64;
+    const y = 132 + Math.floor((90 - size) / 2);
+    if (hasBcx()) return { x: 222, y, w: size, h: size };
+    return { x: 124, y, w: size, h: size };
+  }
+  function nativeChatAdminVisible() {
+    try {
+      if (typeof CurrentScreen !== "undefined" && CurrentScreen !== "ChatAdmin") return false;
       if (typeof ChatAdminPreviewBackgroundMode !== "undefined" && ChatAdminPreviewBackgroundMode) {
         return false;
       }
     } catch (e) {
-    }
-    try {
-      if (!ChatAdminData || !ChatAdminBackgroundList) return false;
-    } catch (e) {
       return false;
     }
+    const el = document.getElementById("InputName");
+    if (!el) return false;
+    if (el.hasAttribute("hidden")) return false;
+    if (el.style && el.style.display === "none") return false;
     return true;
+  }
+  function rmChatAdminBtnAllowed() {
+    if (!rmIsShown()) return false;
+    if (seidrGetSettings().roomManagerEnabled === false) return false;
+    return nativeChatAdminVisible();
   }
   function rmChatAdminDrawButton() {
     if (!rmChatAdminBtnAllowed()) return;
     if (typeof DrawButton !== "function") return;
-    DrawButton(BTN_X, BTN_Y, BTN_W, BTN_H, "Room Manager", "White");
+    const r = getEntryButtonRect();
+    const icon = Seidr.LOGO_URL || "Icons/Preference.png";
+    DrawButton(r.x, r.y, r.w, r.h, "", "White", icon);
+    try {
+      if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h) && typeof DrawButtonHover === "function") {
+        DrawButtonHover(r.x, r.y, r.w, r.h, "Room Manager");
+      }
+    } catch (e) {
+    }
   }
   function rmChatAdminClickButton() {
     if (!rmChatAdminBtnAllowed()) return false;
     try {
-      if (typeof MouseIn === "function" && MouseIn(BTN_X, BTN_Y, BTN_W, BTN_H)) {
+      const r = getEntryButtonRect();
+      if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h)) {
         rmOpenPanel();
         return true;
       }
