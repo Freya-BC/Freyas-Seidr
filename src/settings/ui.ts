@@ -18,7 +18,11 @@ export function seidrBuildSettingsBody() {
 		'<div class="seidr-settings-row">',
 		'<label><input type="checkbox" id="seidr-set-rm-enabled" /> Activate Room Manager</label>',
 		"</div>",
-		'<p class="seidr-settings-hint">Shows or hides the Room Manager launcher when you are a room admin.</p>',
+		'<p class="seidr-settings-hint">Master switch for Room Manager (ChatAdmin button and floating quickmenu).</p>',
+		'<div class="seidr-settings-row">',
+		'<label><input type="checkbox" id="seidr-set-quickmenu" /> Show Quickmenu Button</label>',
+		"</div>",
+		'<p class="seidr-settings-hint">Floating ⌂ in the chat room. Off hides it completely. ChatAdmin Room Manager button is unaffected.</p>',
 		"</section>",
 		'<section class="seidr-settings-sec">',
 		"<h3>Launcher position</h3>",
@@ -33,22 +37,27 @@ export function seidrBuildSettingsBody() {
 export function seidrRefreshSettingsUi() {
 	const s = seidrGetSettings();
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
+	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	if (en) en.checked = !!s.roomManagerEnabled;
+	if (qm) qm.checked = s.showQuickmenuButton !== false;
 	if (pos) pos.value = s.launcherPosition;
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
+	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	function persist() {
 		const patch = {
 			roomManagerEnabled: !!(en && en.checked),
+			showQuickmenuButton: !!(qm && qm.checked),
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
 		};
 		seidrSaveSettings(patch);
 		if (onChange) onChange();
 	}
 	if (en) en.addEventListener("change", persist);
+	if (qm) qm.addEventListener("change", persist);
 	if (pos) pos.addEventListener("change", persist);
 }

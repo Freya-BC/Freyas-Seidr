@@ -13,6 +13,8 @@ export type RmLauncherPosition =
 
 export type SeidrSettings = {
 	roomManagerEnabled: boolean;
+	/** Floating ⌂ in ChatRoom; off hides it completely (ChatAdmin BC button unaffected). */
+	showQuickmenuButton: boolean;
 	launcherPosition: RmLauncherPosition;
 };
 
@@ -33,6 +35,7 @@ const POSITION_IDS: RmLauncherPosition[] = RM_LAUNCHER_POSITIONS.map(function (p
 export function seidrDefaultSettings(): SeidrSettings {
 	return {
 		roomManagerEnabled: true,
+		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
 	};
 }
@@ -42,6 +45,7 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	if (!raw || typeof raw !== "object") return base;
 	const d = raw as Partial<SeidrSettings>;
 	if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
+	if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
 	if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition as RmLauncherPosition) >= 0) {
 		base.launcherPosition = d.launcherPosition as RmLauncherPosition;
 	}

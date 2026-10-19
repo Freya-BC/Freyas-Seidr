@@ -177,6 +177,14 @@ function rmOnChatRoomScreen(): boolean {
 	}
 }
 
+function rmNoCharacterDialog(): boolean {
+	try {
+		return typeof CurrentCharacter === "undefined" || CurrentCharacter == null;
+	} catch (e) {
+		return true;
+	}
+}
+
 export function rmClearSessionBtnPos() {
 	sessionBtnPos = null;
 }
@@ -316,14 +324,16 @@ export function rmEnsureShell() {
 }
 
 export function rmUpdateLauncherVisibility() {
-	const enabled = seidrGetSettings().roomManagerEnabled !== false;
-	if (!Seidr.SHOW_ROOM_MANAGER || !enabled) {
+	const s = seidrGetSettings();
+	const enabled = s.roomManagerEnabled !== false;
+	const quickmenu = s.showQuickmenuButton !== false;
+	if (!Seidr.SHOW_ROOM_MANAGER || !enabled || !quickmenu) {
 		if (btn) btn.classList.remove("seidr-rm-visible");
 		return;
 	}
 	rmEnsureShell();
-	// Floating ⌂ only in normal chat view (not Preference / ChatAdmin / etc.).
-	const show = rmOnChatRoomScreen() && rmIsAdmin();
+	// Floating ⌂: plain ChatRoom only (no Preference / ChatAdmin / character dialog).
+	const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog();
 	if (btn) {
 		btn.classList.toggle("seidr-rm-visible", show);
 		if (show) placeBtnDefault();

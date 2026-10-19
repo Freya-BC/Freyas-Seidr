@@ -57,6 +57,16 @@ export function rmInstall() {
 		try { rmUpdateLauncherVisibility(); } catch (e) { /* ignore */ }
 		return ret;
 	});
+	Seidr.tryHook("CharacterSetCurrent", "CharacterSetCurrent", 0, function (args, next) {
+		const ret = next(args);
+		try { rmUpdateLauncherVisibility(); } catch (e) { /* ignore */ }
+		return ret;
+	});
+	Seidr.tryHook("DialogLeave", "DialogLeave", 0, function (args, next) {
+		const ret = next(args);
+		try { rmUpdateLauncherVisibility(); } catch (e) { /* ignore */ }
+		return ret;
+	});
 
 	if (tick) clearInterval(tick);
 	tick = setInterval(onScreenTick, 1000);

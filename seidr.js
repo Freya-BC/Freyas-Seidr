@@ -1,4 +1,4 @@
-/* Seidr v1.0.17 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.18 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.17";
+  Seidr.VERSION = "1.0.18";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2008,6 +2008,7 @@
   function seidrDefaultSettings() {
     return {
       roomManagerEnabled: true,
+      showQuickmenuButton: true,
       launcherPosition: "chatTop"
     };
   }
@@ -2016,6 +2017,7 @@
     if (!raw || typeof raw !== "object") return base;
     const d = raw;
     if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
+    if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
     if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition) >= 0) {
       base.launcherPosition = d.launcherPosition;
     }
@@ -3280,6 +3282,13 @@
       return false;
     }
   }
+  function rmNoCharacterDialog() {
+    try {
+      return typeof CurrentCharacter === "undefined" || CurrentCharacter == null;
+    } catch (e) {
+      return true;
+    }
+  }
   function rmClearSessionBtnPos() {
     sessionBtnPos = null;
   }
@@ -3403,13 +3412,15 @@
     rmBuildPanelBody();
   }
   function rmUpdateLauncherVisibility() {
-    const enabled = seidrGetSettings().roomManagerEnabled !== false;
-    if (!Seidr.SHOW_ROOM_MANAGER || !enabled) {
+    const s = seidrGetSettings();
+    const enabled = s.roomManagerEnabled !== false;
+    const quickmenu = s.showQuickmenuButton !== false;
+    if (!Seidr.SHOW_ROOM_MANAGER || !enabled || !quickmenu) {
       if (btn) btn.classList.remove("seidr-rm-visible");
       return;
     }
     rmEnsureShell();
-    const show = rmOnChatRoomScreen() && rmIsAdmin();
+    const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog();
     if (btn) {
       btn.classList.toggle("seidr-rm-visible", show);
       if (show) placeBtnDefault();
@@ -3577,6 +3588,22 @@
       }
       return ret;
     });
+    Seidr.tryHook("CharacterSetCurrent", "CharacterSetCurrent", 0, function(args, next) {
+      const ret = next(args);
+      try {
+        rmUpdateLauncherVisibility();
+      } catch (e) {
+      }
+      return ret;
+    });
+    Seidr.tryHook("DialogLeave", "DialogLeave", 0, function(args, next) {
+      const ret = next(args);
+      try {
+        rmUpdateLauncherVisibility();
+      } catch (e) {
+      }
+      return ret;
+    });
     if (tick) clearInterval(tick);
     tick = setInterval(onScreenTick, 1e3);
     window.addEventListener("resize", function() {
@@ -3686,7 +3713,11 @@
       '<div class="seidr-settings-row">',
       '<label><input type="checkbox" id="seidr-set-rm-enabled" /> Activate Room Manager</label>',
       "</div>",
-      '<p class="seidr-settings-hint">Shows or hides the Room Manager launcher when you are a room admin.</p>',
+      '<p class="seidr-settings-hint">Master switch for Room Manager (ChatAdmin button and floating quickmenu).</p>',
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-quickmenu" /> Show Quickmenu Button</label>',
+      "</div>",
+      '<p class="seidr-settings-hint">Floating \u2302 in the chat room. Off hides it completely. ChatAdmin Room Manager button is unaffected.</p>',
       "</section>",
       '<section class="seidr-settings-sec">',
       "<h3>Launcher position</h3>",
@@ -3700,22 +3731,27 @@
   function seidrRefreshSettingsUi() {
     const s = seidrGetSettings();
     const en = $2("seidr-set-rm-enabled");
+    const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
     if (en) en.checked = !!s.roomManagerEnabled;
+    if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
   }
   function seidrBindSettingsUi(onChange) {
     const en = $2("seidr-set-rm-enabled");
+    const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
     function persist() {
       const patch = {
         roomManagerEnabled: !!(en && en.checked),
+        showQuickmenuButton: !!(qm && qm.checked),
         launcherPosition: pos && pos.value ? pos.value : "chatTop"
       };
       seidrSaveSettings(patch);
       if (onChange) onChange();
     }
     if (en) en.addEventListener("change", persist);
+    if (qm) qm.addEventListener("change", persist);
     if (pos) pos.addEventListener("change", persist);
   }
 
