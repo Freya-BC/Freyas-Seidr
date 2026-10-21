@@ -123,31 +123,26 @@ function seidrSharedCenter(cluster, zoom) {
 }
 
 /**
- * Per-pose offsets from Settings Drawing (Seidr.drawOffsets).
- * Hub anchors at shared center; Pull Left/Right X/Y are from the hub.
- * Cuddle X/Y moves the holder only; held stays at center. Hitboxes stay natural.
+ * Option A / Echo pair gap from Settings Drawing (Seidr.drawOffsets).
+ * pull.x = half-gap from shared center; pull.y = side height.
+ * One-side pull: hub shifts opposite on X (Y stays at center).
+ * Cuddle X/Y moves the holder only. Hitboxes stay natural.
  */
 function seidrLiveOffsets() {
 	var o = Seidr.drawOffsets;
-	if (!o || typeof o !== "object") {
-		return {
-			pullLeft: { x: -75, y: 0 },
-			pullRight: { x: 75, y: 0 },
-			cuddle: { x: 0, y: -50 },
-		};
+	var pull = { x: 75, y: 0 };
+	var cuddle = { x: 0, y: -50 };
+	if (o && typeof o === "object") {
+		if (o.pull && typeof o.pull === "object") {
+			if (typeof o.pull.x === "number" && isFinite(o.pull.x)) pull.x = Math.abs(o.pull.x);
+			if (typeof o.pull.y === "number" && isFinite(o.pull.y)) pull.y = o.pull.y;
+		}
+		if (o.cuddle && typeof o.cuddle === "object") {
+			if (typeof o.cuddle.x === "number" && isFinite(o.cuddle.x)) cuddle.x = o.cuddle.x;
+			if (typeof o.cuddle.y === "number" && isFinite(o.cuddle.y)) cuddle.y = o.cuddle.y;
+		}
 	}
-	function pair(p, fx, fy) {
-		if (!p || typeof p !== "object") return { x: fx, y: fy };
-		return {
-			x: typeof p.x === "number" && isFinite(p.x) ? p.x : fx,
-			y: typeof p.y === "number" && isFinite(p.y) ? p.y : fy,
-		};
-	}
-	return {
-		pullLeft: pair(o.pullLeft, -75, 0),
-		pullRight: pair(o.pullRight, 75, 0),
-		cuddle: pair(o.cuddle, 0, -50),
-	};
+	return { pull: pull, cuddle: cuddle };
 }
 
 function seidrDrawPose(character, x, y, zoom) {
@@ -159,17 +154,25 @@ function seidrDrawPose(character, x, y, zoom) {
 	var center = seidrSharedCenter(cluster, z);
 	if (!center) return null;
 	var o = seidrLiveOffsets();
+	var ox = o.pull.x * z;
+	var oy = o.pull.y * z;
 	var n = character.MemberNumber;
 	if (n === cluster.left) {
-		return { X: center.X + o.pullLeft.x * z, Y: center.Y + o.pullLeft.y * z, Zoom: z };
+		return { X: center.X - ox, Y: center.Y + oy, Zoom: z };
 	}
 	if (n === cluster.right) {
-		return { X: center.X + o.pullRight.x * z, Y: center.Y + o.pullRight.y * z, Zoom: z };
+		return { X: center.X + ox, Y: center.Y + oy, Zoom: z };
 	}
 	if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
 	if (n === cluster.hub) {
 		if (cluster.cuddle != null) {
 			return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
+		}
+		if (cluster.left != null && cluster.right == null) {
+			return { X: center.X + ox, Y: center.Y, Zoom: z };
+		}
+		if (cluster.right != null && cluster.left == null) {
+			return { X: center.X - ox, Y: center.Y, Zoom: z };
 		}
 		return { X: center.X, Y: center.Y, Zoom: z };
 	}

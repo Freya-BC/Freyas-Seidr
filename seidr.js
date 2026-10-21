@@ -1,4 +1,4 @@
-/* Seidr v1.0.22 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.23 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,14 +9,13 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.22";
+  Seidr.VERSION = "1.0.23";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
   Seidr.GROUPS = ["ItemTorso"];
   Seidr.drawOffsets = {
-    pullLeft: { x: -75, y: 0 },
-    pullRight: { x: 75, y: 0 },
+    pull: { x: 75, y: 0 },
     cuddle: { x: 0, y: -50 }
   };
   Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
@@ -1618,25 +1617,19 @@
   }
   function seidrLiveOffsets() {
     var o = Seidr.drawOffsets;
-    if (!o || typeof o !== "object") {
-      return {
-        pullLeft: { x: -75, y: 0 },
-        pullRight: { x: 75, y: 0 },
-        cuddle: { x: 0, y: -50 }
-      };
+    var pull = { x: 75, y: 0 };
+    var cuddle = { x: 0, y: -50 };
+    if (o && typeof o === "object") {
+      if (o.pull && typeof o.pull === "object") {
+        if (typeof o.pull.x === "number" && isFinite(o.pull.x)) pull.x = Math.abs(o.pull.x);
+        if (typeof o.pull.y === "number" && isFinite(o.pull.y)) pull.y = o.pull.y;
+      }
+      if (o.cuddle && typeof o.cuddle === "object") {
+        if (typeof o.cuddle.x === "number" && isFinite(o.cuddle.x)) cuddle.x = o.cuddle.x;
+        if (typeof o.cuddle.y === "number" && isFinite(o.cuddle.y)) cuddle.y = o.cuddle.y;
+      }
     }
-    function pair(p, fx, fy) {
-      if (!p || typeof p !== "object") return { x: fx, y: fy };
-      return {
-        x: typeof p.x === "number" && isFinite(p.x) ? p.x : fx,
-        y: typeof p.y === "number" && isFinite(p.y) ? p.y : fy
-      };
-    }
-    return {
-      pullLeft: pair(o.pullLeft, -75, 0),
-      pullRight: pair(o.pullRight, 75, 0),
-      cuddle: pair(o.cuddle, 0, -50)
-    };
+    return { pull, cuddle };
   }
   function seidrDrawPose(character, x, y, zoom) {
     var z = typeof zoom === "number" ? zoom : 1;
@@ -1647,17 +1640,25 @@
     var center = seidrSharedCenter(cluster, z);
     if (!center) return null;
     var o = seidrLiveOffsets();
+    var ox = o.pull.x * z;
+    var oy = o.pull.y * z;
     var n = character.MemberNumber;
     if (n === cluster.left) {
-      return { X: center.X + o.pullLeft.x * z, Y: center.Y + o.pullLeft.y * z, Zoom: z };
+      return { X: center.X - ox, Y: center.Y + oy, Zoom: z };
     }
     if (n === cluster.right) {
-      return { X: center.X + o.pullRight.x * z, Y: center.Y + o.pullRight.y * z, Zoom: z };
+      return { X: center.X + ox, Y: center.Y + oy, Zoom: z };
     }
     if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
     if (n === cluster.hub) {
       if (cluster.cuddle != null) {
         return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
+      }
+      if (cluster.left != null && cluster.right == null) {
+        return { X: center.X + ox, Y: center.Y, Zoom: z };
+      }
+      if (cluster.right != null && cluster.left == null) {
+        return { X: center.X - ox, Y: center.Y, Zoom: z };
       }
       return { X: center.X, Y: center.Y, Zoom: z };
     }
@@ -2033,8 +2034,7 @@
   var SEIDR_DRAW_OFFSET_MAX = 400;
   function seidrDefaultDrawOffsets() {
     return {
-      pullLeft: { x: -75, y: 0 },
-      pullRight: { x: 75, y: 0 },
+      pull: { x: 75, y: 0 },
       cuddle: { x: 0, y: -50 }
     };
   }
@@ -2046,6 +2046,10 @@
     if (rounded > SEIDR_DRAW_OFFSET_MAX) return SEIDR_DRAW_OFFSET_MAX;
     return rounded;
   }
+  function seidrClampPullX(raw, fallback) {
+    const n = seidrClampDrawCoord(raw, fallback);
+    return Math.abs(n);
+  }
   function seidrNormalizeDrawOffsetPair(raw, fallback) {
     const src = raw && typeof raw === "object" ? raw : null;
     return {
@@ -2053,20 +2057,39 @@
       y: seidrClampDrawCoord(src && src.y, fallback.y)
     };
   }
+  function migrateLegacyPull(raw) {
+    const left = raw.pullLeft && typeof raw.pullLeft === "object" ? raw.pullLeft : null;
+    const right = raw.pullRight && typeof raw.pullRight === "object" ? raw.pullRight : null;
+    if (!left && !right) return null;
+    const lx = left && typeof left.x === "number" && Number.isFinite(left.x) ? Math.abs(left.x) : 0;
+    const rx = right && typeof right.x === "number" && Number.isFinite(right.x) ? Math.abs(right.x) : 0;
+    const x = lx || rx || 75;
+    let y = 0;
+    if (left && typeof left.y === "number" && Number.isFinite(left.y)) y = left.y;
+    else if (right && typeof right.y === "number" && Number.isFinite(right.y)) y = right.y;
+    return { x: seidrClampPullX(x, 75), y: seidrClampDrawCoord(y, 0) };
+  }
   function seidrNormalizeDrawOffsets(raw, fallback) {
     const base = fallback ? seidrCloneDrawOffsets(fallback) : seidrDefaultDrawOffsets();
     if (!raw || typeof raw !== "object") return base;
     const d = raw;
-    return {
-      pullLeft: seidrNormalizeDrawOffsetPair(d.pullLeft, base.pullLeft),
-      pullRight: seidrNormalizeDrawOffsetPair(d.pullRight, base.pullRight),
-      cuddle: seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle)
-    };
+    let pull = base.pull;
+    if (d.pull && typeof d.pull === "object") {
+      const p = d.pull;
+      pull = {
+        x: seidrClampPullX(p.x, base.pull.x),
+        y: seidrClampDrawCoord(p.y, base.pull.y)
+      };
+    } else {
+      const migrated = migrateLegacyPull(d);
+      if (migrated) pull = migrated;
+    }
+    const cuddle = seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle);
+    return { pull, cuddle };
   }
   function seidrCloneDrawOffsets(o) {
     return {
-      pullLeft: { x: o.pullLeft.x, y: o.pullLeft.y },
-      pullRight: { x: o.pullRight.x, y: o.pullRight.y },
+      pull: { x: o.pull.x, y: o.pull.y },
       cuddle: { x: o.cuddle.x, y: o.cuddle.y }
     };
   }
@@ -4064,11 +4087,12 @@
   var drawDraft = null;
   var drawDirty = false;
   function poseRow(id, label) {
+    const xMin = id === "pull" ? "0" : String(SEIDR_DRAW_OFFSET_MIN);
     return [
       '<div class="seidr-settings-draw-row" data-pose="' + id + '">',
       '<span class="seidr-settings-draw-label">' + label + "</span>",
       '<label class="seidr-settings-draw-field">X',
-      '<input type="number" id="seidr-set-draw-' + id + '-x" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+      '<input type="number" id="seidr-set-draw-' + id + '-x" min="' + xMin + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
       "</label>",
       '<label class="seidr-settings-draw-field">Y',
       '<input type="number" id="seidr-set-draw-' + id + '-y" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
@@ -4108,9 +4132,8 @@
       "</section>",
       '<section class="seidr-settings-sec">',
       "<h3>Drawing</h3>",
-      '<p class="seidr-settings-hint">Live preview on character models only. Click hitboxes stay put. Save Drawing to keep.</p>',
-      poseRow("pullLeft", "Pull Left"),
-      poseRow("pullRight", "Pull Right"),
+      '<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only \u2014 hitboxes stay put. Save Drawing to keep.</p>',
+      poseRow("pull", "Pull"),
       poseRow("cuddle", "Cuddle"),
       '<div class="seidr-settings-row seidr-settings-draw-actions">',
       '<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
@@ -4124,7 +4147,7 @@
     if (el) el.textContent = text || "";
   }
   function fillDrawInputs(o) {
-    ["pullLeft", "pullRight", "cuddle"].forEach(function(pose) {
+    ["pull", "cuddle"].forEach(function(pose) {
       const x = $2("seidr-set-draw-" + pose + "-x");
       const y = $2("seidr-set-draw-" + pose + "-y");
       if (x) x.value = String(o[pose].x);
@@ -4134,13 +4157,9 @@
   function readDrawDraftFromInputs() {
     const fallback = drawDraft ? drawDraft : seidrDefaultDrawOffsets();
     return seidrNormalizeDrawOffsets({
-      pullLeft: {
-        x: $2("seidr-set-draw-pullLeft-x")?.value,
-        y: $2("seidr-set-draw-pullLeft-y")?.value
-      },
-      pullRight: {
-        x: $2("seidr-set-draw-pullRight-x")?.value,
-        y: $2("seidr-set-draw-pullRight-y")?.value
+      pull: {
+        x: $2("seidr-set-draw-pull-x")?.value,
+        y: $2("seidr-set-draw-pull-y")?.value
       },
       cuddle: {
         x: $2("seidr-set-draw-cuddle-x")?.value,
@@ -4225,7 +4244,7 @@
       liveApplyDraft();
       setDrawMsg("Preview \u2014 Save Drawing to keep");
     }
-    ["pullLeft", "pullRight", "cuddle"].forEach(function(pose) {
+    ["pull", "cuddle"].forEach(function(pose) {
       const x = $2("seidr-set-draw-" + pose + "-x");
       const y = $2("seidr-set-draw-" + pose + "-y");
       if (x) {

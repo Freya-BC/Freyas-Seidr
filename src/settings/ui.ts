@@ -22,11 +22,12 @@ let drawDraft: SeidrDrawOffsets | null = null;
 let drawDirty = false;
 
 function poseRow(id: string, label: string): string {
+	const xMin = id === "pull" ? "0" : String(SEIDR_DRAW_OFFSET_MIN);
 	return [
 		'<div class="seidr-settings-draw-row" data-pose="' + id + '">',
 		'<span class="seidr-settings-draw-label">' + label + "</span>",
 		'<label class="seidr-settings-draw-field">X',
-		'<input type="number" id="seidr-set-draw-' + id + '-x" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+		'<input type="number" id="seidr-set-draw-' + id + '-x" min="' + xMin + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
 		"</label>",
 		'<label class="seidr-settings-draw-field">Y',
 		'<input type="number" id="seidr-set-draw-' + id + '-y" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
@@ -67,9 +68,8 @@ export function seidrBuildSettingsBody() {
 		"</section>",
 		'<section class="seidr-settings-sec">',
 		"<h3>Drawing</h3>",
-		'<p class="seidr-settings-hint">Live preview on character models only. Click hitboxes stay put. Save Drawing to keep.</p>',
-		poseRow("pullLeft", "Pull Left"),
-		poseRow("pullRight", "Pull Right"),
+		'<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only — hitboxes stay put. Save Drawing to keep.</p>',
+		poseRow("pull", "Pull"),
 		poseRow("cuddle", "Cuddle"),
 		'<div class="seidr-settings-row seidr-settings-draw-actions">',
 		'<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
@@ -85,7 +85,7 @@ function setDrawMsg(text: string) {
 }
 
 function fillDrawInputs(o: SeidrDrawOffsets) {
-	(["pullLeft", "pullRight", "cuddle"] as const).forEach(function (pose) {
+	(["pull", "cuddle"] as const).forEach(function (pose) {
 		const x = $("seidr-set-draw-" + pose + "-x") as HTMLInputElement | null;
 		const y = $("seidr-set-draw-" + pose + "-y") as HTMLInputElement | null;
 		if (x) x.value = String(o[pose].x);
@@ -96,13 +96,9 @@ function fillDrawInputs(o: SeidrDrawOffsets) {
 function readDrawDraftFromInputs(): SeidrDrawOffsets {
 	const fallback = drawDraft ? drawDraft : seidrDefaultDrawOffsets();
 	return seidrNormalizeDrawOffsets({
-		pullLeft: {
-			x: ($("seidr-set-draw-pullLeft-x") as HTMLInputElement | null)?.value,
-			y: ($("seidr-set-draw-pullLeft-y") as HTMLInputElement | null)?.value,
-		},
-		pullRight: {
-			x: ($("seidr-set-draw-pullRight-x") as HTMLInputElement | null)?.value,
-			y: ($("seidr-set-draw-pullRight-y") as HTMLInputElement | null)?.value,
+		pull: {
+			x: ($("seidr-set-draw-pull-x") as HTMLInputElement | null)?.value,
+			y: ($("seidr-set-draw-pull-y") as HTMLInputElement | null)?.value,
 		},
 		cuddle: {
 			x: ($("seidr-set-draw-cuddle-x") as HTMLInputElement | null)?.value,
@@ -196,7 +192,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 		setDrawMsg("Preview — Save Drawing to keep");
 	}
 
-	(["pullLeft", "pullRight", "cuddle"] as const).forEach(function (pose) {
+	(["pull", "cuddle"] as const).forEach(function (pose) {
 		const x = $("seidr-set-draw-" + pose + "-x") as HTMLInputElement | null;
 		const y = $("seidr-set-draw-" + pose + "-y") as HTMLInputElement | null;
 		if (x) {

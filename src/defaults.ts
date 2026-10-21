@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.22";
+Seidr.VERSION = "1.0.23";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -9,11 +9,10 @@ Seidr.HIDDEN = "Seidr";
 // Appearance "Body" / BodyUpper has neither, so it cannot host actions.
 // ItemTorso is the left body item zone (closest working Body click target).
 Seidr.GROUPS = ["ItemTorso"];
-// Live DrawCharacter offsets (Settings Drawing). Echo pull ±75; cuddle holder Y -50.
+// Live DrawCharacter offsets (Settings Drawing). Echo pair gap: pull.x half-gap 75.
 // Hitboxes stay on natural seats — only DrawCharacter reads these.
 Seidr.drawOffsets = {
-	pullLeft: { x: -75, y: 0 },
-	pullRight: { x: 75, y: 0 },
+	pull: { x: 75, y: 0 },
 	cuddle: { x: 0, y: -50 },
 };
 Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
