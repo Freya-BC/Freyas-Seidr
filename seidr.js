@@ -1,4 +1,4 @@
-/* Seidr v1.0.19 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.20 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.19";
+  Seidr.VERSION = "1.0.20";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2241,7 +2241,7 @@
       "}",
       ".seidr-rm-icon-btn:hover { border-color: #d4a017; color: #d4a017; }",
       ".seidr-rm-body {",
-      "  flex: 1; min-height: 0; overflow: auto; padding: 10px;",
+      "  flex: 1; min-height: 0; overflow: hidden; padding: 10px;",
       "  display: flex; flex-direction: column; gap: 10px;",
       "}",
       ".seidr-rm-footer {",
@@ -2260,7 +2260,7 @@
       "  border-radius: 6px; padding: 8px; flex-shrink: 0;",
       "}",
       ".seidr-rm-sec-grow {",
-      "  flex: 1 1 auto; min-height: 120px; display: flex; flex-direction: column;",
+      "  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;",
       "}",
       ".seidr-rm-sec h3 {",
       "  margin: 0 0 6px; font-size: 11px; letter-spacing: 0.05em;",
@@ -2283,15 +2283,30 @@
       ".seidr-rm-grid {",
       "  display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));",
       "  grid-auto-flow: row; grid-auto-rows: max-content;",
-      "  gap: 10px; margin-top: 8px; overflow-y: auto; min-height: 0;",
+      "  gap: 10px; margin-top: 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto;",
       "  align-content: start; align-items: start;",
-      "  max-height: min(48vh, 360px);",
+      "  scrollbar-width: thin;",
+      "  scrollbar-color: rgba(212,160,23,0.55) rgba(20,16,28,0.9);",
+      "}",
+      ".seidr-rm-grid::-webkit-scrollbar { width: 8px; }",
+      ".seidr-rm-grid::-webkit-scrollbar-track {",
+      "  background: rgba(20,16,28,0.9); border-radius: 4px;",
+      "}",
+      ".seidr-rm-grid::-webkit-scrollbar-thumb {",
+      "  background: rgba(212,160,23,0.55); border-radius: 4px;",
+      "}",
+      ".seidr-rm-grid::-webkit-scrollbar-thumb:hover {",
+      "  background: rgba(212,160,23,0.8);",
       "}",
       ".seidr-rm-card {",
       "  position: relative; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px;",
       "  overflow: hidden; background: #2a2038; display: flex; flex-direction: column;",
       "  height: auto; min-width: 0; align-self: start; isolation: isolate;",
       "}",
+      '.seidr-rm-card[draggable="true"] { cursor: grab; }',
+      ".seidr-rm-card.seidr-rm-dragging { opacity: 0.45; }",
+      ".seidr-rm-card.seidr-rm-drop-before { box-shadow: inset 3px 0 0 #d4a017; }",
+      ".seidr-rm-card.seidr-rm-drop-after { box-shadow: inset -3px 0 0 #d4a017; }",
       ".seidr-rm-card-thumb {",
       "  aspect-ratio: 4 / 3; width: 100%; height: auto; flex-shrink: 0;",
       "  object-fit: cover; background: #1e1830; display: block;",
@@ -2550,9 +2565,26 @@
 
   // src/roomManager/backgrounds.ts
   function rmListBackgrounds() {
-    return rmGetStore().backgrounds.slice().sort(function(a, b) {
-      return (a.name || "").localeCompare(b.name || "");
+    return rmGetStore().backgrounds.slice();
+  }
+  function rmReorderBackgrounds(orderedIds) {
+    const store = rmGetStore();
+    const byId = {};
+    store.backgrounds.forEach(function(b) {
+      byId[b.id] = b;
     });
+    const next = [];
+    const seen = {};
+    orderedIds.forEach(function(id) {
+      if (!id || seen[id] || !byId[id]) return;
+      next.push(byId[id]);
+      seen[id] = true;
+    });
+    store.backgrounds.forEach(function(b) {
+      if (!seen[b.id]) next.push(b);
+    });
+    store.backgrounds = next;
+    return rmSaveStore().ok;
   }
   function rmValidateBackgroundUrl(url) {
     const trimmed = (url || "").trim();
@@ -2903,11 +2935,98 @@
       });
     });
   }
+  var bgDragId = null;
+  function clearBgDropMarkers(grid) {
+    grid.querySelectorAll(".seidr-rm-drop-before, .seidr-rm-drop-after").forEach(function(el) {
+      el.classList.remove("seidr-rm-drop-before", "seidr-rm-drop-after");
+    });
+  }
+  function bindBgGridDnD(grid) {
+    if (grid._seidrBgDnD) return;
+    grid._seidrBgDnD = true;
+    grid.addEventListener("dragstart", function(ev) {
+      const t = ev.target;
+      if (t.closest(".seidr-rm-card-actions")) {
+        ev.preventDefault();
+        return;
+      }
+      const card = t.closest(".seidr-rm-card");
+      if (!card || !card.draggable || !card.dataset.id) {
+        ev.preventDefault();
+        return;
+      }
+      bgDragId = card.dataset.id;
+      card.classList.add("seidr-rm-dragging");
+      try {
+        ev.dataTransfer.effectAllowed = "move";
+        ev.dataTransfer.setData("text/plain", bgDragId);
+      } catch (e) {
+      }
+    });
+    grid.addEventListener("dragover", function(ev) {
+      if (!bgDragId) return;
+      ev.preventDefault();
+      try {
+        ev.dataTransfer.dropEffect = "move";
+      } catch (e) {
+      }
+      const card = ev.target.closest(".seidr-rm-card");
+      clearBgDropMarkers(grid);
+      if (!card || card.dataset.id === bgDragId) return;
+      const rect = card.getBoundingClientRect();
+      const before = ev.clientX < rect.left + rect.width / 2;
+      card.classList.add(before ? "seidr-rm-drop-before" : "seidr-rm-drop-after");
+    });
+    grid.addEventListener("dragleave", function(ev) {
+      const rel = ev.relatedTarget;
+      if (rel && grid.contains(rel)) return;
+      clearBgDropMarkers(grid);
+    });
+    grid.addEventListener("drop", function(ev) {
+      ev.preventDefault();
+      const dragId = bgDragId;
+      clearBgDropMarkers(grid);
+      const target = ev.target.closest(".seidr-rm-card");
+      if (!dragId || !target || !target.dataset.id || target.dataset.id === dragId) {
+        bgDragId = null;
+        return;
+      }
+      const cards = Array.prototype.slice.call(grid.querySelectorAll(".seidr-rm-card"));
+      const ids = cards.map(function(c) {
+        return c.dataset.id || "";
+      }).filter(Boolean);
+      const from = ids.indexOf(dragId);
+      let to = ids.indexOf(target.dataset.id);
+      if (from < 0 || to < 0) {
+        bgDragId = null;
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      const after = ev.clientX >= rect.left + rect.width / 2;
+      ids.splice(from, 1);
+      to = ids.indexOf(target.dataset.id);
+      if (after) to += 1;
+      ids.splice(to, 0, dragId);
+      bgDragId = null;
+      const ok = rmReorderBackgrounds(ids);
+      setMsg(ok ? "Backgrounds reordered" : "Reorder failed");
+      if (ok) rmRefreshUi();
+    });
+    grid.addEventListener("dragend", function() {
+      bgDragId = null;
+      clearBgDropMarkers(grid);
+      grid.querySelectorAll(".seidr-rm-dragging").forEach(function(el) {
+        el.classList.remove("seidr-rm-dragging");
+      });
+    });
+  }
   function renderBgGrid() {
     const grid = $("seidr-rm-grid");
     const filter = $("seidr-rm-bg-filter");
     if (!grid) return;
+    bindBgGridDnD(grid);
     const q = (filter && filter.value || "").trim().toLowerCase();
+    const canDrag = !q;
     const list = rmListBackgrounds().filter(function(b) {
       return !q || (b.name || "").toLowerCase().indexOf(q) >= 0;
     });
@@ -2916,8 +3035,10 @@
     list.forEach(function(b) {
       const card = document.createElement("div");
       card.className = "seidr-rm-card";
+      card.dataset.id = b.id;
+      if (canDrag) card.draggable = true;
       card.innerHTML = [
-        '<img class="seidr-rm-card-thumb" alt="" />',
+        '<img class="seidr-rm-card-thumb" alt="" draggable="false" />',
         '<div class="seidr-rm-card-name"></div>',
         '<div class="seidr-rm-card-actions">',
         '<button type="button" data-act="load" title="Load">\u2B07</button>',
@@ -3811,6 +3932,12 @@
       "  background: rgba(20,16,28,0.9); color: #f0e6d4; border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 4px; padding: 6px 8px;",
       "}",
+      ".seidr-settings-row button {",
+      "  background: rgba(60,48,80,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14);",
+      "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
+      "}",
+      ".seidr-settings-row button:hover { border-color: #d4a017; }",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
       "}"

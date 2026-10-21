@@ -4,9 +4,26 @@ import { rmNewId, type RmBackgroundEntry } from "./model";
 import { rmInLiveRoom, rmOnChatAdmin, rmUpdateLiveRoom } from "./roomApply";
 
 export function rmListBackgrounds(): RmBackgroundEntry[] {
-	return rmGetStore().backgrounds.slice().sort(function (a, b) {
-		return (a.name || "").localeCompare(b.name || "");
+	return rmGetStore().backgrounds.slice();
+}
+
+/** Persist card order by id list; unknown ids kept at end. */
+export function rmReorderBackgrounds(orderedIds: string[]): boolean {
+	const store = rmGetStore();
+	const byId: Record<string, RmBackgroundEntry> = {};
+	store.backgrounds.forEach(function (b) { byId[b.id] = b; });
+	const next: RmBackgroundEntry[] = [];
+	const seen: Record<string, boolean> = {};
+	orderedIds.forEach(function (id) {
+		if (!id || seen[id] || !byId[id]) return;
+		next.push(byId[id]);
+		seen[id] = true;
 	});
+	store.backgrounds.forEach(function (b) {
+		if (!seen[b.id]) next.push(b);
+	});
+	store.backgrounds = next;
+	return rmSaveStore().ok;
 }
 
 export function rmValidateBackgroundUrl(url: string): Promise<{ ok: boolean; error?: string; url?: string }> {

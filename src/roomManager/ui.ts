@@ -12,7 +12,13 @@ import {
 	rmMapModeActive,
 	rmCanApplyToRoom,
 } from "./roomApply";
-import { rmListBackgrounds, rmSaveBackground, rmApplyBackgroundUrl, rmDeleteBackground } from "./backgrounds";
+import {
+	rmListBackgrounds,
+	rmSaveBackground,
+	rmApplyBackgroundUrl,
+	rmDeleteBackground,
+	rmReorderBackgrounds,
+} from "./backgrounds";
 import { rmListMaps, rmSaveNamedMap, rmLoadNamedMap, rmDeleteNamedMap } from "./maps";
 import { rmEnsurePreview } from "./preview";
 
@@ -126,11 +132,95 @@ function openBgDialog(existing?: { id: string; name: string; url: string }) {
 	});
 }
 
+let bgDragId: string | null = null;
+
+function clearBgDropMarkers(grid: HTMLElement) {
+	grid.querySelectorAll(".seidr-rm-drop-before, .seidr-rm-drop-after").forEach(function (el) {
+		el.classList.remove("seidr-rm-drop-before", "seidr-rm-drop-after");
+	});
+}
+
+function bindBgGridDnD(grid: HTMLElement) {
+	if ((grid as any)._seidrBgDnD) return;
+	(grid as any)._seidrBgDnD = true;
+	grid.addEventListener("dragstart", function (ev) {
+		const t = ev.target as HTMLElement;
+		if (t.closest(".seidr-rm-card-actions")) {
+			ev.preventDefault();
+			return;
+		}
+		const card = t.closest(".seidr-rm-card") as HTMLElement | null;
+		if (!card || !card.draggable || !card.dataset.id) {
+			ev.preventDefault();
+			return;
+		}
+		bgDragId = card.dataset.id;
+		card.classList.add("seidr-rm-dragging");
+		try {
+			ev.dataTransfer!.effectAllowed = "move";
+			ev.dataTransfer!.setData("text/plain", bgDragId);
+		} catch (e) { /* ignore */ }
+	});
+	grid.addEventListener("dragover", function (ev) {
+		if (!bgDragId) return;
+		ev.preventDefault();
+		try { ev.dataTransfer!.dropEffect = "move"; } catch (e) { /* ignore */ }
+		const card = (ev.target as HTMLElement).closest(".seidr-rm-card") as HTMLElement | null;
+		clearBgDropMarkers(grid);
+		if (!card || card.dataset.id === bgDragId) return;
+		const rect = card.getBoundingClientRect();
+		const before = ev.clientX < rect.left + rect.width / 2;
+		card.classList.add(before ? "seidr-rm-drop-before" : "seidr-rm-drop-after");
+	});
+	grid.addEventListener("dragleave", function (ev) {
+		const rel = ev.relatedTarget as Node | null;
+		if (rel && grid.contains(rel)) return;
+		clearBgDropMarkers(grid);
+	});
+	grid.addEventListener("drop", function (ev) {
+		ev.preventDefault();
+		const dragId = bgDragId;
+		clearBgDropMarkers(grid);
+		const target = (ev.target as HTMLElement).closest(".seidr-rm-card") as HTMLElement | null;
+		if (!dragId || !target || !target.dataset.id || target.dataset.id === dragId) {
+			bgDragId = null;
+			return;
+		}
+		const cards = Array.prototype.slice.call(grid.querySelectorAll(".seidr-rm-card")) as HTMLElement[];
+		const ids = cards.map(function (c) { return c.dataset.id || ""; }).filter(Boolean);
+		const from = ids.indexOf(dragId);
+		let to = ids.indexOf(target.dataset.id!);
+		if (from < 0 || to < 0) {
+			bgDragId = null;
+			return;
+		}
+		const rect = target.getBoundingClientRect();
+		const after = ev.clientX >= rect.left + rect.width / 2;
+		ids.splice(from, 1);
+		to = ids.indexOf(target.dataset.id!);
+		if (after) to += 1;
+		ids.splice(to, 0, dragId);
+		bgDragId = null;
+		const ok = rmReorderBackgrounds(ids);
+		setMsg(ok ? "Backgrounds reordered" : "Reorder failed");
+		if (ok) rmRefreshUi();
+	});
+	grid.addEventListener("dragend", function () {
+		bgDragId = null;
+		clearBgDropMarkers(grid);
+		grid.querySelectorAll(".seidr-rm-dragging").forEach(function (el) {
+			el.classList.remove("seidr-rm-dragging");
+		});
+	});
+}
+
 function renderBgGrid() {
 	const grid = $("seidr-rm-grid");
 	const filter = ($("seidr-rm-bg-filter") as HTMLInputElement | null);
 	if (!grid) return;
+	bindBgGridDnD(grid);
 	const q = (filter && filter.value || "").trim().toLowerCase();
+	const canDrag = !q;
 	const list = rmListBackgrounds().filter(function (b) {
 		return !q || (b.name || "").toLowerCase().indexOf(q) >= 0;
 	});
@@ -139,8 +229,10 @@ function renderBgGrid() {
 	list.forEach(function (b) {
 		const card = document.createElement("div");
 		card.className = "seidr-rm-card";
+		card.dataset.id = b.id;
+		if (canDrag) card.draggable = true;
 		card.innerHTML = [
-			'<img class="seidr-rm-card-thumb" alt="" />',
+			'<img class="seidr-rm-card-thumb" alt="" draggable="false" />',
 			'<div class="seidr-rm-card-name"></div>',
 			'<div class="seidr-rm-card-actions">',
 			'<button type="button" data-act="load" title="Load">⬇</button>',
