@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.20";
+Seidr.VERSION = "1.0.21";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -9,11 +9,13 @@ Seidr.HIDDEN = "Seidr";
 // Appearance "Body" / BodyUpper has neither, so it cannot host actions.
 // ItemTorso is the left body item zone (closest working Body click target).
 Seidr.GROUPS = ["ItemTorso"];
-// Echo pull is center ±75 (Y 0). Sides stand a bit farther out and use Echo's
-// behind height from cuddle (holder at Y -50).
-Seidr.OFFSET_X = 100;
-Seidr.OFFSET_SIDE_Y = -50;
-Seidr.OFFSET_HUB_Y = -50;
+// Live DrawCharacter offsets (Settings Drawing). Echo pull ±75; cuddle holder Y -50.
+// Hitboxes stay on natural seats — only DrawCharacter reads these.
+Seidr.drawOffsets = {
+	pullLeft: { x: -75, y: 0 },
+	pullRight: { x: 75, y: 0 },
+	cuddle: { x: 0, y: -50 },
+};
 Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
 Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
 Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";

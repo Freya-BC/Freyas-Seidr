@@ -1,4 +1,4 @@
-/* Seidr v1.0.20 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.21 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,14 +9,16 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.20";
+  Seidr.VERSION = "1.0.21";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
   Seidr.GROUPS = ["ItemTorso"];
-  Seidr.OFFSET_X = 100;
-  Seidr.OFFSET_SIDE_Y = -50;
-  Seidr.OFFSET_HUB_Y = -50;
+  Seidr.drawOffsets = {
+    pullLeft: { x: -75, y: 0 },
+    pullRight: { x: 75, y: 0 },
+    cuddle: { x: 0, y: -50 }
+  };
   Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
   Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
   Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
@@ -1614,6 +1616,28 @@
     if (!count) return null;
     return { X: sumX / count, Y: sumY / count, Zoom: z };
   }
+  function seidrLiveOffsets() {
+    var o = Seidr.drawOffsets;
+    if (!o || typeof o !== "object") {
+      return {
+        pullLeft: { x: -75, y: 0 },
+        pullRight: { x: 75, y: 0 },
+        cuddle: { x: 0, y: -50 }
+      };
+    }
+    function pair(p, fx, fy) {
+      if (!p || typeof p !== "object") return { x: fx, y: fy };
+      return {
+        x: typeof p.x === "number" && isFinite(p.x) ? p.x : fx,
+        y: typeof p.y === "number" && isFinite(p.y) ? p.y : fy
+      };
+    }
+    return {
+      pullLeft: pair(o.pullLeft, -75, 0),
+      pullRight: pair(o.pullRight, 75, 0),
+      cuddle: pair(o.cuddle, 0, -50)
+    };
+  }
   function seidrDrawPose(character, x, y, zoom) {
     var z = typeof zoom === "number" ? zoom : 1;
     if (!character || typeof character.MemberNumber !== "number") return null;
@@ -1622,19 +1646,25 @@
     if (!cluster) return null;
     var center = seidrSharedCenter(cluster, z);
     if (!center) return null;
-    var ox = (Seidr.OFFSET_X || 100) * z;
-    var bothSides = cluster.left != null && cluster.right != null;
-    var sideOx = bothSides ? ox * 2 : ox;
-    var sideY = center.Y + (Seidr.OFFSET_SIDE_Y || -50) * z;
-    var hubY = (Seidr.OFFSET_HUB_Y || -50) * z;
+    var o = seidrLiveOffsets();
     var n = character.MemberNumber;
-    if (n === cluster.left) return { X: center.X - sideOx, Y: sideY, Zoom: z };
-    if (n === cluster.right) return { X: center.X + sideOx, Y: sideY, Zoom: z };
+    if (n === cluster.left) {
+      return { X: center.X + o.pullLeft.x * z, Y: center.Y + o.pullLeft.y * z, Zoom: z };
+    }
+    if (n === cluster.right) {
+      return { X: center.X + o.pullRight.x * z, Y: center.Y + o.pullRight.y * z, Zoom: z };
+    }
     if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
     if (n === cluster.hub) {
-      if (cluster.cuddle != null) return { X: center.X, Y: center.Y + hubY, Zoom: z };
-      if (cluster.left != null && cluster.right == null) return { X: center.X + ox, Y: center.Y, Zoom: z };
-      if (cluster.right != null && cluster.left == null) return { X: center.X - ox, Y: center.Y, Zoom: z };
+      if (cluster.cuddle != null) {
+        return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
+      }
+      if (cluster.left != null && cluster.right == null) {
+        return { X: center.X - o.pullLeft.x * z, Y: center.Y - o.pullLeft.y * z, Zoom: z };
+      }
+      if (cluster.right != null && cluster.left == null) {
+        return { X: center.X - o.pullRight.x * z, Y: center.Y - o.pullRight.y * z, Zoom: z };
+      }
       return { X: center.X, Y: center.Y, Zoom: z };
     }
     return null;
@@ -2005,11 +2035,53 @@
   var POSITION_IDS = RM_LAUNCHER_POSITIONS.map(function(p) {
     return p.id;
   });
+  var SEIDR_DRAW_OFFSET_MIN = -400;
+  var SEIDR_DRAW_OFFSET_MAX = 400;
+  function seidrDefaultDrawOffsets() {
+    return {
+      pullLeft: { x: -75, y: 0 },
+      pullRight: { x: 75, y: 0 },
+      cuddle: { x: 0, y: -50 }
+    };
+  }
+  function seidrClampDrawCoord(raw, fallback) {
+    const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) return fallback;
+    const rounded = Math.round(n);
+    if (rounded < SEIDR_DRAW_OFFSET_MIN) return SEIDR_DRAW_OFFSET_MIN;
+    if (rounded > SEIDR_DRAW_OFFSET_MAX) return SEIDR_DRAW_OFFSET_MAX;
+    return rounded;
+  }
+  function seidrNormalizeDrawOffsetPair(raw, fallback) {
+    const src = raw && typeof raw === "object" ? raw : null;
+    return {
+      x: seidrClampDrawCoord(src && src.x, fallback.x),
+      y: seidrClampDrawCoord(src && src.y, fallback.y)
+    };
+  }
+  function seidrNormalizeDrawOffsets(raw, fallback) {
+    const base = fallback ? seidrCloneDrawOffsets(fallback) : seidrDefaultDrawOffsets();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    return {
+      pullLeft: seidrNormalizeDrawOffsetPair(d.pullLeft, base.pullLeft),
+      pullRight: seidrNormalizeDrawOffsetPair(d.pullRight, base.pullRight),
+      cuddle: seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle)
+    };
+  }
+  function seidrCloneDrawOffsets(o) {
+    return {
+      pullLeft: { x: o.pullLeft.x, y: o.pullLeft.y },
+      pullRight: { x: o.pullRight.x, y: o.pullRight.y },
+      cuddle: { x: o.cuddle.x, y: o.cuddle.y }
+    };
+  }
   function seidrDefaultSettings() {
     return {
       roomManagerEnabled: true,
       showQuickmenuButton: true,
-      launcherPosition: "chatTop"
+      launcherPosition: "chatTop",
+      drawOffsets: seidrDefaultDrawOffsets()
     };
   }
   function seidrNormalizeSettings(raw) {
@@ -2021,6 +2093,7 @@
     if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition) >= 0) {
       base.launcherPosition = d.launcherPosition;
     }
+    base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
     return base;
   }
 
@@ -3874,6 +3947,19 @@
   Seidr.installRoomManager = rmInstall;
   Seidr.uninstallRoomManager = rmUninstall;
 
+  // src/settings/drawOffsets.ts
+  function seidrApplyDrawOffsets(raw) {
+    const next = seidrNormalizeDrawOffsets(raw);
+    Seidr.drawOffsets = seidrCloneDrawOffsets(next);
+    return Seidr.drawOffsets;
+  }
+  function seidrLoadCommittedDrawOffsets() {
+    return seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+  }
+  Seidr.seidrDefaultDrawOffsets = seidrDefaultDrawOffsets;
+  Seidr.seidrApplyDrawOffsets = seidrApplyDrawOffsets;
+  Seidr.seidrLoadCommittedDrawOffsets = seidrLoadCommittedDrawOffsets;
+
   // src/settings/styles.ts
   function seidrSettingsCss() {
     return [
@@ -3882,8 +3968,8 @@
       "#seidr-settings-panel {",
       "  pointer-events: auto; position: fixed; z-index: 120;",
       "  display: none; flex-direction: column;",
-      "  width: min(92vw, 420px); min-width: 300px;",
-      "  max-height: min(80vh, 520px);",
+      "  width: min(92vw, 460px); min-width: 300px;",
+      "  max-height: min(85vh, 640px);",
       "  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;",
       "  box-shadow: 0 12px 40px rgba(0,0,0,0.5);",
@@ -3938,6 +4024,30 @@
       "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
       "}",
       ".seidr-settings-row button:hover { border-color: #d4a017; }",
+      ".seidr-settings-draw-row {",
+      "  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;",
+      "  margin-top: 8px;",
+      "}",
+      ".seidr-settings-draw-label {",
+      "  flex: 0 0 88px; font-size: 12px; color: #f0e6d4;",
+      "}",
+      ".seidr-settings-draw-field {",
+      "  display: flex; align-items: center; gap: 4px; font-size: 11px; color: #a898b0;",
+      "  flex: 0 0 auto; cursor: default;",
+      "}",
+      '.seidr-settings-draw-field input[type="number"] {',
+      "  width: 72px;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14);",
+      "  border-radius: 4px; padding: 4px 6px;",
+      "}",
+      ".seidr-settings-draw-row button {",
+      "  background: rgba(60,48,80,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14);",
+      "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
+      "}",
+      ".seidr-settings-draw-row button:hover { border-color: #d4a017; }",
+      ".seidr-settings-draw-actions { margin-top: 10px; }",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
       "}"
@@ -3956,6 +4066,22 @@
   // src/settings/ui.ts
   function $2(id) {
     return document.getElementById(id);
+  }
+  var drawDraft = null;
+  var drawDirty = false;
+  function poseRow(id, label) {
+    return [
+      '<div class="seidr-settings-draw-row" data-pose="' + id + '">',
+      '<span class="seidr-settings-draw-label">' + label + "</span>",
+      '<label class="seidr-settings-draw-field">X',
+      '<input type="number" id="seidr-set-draw-' + id + '-x" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+      "</label>",
+      '<label class="seidr-settings-draw-field">Y',
+      '<input type="number" id="seidr-set-draw-' + id + '-y" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+      "</label>",
+      '<button type="button" data-draw-reset="' + id + '">Reset</button>',
+      "</div>"
+    ].join("");
   }
   function seidrBuildSettingsBody() {
     const body = $2("seidr-settings-body");
@@ -3985,8 +4111,70 @@
       '<select id="seidr-set-rm-pos">' + opts + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
+      "</section>",
+      '<section class="seidr-settings-sec">',
+      "<h3>Drawing</h3>",
+      '<p class="seidr-settings-hint">Live preview on character models only. Click hitboxes stay put. Save Drawing to keep.</p>',
+      poseRow("pullLeft", "Pull Left"),
+      poseRow("pullRight", "Pull Right"),
+      poseRow("cuddle", "Cuddle"),
+      '<div class="seidr-settings-row seidr-settings-draw-actions">',
+      '<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-set-draw-msg"></p>',
       "</section>"
     ].join("");
+  }
+  function setDrawMsg(text) {
+    const el = $2("seidr-set-draw-msg");
+    if (el) el.textContent = text || "";
+  }
+  function fillDrawInputs(o) {
+    ["pullLeft", "pullRight", "cuddle"].forEach(function(pose) {
+      const x = $2("seidr-set-draw-" + pose + "-x");
+      const y = $2("seidr-set-draw-" + pose + "-y");
+      if (x) x.value = String(o[pose].x);
+      if (y) y.value = String(o[pose].y);
+    });
+  }
+  function readDrawDraftFromInputs() {
+    const fallback = drawDraft ? drawDraft : seidrDefaultDrawOffsets();
+    return seidrNormalizeDrawOffsets({
+      pullLeft: {
+        x: $2("seidr-set-draw-pullLeft-x")?.value,
+        y: $2("seidr-set-draw-pullLeft-y")?.value
+      },
+      pullRight: {
+        x: $2("seidr-set-draw-pullRight-x")?.value,
+        y: $2("seidr-set-draw-pullRight-y")?.value
+      },
+      cuddle: {
+        x: $2("seidr-set-draw-cuddle-x")?.value,
+        y: $2("seidr-set-draw-cuddle-y")?.value
+      }
+    }, fallback);
+  }
+  function liveApplyDraft() {
+    if (!drawDraft) return;
+    seidrApplyDrawOffsets(drawDraft);
+  }
+  function seidrBeginDrawDraft() {
+    drawDraft = seidrCloneDrawOffsets(seidrGetSettings().drawOffsets);
+    drawDirty = false;
+    fillDrawInputs(drawDraft);
+    seidrApplyDrawOffsets(drawDraft);
+    setDrawMsg("");
+  }
+  function seidrDiscardDrawDraft() {
+    if (!drawDirty && !drawDraft) {
+      seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+      drawDraft = null;
+      return;
+    }
+    drawDraft = null;
+    drawDirty = false;
+    seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+    setDrawMsg("");
   }
   function seidrRefreshSettingsUi() {
     const s = seidrGetSettings();
@@ -3996,6 +4184,7 @@
     if (en) en.checked = !!s.roomManagerEnabled;
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
+    seidrBeginDrawDraft();
   }
   function seidrBindSettingsUi(onChange) {
     const en = $2("seidr-set-rm-enabled");
@@ -4025,6 +4214,61 @@
         if (openMsg) openMsg.textContent = "";
         if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
         else if (openMsg) openMsg.textContent = "Room Manager unavailable.";
+      });
+    }
+    function onDrawLive() {
+      const next = readDrawDraftFromInputs();
+      drawDraft = next;
+      drawDirty = true;
+      liveApplyDraft();
+      setDrawMsg("Preview \u2014 Save Drawing to keep");
+    }
+    function onDrawCommit() {
+      const next = readDrawDraftFromInputs();
+      drawDraft = next;
+      drawDirty = true;
+      fillDrawInputs(next);
+      liveApplyDraft();
+      setDrawMsg("Preview \u2014 Save Drawing to keep");
+    }
+    ["pullLeft", "pullRight", "cuddle"].forEach(function(pose) {
+      const x = $2("seidr-set-draw-" + pose + "-x");
+      const y = $2("seidr-set-draw-" + pose + "-y");
+      if (x) {
+        x.addEventListener("input", onDrawLive);
+        x.addEventListener("change", onDrawCommit);
+      }
+      if (y) {
+        y.addEventListener("input", onDrawLive);
+        y.addEventListener("change", onDrawCommit);
+      }
+    });
+    document.querySelectorAll("[data-draw-reset]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const pose = btn2.getAttribute("data-draw-reset");
+        if (!pose || !drawDraft) return;
+        const def = seidrDefaultDrawOffsets();
+        drawDraft[pose] = { x: def[pose].x, y: def[pose].y };
+        drawDirty = true;
+        fillDrawInputs(drawDraft);
+        liveApplyDraft();
+        setDrawMsg("Reset to default \u2014 Save Drawing to keep");
+      });
+    });
+    const saveBtn = $2("seidr-set-draw-save");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", function() {
+        const next = readDrawDraftFromInputs();
+        drawDraft = next;
+        const saved = seidrSaveSettings({ drawOffsets: next });
+        if (!saved.ok) {
+          setDrawMsg(saved.error || "Save failed");
+          return;
+        }
+        drawDirty = false;
+        seidrApplyDrawOffsets(next);
+        fillDrawInputs(next);
+        setDrawMsg("Drawing saved");
       });
     }
   }
@@ -4118,6 +4362,10 @@
   }
   function seidrCloseSettings() {
     if (!panel2) return;
+    try {
+      seidrDiscardDrawDraft();
+    } catch (e) {
+    }
     panel2.classList.remove("seidr-settings-open");
     panel2.setAttribute("hidden", "true");
   }
@@ -4172,6 +4420,10 @@
 
   // src/settings/index.ts
   function installSeidrSettings() {
+    try {
+      seidrLoadCommittedDrawOffsets();
+    } catch (e) {
+    }
     seidrRegisterPreference();
   }
   Seidr.installSeidrSettings = installSeidrSettings;

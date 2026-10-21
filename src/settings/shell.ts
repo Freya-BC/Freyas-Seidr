@@ -1,7 +1,12 @@
 /** Preference Extensions entry + settings panel chrome */
 import { Seidr } from "../seidr";
 import { seidrInjectSettingsStyles } from "./styles";
-import { seidrBindSettingsUi, seidrBuildSettingsBody, seidrRefreshSettingsUi } from "./ui";
+import {
+	seidrBindSettingsUi,
+	seidrBuildSettingsBody,
+	seidrDiscardDrawDraft,
+	seidrRefreshSettingsUi,
+} from "./ui";
 
 let root: HTMLElement | null = null;
 let panel: HTMLElement | null = null;
@@ -97,6 +102,7 @@ export function seidrOpenSettings() {
 
 export function seidrCloseSettings() {
 	if (!panel) return;
+	try { seidrDiscardDrawDraft(); } catch (e) { /* ignore */ }
 	panel.classList.remove("seidr-settings-open");
 	panel.setAttribute("hidden", "true");
 }
