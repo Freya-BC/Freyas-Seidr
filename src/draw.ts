@@ -126,6 +126,7 @@ function seidrSharedCenter(cluster, zoom) {
  * Option A / Echo pair gap from Settings Drawing (Seidr.drawOffsets).
  * pull.x = half-gap from shared center; pull.y = side height.
  * One-side pull: hub shifts opposite on X (Y stays at center).
+ * Hub on center X (both sides or cuddle): sides use 2×ox so gap stays 2× Pull X.
  * Cuddle X/Y moves the holder only. Hitboxes stay natural.
  */
 function seidrLiveOffsets() {
@@ -156,12 +157,17 @@ function seidrDrawPose(character, x, y, zoom) {
 	var o = seidrLiveOffsets();
 	var ox = o.pull.x * z;
 	var oy = o.pull.y * z;
+	// When hub sits on center X (both sides, or cuddle), double side X so
+	// hub-to-side gap stays 2× Pull X — same as one-side pull with hub opposite.
+	var hubOnCenterX = cluster.cuddle != null
+		|| (cluster.left != null && cluster.right != null);
+	var sideOx = hubOnCenterX ? ox * 2 : ox;
 	var n = character.MemberNumber;
 	if (n === cluster.left) {
-		return { X: center.X - ox, Y: center.Y + oy, Zoom: z };
+		return { X: center.X - sideOx, Y: center.Y + oy, Zoom: z };
 	}
 	if (n === cluster.right) {
-		return { X: center.X + ox, Y: center.Y + oy, Zoom: z };
+		return { X: center.X + sideOx, Y: center.Y + oy, Zoom: z };
 	}
 	if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
 	if (n === cluster.hub) {
