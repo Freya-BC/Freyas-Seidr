@@ -1,4 +1,4 @@
-/* Seidr v1.0.21 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.22 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.21";
+  Seidr.VERSION = "1.0.22";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1658,12 +1658,6 @@
     if (n === cluster.hub) {
       if (cluster.cuddle != null) {
         return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
-      }
-      if (cluster.left != null && cluster.right == null) {
-        return { X: center.X - o.pullLeft.x * z, Y: center.Y - o.pullLeft.y * z, Zoom: z };
-      }
-      if (cluster.right != null && cluster.left == null) {
-        return { X: center.X - o.pullRight.x * z, Y: center.Y - o.pullRight.y * z, Zoom: z };
       }
       return { X: center.X, Y: center.Y, Zoom: z };
     }

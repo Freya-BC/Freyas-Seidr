@@ -124,8 +124,8 @@ function seidrSharedCenter(cluster, zoom) {
 
 /**
  * Per-pose offsets from Settings Drawing (Seidr.drawOffsets).
- * Left/right/cuddle-held use configured X/Y from shared center; hub mirrors
- * one-side pulls or uses cuddle offset when holding. Hitboxes stay natural.
+ * Hub anchors at shared center; Pull Left/Right X/Y are from the hub.
+ * Cuddle X/Y moves the holder only; held stays at center. Hitboxes stay natural.
  */
 function seidrLiveOffsets() {
 	var o = Seidr.drawOffsets;
@@ -170,12 +170,6 @@ function seidrDrawPose(character, x, y, zoom) {
 	if (n === cluster.hub) {
 		if (cluster.cuddle != null) {
 			return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
-		}
-		if (cluster.left != null && cluster.right == null) {
-			return { X: center.X - o.pullLeft.x * z, Y: center.Y - o.pullLeft.y * z, Zoom: z };
-		}
-		if (cluster.right != null && cluster.left == null) {
-			return { X: center.X - o.pullRight.x * z, Y: center.Y - o.pullRight.y * z, Zoom: z };
 		}
 		return { X: center.X, Y: center.Y, Zoom: z };
 	}
