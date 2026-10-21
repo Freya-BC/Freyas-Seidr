@@ -106,3 +106,13 @@ export function rmLoadNamedMap(id: string): { ok: boolean; error?: string } {
 	if (!entry) return { ok: false, error: "Map not found" };
 	return rmImportMapString(entry.data);
 }
+
+export function rmDeleteNamedMap(id: string): { ok: boolean; error?: string } {
+	const store = rmGetStore();
+	const next = (store.maps || []).filter(function (m) { return m.id !== id; });
+	if (next.length === (store.maps || []).length) return { ok: false, error: "Map not found" };
+	store.maps = next;
+	const saved = rmSaveStore();
+	if (!saved.ok) return { ok: false, error: saved.error };
+	return { ok: true };
+}

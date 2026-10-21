@@ -1,4 +1,4 @@
-/* Seidr v1.0.18 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.19 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.18";
+  Seidr.VERSION = "1.0.19";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2277,8 +2277,12 @@
       "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
       "}",
       ".seidr-rm-row button:hover, .seidr-rm-dialog button:hover { border-color: #d4a017; }",
+      ".seidr-rm-row button:disabled, .seidr-rm-card-actions button:disabled {",
+      "  opacity: 0.45; cursor: not-allowed;",
+      "}",
       ".seidr-rm-grid {",
       "  display: grid; grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));",
+      "  grid-auto-flow: row; grid-auto-rows: max-content;",
       "  gap: 10px; margin-top: 8px; overflow-y: auto; min-height: 0;",
       "  align-content: start; align-items: start;",
       "  max-height: min(48vh, 360px);",
@@ -2286,25 +2290,28 @@
       ".seidr-rm-card {",
       "  position: relative; border: 1px solid rgba(255,255,255,0.12); border-radius: 4px;",
       "  overflow: hidden; background: #2a2038; display: flex; flex-direction: column;",
-      "  height: auto; align-self: start;",
+      "  height: auto; min-width: 0; align-self: start; isolation: isolate;",
       "}",
       ".seidr-rm-card-thumb {",
-      "  aspect-ratio: 4 / 3; width: 100%; object-fit: cover; background: #1e1830; display: block;",
+      "  aspect-ratio: 4 / 3; width: 100%; height: auto; flex-shrink: 0;",
+      "  object-fit: cover; background: #1e1830; display: block;",
       "}",
       ".seidr-rm-card-name {",
-      "  font-size: 11px; padding: 4px 6px; color: #a898b0; white-space: nowrap;",
-      "  overflow: hidden; text-overflow: ellipsis;",
+      "  flex-shrink: 0; min-height: 1.4em; font-size: 11px; padding: 4px 6px; color: #a898b0;",
+      "  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;",
       "}",
       ".seidr-rm-card-actions {",
-      "  position: absolute; top: 6px; right: 6px; display: none; gap: 6px;",
+      "  position: absolute; top: 6px; right: 6px; display: none; gap: 6px; z-index: 2;",
       "}",
       ".seidr-rm-card:hover .seidr-rm-card-actions { display: flex; }",
-      ".seidr-rm-card-actions button {",
+      ".seidr-rm-card-actions button, .seidr-rm-icon-act {",
       "  width: 40px; height: 40px; border-radius: 6px; border: none;",
       "  background: rgba(0,0,0,0.72); color: #f0e6d4; cursor: pointer;",
-      "  font-size: 18px; line-height: 1;",
+      "  font-size: 18px; line-height: 1; flex-shrink: 0;",
       "}",
-      ".seidr-rm-card-actions button:hover { background: rgba(0,0,0,0.88); color: #d4a017; }",
+      ".seidr-rm-card-actions button:hover, .seidr-rm-icon-act:hover {",
+      "  background: rgba(0,0,0,0.88); color: #d4a017;",
+      "}",
       ".seidr-rm-msg { color: #e0b15a; font-size: 12px; }",
       ".seidr-rm-overlay {",
       "  pointer-events: auto; position: fixed; inset: 0; z-index: 118;",
@@ -2313,8 +2320,9 @@
       ".seidr-rm-dialog {",
       "  width: min(92vw, 400px); background: rgba(36,28,48,0.98); border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;",
+      "  color: #f0e6d4;",
       "}",
-      ".seidr-rm-dialog h4 { margin: 0; }",
+      ".seidr-rm-dialog h4 { margin: 0; color: #d4a017; }",
       ".seidr-rm-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #a898b0; }",
       ".seidr-rm-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }",
       ".seidr-rm-hidden { display: none !important; }"
@@ -2354,6 +2362,14 @@
   function rmOnChatAdmin() {
     try {
       return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatAdmin";
+    } catch (e) {
+      return false;
+    }
+  }
+  function rmCanApplyToRoom() {
+    try {
+      if (typeof CurrentScreen === "undefined") return false;
+      return CurrentScreen === "ChatRoom" || CurrentScreen === "ChatAdmin";
     } catch (e) {
       return false;
     }
@@ -2587,6 +2603,15 @@
       return { ok: true, entry };
     });
   }
+  function rmDeleteBackground(id) {
+    const store = rmGetStore();
+    const next = store.backgrounds.filter(function(b) {
+      return b.id !== id;
+    });
+    if (next.length === store.backgrounds.length) return false;
+    store.backgrounds = next;
+    return rmSaveStore().ok;
+  }
   function rmApplyBackgroundUrl(url) {
     const trimmed = (url || "").trim();
     if (!trimmed) return { ok: false, error: "No URL" };
@@ -2700,6 +2725,17 @@
     if (!entry) return { ok: false, error: "Map not found" };
     return rmImportMapString(entry.data);
   }
+  function rmDeleteNamedMap(id) {
+    const store = rmGetStore();
+    const next = (store.maps || []).filter(function(m) {
+      return m.id !== id;
+    });
+    if (next.length === (store.maps || []).length) return { ok: false, error: "Map not found" };
+    store.maps = next;
+    const saved = rmSaveStore();
+    if (!saved.ok) return { ok: false, error: saved.error };
+    return { ok: true };
+  }
 
   // src/roomManager/preview.ts
   var PREFIX = "SeidrRmPreview_";
@@ -2810,6 +2846,21 @@
   function confirmAct(msg) {
     return window.confirm(msg);
   }
+  function rmUpdateApplyUi() {
+    const can = rmCanApplyToRoom();
+    ["seidr-rm-room-load", "seidr-rm-access-load", "seidr-rm-map-load"].forEach(function(id) {
+      const el = $(id);
+      if (el) {
+        el.disabled = !can;
+        el.title = can ? "" : "Join a chat room or open room settings to Load";
+      }
+    });
+    document.querySelectorAll("#seidr-rm-grid [data-act='load']").forEach(function(node) {
+      const b = node;
+      b.disabled = !can;
+      b.title = can ? "Load" : "Join a chat room or open room settings to Load";
+    });
+  }
   function openBgDialog(existing) {
     const overlay = document.createElement("div");
     overlay.className = "seidr-rm-overlay";
@@ -2861,6 +2912,7 @@
       return !q || (b.name || "").toLowerCase().indexOf(q) >= 0;
     });
     grid.innerHTML = "";
+    const canLoad = rmCanApplyToRoom();
     list.forEach(function(b) {
       const card = document.createElement("div");
       card.className = "seidr-rm-card";
@@ -2870,6 +2922,7 @@
         '<div class="seidr-rm-card-actions">',
         '<button type="button" data-act="load" title="Load">\u2B07</button>',
         '<button type="button" data-act="edit" title="Edit">\u270E</button>',
+        '<button type="button" data-act="del" title="Delete">\xD7</button>',
         "</div>"
       ].join("");
       card.querySelector(".seidr-rm-card-name").textContent = b.name;
@@ -2878,12 +2931,25 @@
       rmEnsurePreview(b.url).then(function(src) {
         if (src) img.src = src;
       });
-      card.querySelector('[data-act="load"]').addEventListener("click", function() {
+      const loadBtn = card.querySelector('[data-act="load"]');
+      loadBtn.disabled = !canLoad;
+      if (!canLoad) loadBtn.title = "Join a chat room or open room settings to Load";
+      loadBtn.addEventListener("click", function() {
+        if (!rmCanApplyToRoom()) {
+          setMsg("Open ChatRoom or ChatAdmin to Load");
+          return;
+        }
         const r = rmApplyBackgroundUrl(b.url);
         setMsg(r.ok ? "Background applied" : r.error || "Failed");
       });
       card.querySelector('[data-act="edit"]').addEventListener("click", function() {
         openBgDialog(b);
+      });
+      card.querySelector('[data-act="del"]').addEventListener("click", function() {
+        if (!confirmAct("Delete background \u201C" + b.name + "\u201D?")) return;
+        const ok = rmDeleteBackground(b.id);
+        setMsg(ok ? "Background deleted" : "Delete failed");
+        rmRefreshUi();
       });
       grid.appendChild(card);
     });
@@ -2916,7 +2982,8 @@
       '<select id="seidr-rm-room-sel"></select>',
       '<button type="button" data-rm="room-save">Save as\u2026</button>',
       '<button type="button" data-rm="room-overwrite">Overwrite</button>',
-      '<button type="button" data-rm="room-load">Load</button>',
+      '<button type="button" data-rm="room-load" id="seidr-rm-room-load">Load</button>',
+      '<button type="button" data-rm="room-delete">Delete</button>',
       "</div></section>",
       '<section class="seidr-rm-sec">',
       "<h3>2. Room Access</h3>",
@@ -2924,7 +2991,8 @@
       '<select id="seidr-rm-access-sel"></select>',
       '<button type="button" data-rm="access-save">Save as\u2026</button>',
       '<button type="button" data-rm="access-overwrite">Overwrite</button>',
-      '<button type="button" data-rm="access-load">Load \u2192 room</button>',
+      '<button type="button" data-rm="access-load" id="seidr-rm-access-load">Load \u2192 room</button>',
+      '<button type="button" data-rm="access-delete">Delete</button>',
       "</div></section>",
       '<section class="seidr-rm-sec seidr-rm-sec-grow">',
       "<h3>3. Backgrounds</h3>",
@@ -2940,7 +3008,8 @@
       '<select id="seidr-rm-map-sel"></select>',
       '<button type="button" data-rm="map-save-as">Save as\u2026</button>',
       '<button type="button" data-rm="map-overwrite">Overwrite</button>',
-      '<button type="button" data-rm="map-load">Load</button>',
+      '<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
+      '<button type="button" class="seidr-rm-icon-act" data-rm="map-delete" title="Delete">\xD7</button>',
       "</div></section>"
     ].join("");
     body.addEventListener("click", function(ev) {
@@ -2978,6 +3047,10 @@
         setMsg(s.ok ? "Overwritten" : s.error || "Failed");
         rmRefreshUi();
       } else if (act === "room-load") {
+        if (!rmCanApplyToRoom()) {
+          setMsg("Open ChatRoom or ChatAdmin to Load");
+          return;
+        }
         const sel = $("seidr-rm-room-sel");
         if (!sel || !sel.value) {
           setMsg("Select a config");
@@ -2995,6 +3068,17 @@
         } else {
           setMsg("Filled ChatAdmin fields");
         }
+      } else if (act === "room-delete") {
+        const sel = $("seidr-rm-room-sel");
+        if (!sel || !sel.value) {
+          setMsg("Select a config");
+          return;
+        }
+        if (!confirmAct("Delete room config \u201C" + sel.value + "\u201D?")) return;
+        delete store.room[sel.value];
+        const s = rmSaveStore();
+        setMsg(s.ok ? "Deleted" : s.error || "Failed");
+        rmRefreshUi();
       } else if (act === "access-save") {
         const name = promptName("Save access list as:");
         if (!name) return;
@@ -3025,6 +3109,10 @@
         setMsg(s.ok ? "Overwritten" : s.error || "Failed");
         rmRefreshUi();
       } else if (act === "access-load") {
+        if (!rmCanApplyToRoom()) {
+          setMsg("Open ChatRoom or ChatAdmin to Load");
+          return;
+        }
         const sel = $("seidr-rm-access-sel");
         if (!sel || !sel.value) {
           setMsg("Select access");
@@ -3042,6 +3130,17 @@
         } else {
           setMsg("Filled access lists in ChatAdmin");
         }
+      } else if (act === "access-delete") {
+        const sel = $("seidr-rm-access-sel");
+        if (!sel || !sel.value) {
+          setMsg("Select access");
+          return;
+        }
+        if (!confirmAct("Delete access list \u201C" + sel.value + "\u201D?")) return;
+        delete store.access[sel.value];
+        const s = rmSaveStore();
+        setMsg(s.ok ? "Deleted" : s.error || "Failed");
+        rmRefreshUi();
       } else if (act === "bg-add") {
         openBgDialog();
       } else if (act === "map-save-as") {
@@ -3068,6 +3167,10 @@
         setMsg(r.ok ? "Overwritten" : r.error || "Failed");
         rmRefreshUi();
       } else if (act === "map-load") {
+        if (!rmCanApplyToRoom()) {
+          setMsg("Open ChatRoom or ChatAdmin to Load");
+          return;
+        }
         const sel = $("seidr-rm-map-sel");
         if (!sel || !sel.value) {
           setMsg("Select a map");
@@ -3082,6 +3185,22 @@
         }
         const r = rmLoadNamedMap(id);
         setMsg(r.ok ? "Map loaded" : r.error || "Failed");
+      } else if (act === "map-delete") {
+        const sel = $("seidr-rm-map-sel");
+        if (!sel || !sel.value) {
+          setMsg("Select a map");
+          return;
+        }
+        if (!confirmAct("Delete map \u201C" + sel.value + "\u201D?")) return;
+        const ids = sel._rmMapIds;
+        const id = ids && ids[sel.value];
+        if (!id) {
+          setMsg("Not found");
+          return;
+        }
+        const r = rmDeleteNamedMap(id);
+        setMsg(r.ok ? "Map deleted" : r.error || "Failed");
+        rmRefreshUi();
       }
     });
     const filter = $("seidr-rm-bg-filter");
@@ -3098,8 +3217,10 @@
     renderBgGrid();
     renderMaps();
     refreshFooter();
+    rmUpdateApplyUi();
   }
   Seidr.rmRefreshUi = rmRefreshUi;
+  Seidr.rmUpdateApplyUi = rmUpdateApplyUi;
 
   // src/settings/storage.ts
   function seidrGetSettings() {
@@ -3440,6 +3561,10 @@
     } catch (e) {
       console.warn("[Seidr RM] refresh", e);
     }
+    try {
+      if (typeof Seidr.rmUpdateApplyUi === "function") Seidr.rmUpdateApplyUi();
+    } catch (e) {
+    }
   }
   function rmClosePanel() {
     if (!panel) return;
@@ -3530,6 +3655,10 @@
   var tick = null;
   function onScreenTick() {
     rmUpdateLauncherVisibility();
+    try {
+      rmUpdateApplyUi();
+    } catch (e) {
+    }
   }
   function rmInstall() {
     if (!rmIsShown()) return;
@@ -3561,13 +3690,13 @@
       return next(args);
     });
     Seidr.tryHook("ChatAdminExit", "ChatAdminExit", 0, function(args, next) {
-      try {
-        rmClosePanel();
-      } catch (e) {
-      }
       const ret = next(args);
       try {
         rmEnterLiveRoomPlacement();
+      } catch (e) {
+      }
+      try {
+        rmUpdateApplyUi();
       } catch (e) {
       }
       return ret;
@@ -3718,6 +3847,10 @@
       '<label><input type="checkbox" id="seidr-set-quickmenu" /> Show Quickmenu Button</label>',
       "</div>",
       '<p class="seidr-settings-hint">Floating \u2302 in the chat room. Off hides it completely. ChatAdmin Room Manager button is unaffected.</p>',
+      '<div class="seidr-settings-row">',
+      '<button type="button" id="seidr-set-open-rm">Open Room Manager</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-set-open-rm-msg"></p>',
       "</section>",
       '<section class="seidr-settings-sec">',
       "<h3>Launcher position</h3>",
@@ -3741,6 +3874,8 @@
     const en = $2("seidr-set-rm-enabled");
     const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
+    const openRm = $2("seidr-set-open-rm");
+    const openMsg = $2("seidr-set-open-rm-msg");
     function persist() {
       const patch = {
         roomManagerEnabled: !!(en && en.checked),
@@ -3753,6 +3888,18 @@
     if (en) en.addEventListener("change", persist);
     if (qm) qm.addEventListener("change", persist);
     if (pos) pos.addEventListener("change", persist);
+    if (openRm) {
+      openRm.addEventListener("click", function() {
+        const s = seidrGetSettings();
+        if (!Seidr.SHOW_ROOM_MANAGER || s.roomManagerEnabled === false) {
+          if (openMsg) openMsg.textContent = "Activate Room Manager first.";
+          return;
+        }
+        if (openMsg) openMsg.textContent = "";
+        if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
+        else if (openMsg) openMsg.textContent = "Room Manager unavailable.";
+      });
+    }
   }
 
   // src/settings/shell.ts

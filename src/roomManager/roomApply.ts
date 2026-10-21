@@ -29,6 +29,16 @@ export function rmOnChatAdmin(): boolean {
 	}
 }
 
+/** ChatRoom (incl. map) or ChatAdmin — where Load/apply is valid. */
+export function rmCanApplyToRoom(): boolean {
+	try {
+		if (typeof CurrentScreen === "undefined") return false;
+		return CurrentScreen === "ChatRoom" || CurrentScreen === "ChatAdmin";
+	} catch (e) {
+		return false;
+	}
+}
+
 function snapshotFromRoom(data: any): Record<string, unknown> {
 	return {
 		Name: data.Name || "",

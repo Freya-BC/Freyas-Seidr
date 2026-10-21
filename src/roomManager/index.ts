@@ -6,16 +6,17 @@ import {
 	rmEnsureShell,
 	rmUpdateLauncherVisibility,
 	rmDestroyShell,
-	rmClosePanel,
 	rmEnterLiveRoomPlacement,
 } from "./shell";
 import { rmChatAdminDrawButton, rmChatAdminClickButton } from "./chatAdminBtn";
+import { rmUpdateApplyUi } from "./ui";
 
 let installed = false;
 let tick: ReturnType<typeof setInterval> | null = null;
 
 function onScreenTick() {
 	rmUpdateLauncherVisibility();
+	try { rmUpdateApplyUi(); } catch (e) { /* ignore */ }
 }
 
 export function rmInstall() {
@@ -42,9 +43,10 @@ export function rmInstall() {
 		return next(args);
 	});
 	Seidr.tryHook("ChatAdminExit", "ChatAdminExit", 0, function (args, next) {
-		try { rmClosePanel(); } catch (e) { /* ignore */ }
+		// Keep RM panel open when leaving ChatAdmin; Loads re-gate via tick/apply UI.
 		const ret = next(args);
 		try { rmEnterLiveRoomPlacement(); } catch (e) { /* ignore */ }
+		try { rmUpdateApplyUi(); } catch (e) { /* ignore */ }
 		return ret;
 	});
 	Seidr.tryHook("ChatRoomLoad", "ChatRoomLoad", 5, function (args, next) {

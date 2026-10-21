@@ -1,4 +1,5 @@
 /** Seidr settings panel body */
+import { Seidr } from "../seidr";
 import { RM_LAUNCHER_POSITIONS, type RmLauncherPosition } from "./model";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
 
@@ -23,6 +24,10 @@ export function seidrBuildSettingsBody() {
 		'<label><input type="checkbox" id="seidr-set-quickmenu" /> Show Quickmenu Button</label>',
 		"</div>",
 		'<p class="seidr-settings-hint">Floating ⌂ in the chat room. Off hides it completely. ChatAdmin Room Manager button is unaffected.</p>',
+		'<div class="seidr-settings-row">',
+		'<button type="button" id="seidr-set-open-rm">Open Room Manager</button>',
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-set-open-rm-msg"></p>',
 		"</section>",
 		'<section class="seidr-settings-sec">',
 		"<h3>Launcher position</h3>",
@@ -48,6 +53,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
+	const openRm = $("seidr-set-open-rm") as HTMLButtonElement | null;
+	const openMsg = $("seidr-set-open-rm-msg");
 	function persist() {
 		const patch = {
 			roomManagerEnabled: !!(en && en.checked),
@@ -60,4 +67,16 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (en) en.addEventListener("change", persist);
 	if (qm) qm.addEventListener("change", persist);
 	if (pos) pos.addEventListener("change", persist);
+	if (openRm) {
+		openRm.addEventListener("click", function () {
+			const s = seidrGetSettings();
+			if (!Seidr.SHOW_ROOM_MANAGER || s.roomManagerEnabled === false) {
+				if (openMsg) openMsg.textContent = "Activate Room Manager first.";
+				return;
+			}
+			if (openMsg) openMsg.textContent = "";
+			if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
+			else if (openMsg) openMsg.textContent = "Room Manager unavailable.";
+		});
+	}
 }

@@ -349,6 +349,9 @@ export function rmOpenPanel() {
 	try { rmRefreshUi(); } catch (e) {
 		console.warn("[Seidr RM] refresh", e);
 	}
+	try {
+		if (typeof Seidr.rmUpdateApplyUi === "function") Seidr.rmUpdateApplyUi();
+	} catch (e) { /* ignore */ }
 }
 
 export function rmClosePanel() {

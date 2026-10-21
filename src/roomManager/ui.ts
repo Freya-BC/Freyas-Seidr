@@ -10,9 +10,10 @@ import {
 	rmUpdateLiveRoom,
 	rmInLiveRoom,
 	rmMapModeActive,
+	rmCanApplyToRoom,
 } from "./roomApply";
-import { rmListBackgrounds, rmSaveBackground, rmApplyBackgroundUrl } from "./backgrounds";
-import { rmListMaps, rmSaveNamedMap, rmLoadNamedMap } from "./maps";
+import { rmListBackgrounds, rmSaveBackground, rmApplyBackgroundUrl, rmDeleteBackground } from "./backgrounds";
+import { rmListMaps, rmSaveNamedMap, rmLoadNamedMap, rmDeleteNamedMap } from "./maps";
 import { rmEnsurePreview } from "./preview";
 
 let msgTimer: ReturnType<typeof setTimeout> | null = null;
@@ -63,6 +64,23 @@ function promptName(title: string, initial?: string): string | null {
 
 function confirmAct(msg: string): boolean {
 	return window.confirm(msg);
+}
+
+/** Disable Load controls when not in ChatRoom / ChatAdmin; keep panel open. */
+export function rmUpdateApplyUi() {
+	const can = rmCanApplyToRoom();
+	["seidr-rm-room-load", "seidr-rm-access-load", "seidr-rm-map-load"].forEach(function (id) {
+		const el = $(id) as HTMLButtonElement | null;
+		if (el) {
+			el.disabled = !can;
+			el.title = can ? "" : "Join a chat room or open room settings to Load";
+		}
+	});
+	document.querySelectorAll("#seidr-rm-grid [data-act='load']").forEach(function (node) {
+		const b = node as HTMLButtonElement;
+		b.disabled = !can;
+		b.title = can ? "Load" : "Join a chat room or open room settings to Load";
+	});
 }
 
 function openBgDialog(existing?: { id: string; name: string; url: string }) {
@@ -117,6 +135,7 @@ function renderBgGrid() {
 		return !q || (b.name || "").toLowerCase().indexOf(q) >= 0;
 	});
 	grid.innerHTML = "";
+	const canLoad = rmCanApplyToRoom();
 	list.forEach(function (b) {
 		const card = document.createElement("div");
 		card.className = "seidr-rm-card";
@@ -126,6 +145,7 @@ function renderBgGrid() {
 			'<div class="seidr-rm-card-actions">',
 			'<button type="button" data-act="load" title="Load">⬇</button>',
 			'<button type="button" data-act="edit" title="Edit">✎</button>',
+			'<button type="button" data-act="del" title="Delete">×</button>',
 			"</div>",
 		].join("");
 		(card.querySelector(".seidr-rm-card-name") as HTMLElement).textContent = b.name;
@@ -134,12 +154,25 @@ function renderBgGrid() {
 		rmEnsurePreview(b.url).then(function (src) {
 			if (src) img.src = src;
 		});
-		card.querySelector('[data-act="load"]')!.addEventListener("click", function () {
+		const loadBtn = card.querySelector('[data-act="load"]') as HTMLButtonElement;
+		loadBtn.disabled = !canLoad;
+		if (!canLoad) loadBtn.title = "Join a chat room or open room settings to Load";
+		loadBtn.addEventListener("click", function () {
+			if (!rmCanApplyToRoom()) {
+				setMsg("Open ChatRoom or ChatAdmin to Load");
+				return;
+			}
 			const r = rmApplyBackgroundUrl(b.url);
 			setMsg(r.ok ? "Background applied" : (r.error || "Failed"));
 		});
 		card.querySelector('[data-act="edit"]')!.addEventListener("click", function () {
 			openBgDialog(b);
+		});
+		card.querySelector('[data-act="del"]')!.addEventListener("click", function () {
+			if (!confirmAct("Delete background “" + b.name + "”?")) return;
+			const ok = rmDeleteBackground(b.id);
+			setMsg(ok ? "Background deleted" : "Delete failed");
+			rmRefreshUi();
 		});
 		grid.appendChild(card);
 	});
@@ -170,7 +203,8 @@ export function rmBuildPanelBody() {
 		'<select id="seidr-rm-room-sel"></select>',
 		'<button type="button" data-rm="room-save">Save as…</button>',
 		'<button type="button" data-rm="room-overwrite">Overwrite</button>',
-		'<button type="button" data-rm="room-load">Load</button>',
+		'<button type="button" data-rm="room-load" id="seidr-rm-room-load">Load</button>',
+		'<button type="button" data-rm="room-delete">Delete</button>',
 		"</div></section>",
 		'<section class="seidr-rm-sec">',
 		"<h3>2. Room Access</h3>",
@@ -178,7 +212,8 @@ export function rmBuildPanelBody() {
 		'<select id="seidr-rm-access-sel"></select>',
 		'<button type="button" data-rm="access-save">Save as…</button>',
 		'<button type="button" data-rm="access-overwrite">Overwrite</button>',
-		'<button type="button" data-rm="access-load">Load → room</button>',
+		'<button type="button" data-rm="access-load" id="seidr-rm-access-load">Load → room</button>',
+		'<button type="button" data-rm="access-delete">Delete</button>',
 		"</div></section>",
 		'<section class="seidr-rm-sec seidr-rm-sec-grow">',
 		"<h3>3. Backgrounds</h3>",
@@ -194,7 +229,8 @@ export function rmBuildPanelBody() {
 		'<select id="seidr-rm-map-sel"></select>',
 		'<button type="button" data-rm="map-save-as">Save as…</button>',
 		'<button type="button" data-rm="map-overwrite">Overwrite</button>',
-		'<button type="button" data-rm="map-load">Load</button>',
+		'<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
+		'<button type="button" class="seidr-rm-icon-act" data-rm="map-delete" title="Delete">×</button>',
 		"</div></section>",
 	].join("");
 
@@ -224,6 +260,7 @@ export function rmBuildPanelBody() {
 			setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
 			rmRefreshUi();
 		} else if (act === "room-load") {
+			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
 			const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
 			if (!sel || !sel.value) { setMsg("Select a config"); return; }
 			const preset = store.room[sel.value];
@@ -235,6 +272,14 @@ export function rmBuildPanelBody() {
 			} else {
 				setMsg("Filled ChatAdmin fields");
 			}
+		} else if (act === "room-delete") {
+			const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
+			if (!sel || !sel.value) { setMsg("Select a config"); return; }
+			if (!confirmAct("Delete room config “" + sel.value + "”?")) return;
+			delete store.room[sel.value];
+			const s = rmSaveStore();
+			setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
+			rmRefreshUi();
 		} else if (act === "access-save") {
 			const name = promptName("Save access list as:");
 			if (!name) return;
@@ -256,6 +301,7 @@ export function rmBuildPanelBody() {
 			setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
 			rmRefreshUi();
 		} else if (act === "access-load") {
+			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
 			const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
 			if (!sel || !sel.value) { setMsg("Select access"); return; }
 			const preset = store.access[sel.value];
@@ -267,6 +313,14 @@ export function rmBuildPanelBody() {
 			} else {
 				setMsg("Filled access lists in ChatAdmin");
 			}
+		} else if (act === "access-delete") {
+			const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
+			if (!sel || !sel.value) { setMsg("Select access"); return; }
+			if (!confirmAct("Delete access list “" + sel.value + "”?")) return;
+			delete store.access[sel.value];
+			const s = rmSaveStore();
+			setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
+			rmRefreshUi();
 		} else if (act === "bg-add") {
 			openBgDialog();
 		} else if (act === "map-save-as") {
@@ -288,6 +342,7 @@ export function rmBuildPanelBody() {
 			setMsg(r.ok ? "Overwritten" : (r.error || "Failed"));
 			rmRefreshUi();
 		} else if (act === "map-load") {
+			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
 			const sel = $("seidr-rm-map-sel") as HTMLSelectElement;
 			if (!sel || !sel.value) { setMsg("Select a map"); return; }
 			if (!confirmAct("Load map “" + sel.value + "” into this room?")) return;
@@ -296,6 +351,16 @@ export function rmBuildPanelBody() {
 			if (!id) { setMsg("Not found"); return; }
 			const r = rmLoadNamedMap(id);
 			setMsg(r.ok ? "Map loaded" : (r.error || "Failed"));
+		} else if (act === "map-delete") {
+			const sel = $("seidr-rm-map-sel") as HTMLSelectElement;
+			if (!sel || !sel.value) { setMsg("Select a map"); return; }
+			if (!confirmAct("Delete map “" + sel.value + "”?")) return;
+			const ids = (sel as any)._rmMapIds as Record<string, string> | undefined;
+			const id = ids && ids[sel.value];
+			if (!id) { setMsg("Not found"); return; }
+			const r = rmDeleteNamedMap(id);
+			setMsg(r.ok ? "Map deleted" : (r.error || "Failed"));
+			rmRefreshUi();
 		}
 	});
 
@@ -312,6 +377,8 @@ export function rmRefreshUi() {
 	renderBgGrid();
 	renderMaps();
 	refreshFooter();
+	rmUpdateApplyUi();
 }
 
 Seidr.rmRefreshUi = rmRefreshUi;
+Seidr.rmUpdateApplyUi = rmUpdateApplyUi;
