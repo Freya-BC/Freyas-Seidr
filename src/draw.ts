@@ -3,7 +3,7 @@ import { Seidr } from "./seidr";
 import { SeidrState } from "./state";
 import { seidrFindChar, seidrInEcho, seidrReconcileEcho } from "./room";
 
-export const seidrNatural: Record<number, { X: number; Y: number; Zoom?: number }> = {};
+export const seidrNatural: Record<number, { X: number; Y: number; Zoom?: number; Space?: number }> = {};
 
 function seidrViewActive() {
 	if (typeof ChatRoomCharacterViewIsActive !== "function") return true;
@@ -297,7 +297,7 @@ Seidr.installDraw = function () {
 				var character = list && list[charIdx];
 				if (character && typeof character.MemberNumber === "number") {
 					// Natural seats for hitboxes, status/mod icons, and shared-center math.
-					seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom };
+					seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom, Space: space };
 				}
 			} catch (e) { /* ignore */ }
 			return original(charIdx, charX, charY, space, zoom);

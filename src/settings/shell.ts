@@ -96,6 +96,9 @@ export function seidrOpenSettings() {
 	seidrEnsureSettingsShell();
 	if (!panel) return;
 	seidrRefreshSettingsUi();
+	panel.querySelectorAll("details").forEach(function (d) {
+		d.removeAttribute("open");
+	});
 	panel.classList.add("seidr-settings-open");
 	panel.removeAttribute("hidden");
 }

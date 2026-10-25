@@ -19,6 +19,9 @@ export type SeidrDrawOffsets = {
 	cuddle: SeidrDrawOffsetPair;
 };
 
+export type SeidrArousalBarMode = "off" | "alwaysHide" | "untilChange" | "bottomBar";
+export type SeidrArousalBarScope = "self" | "seidrCluster" | "all";
+
 export type SeidrSettings = {
 	roomManagerEnabled: boolean;
 	/** Floating ⌂ in ChatRoom; off hides it completely (ChatAdmin BC button unaffected). */
@@ -26,7 +29,26 @@ export type SeidrSettings = {
 	launcherPosition: RmLauncherPosition;
 	/** DrawCharacter pose offsets only (not hitboxes). */
 	drawOffsets: SeidrDrawOffsets;
+	/** On-character / bottom HUD arousal meter chrome. */
+	arousalBarMode: SeidrArousalBarMode;
+	arousalBarScope: SeidrArousalBarScope;
 };
+
+export const AROUSAL_BAR_MODES: { id: SeidrArousalBarMode; label: string }[] = [
+	{ id: "off", label: "Club default" },
+	{ id: "alwaysHide", label: "Always hide" },
+	{ id: "untilChange", label: "Show on change" },
+	{ id: "bottomBar", label: "Bottom bar" },
+];
+
+export const AROUSAL_BAR_SCOPES: { id: SeidrArousalBarScope; label: string }[] = [
+	{ id: "self", label: "Self only" },
+	{ id: "seidrCluster", label: "Seidr holds" },
+	{ id: "all", label: "Everyone" },
+];
+
+const AROUSAL_MODE_IDS: SeidrArousalBarMode[] = AROUSAL_BAR_MODES.map(function (m) { return m.id; });
+const AROUSAL_SCOPE_IDS: SeidrArousalBarScope[] = AROUSAL_BAR_SCOPES.map(function (s) { return s.id; });
 
 export const RM_LAUNCHER_POSITIONS: { id: RmLauncherPosition; label: string }[] = [
 	{ id: "topLeft", label: "Top Left" },
@@ -128,6 +150,8 @@ export function seidrDefaultSettings(): SeidrSettings {
 		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
 		drawOffsets: seidrDefaultDrawOffsets(),
+		arousalBarMode: "off",
+		arousalBarScope: "seidrCluster",
 	};
 }
 
@@ -141,5 +165,11 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 		base.launcherPosition = d.launcherPosition as RmLauncherPosition;
 	}
 	base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
+	if (typeof d.arousalBarMode === "string" && AROUSAL_MODE_IDS.indexOf(d.arousalBarMode as SeidrArousalBarMode) >= 0) {
+		base.arousalBarMode = d.arousalBarMode as SeidrArousalBarMode;
+	}
+	if (typeof d.arousalBarScope === "string" && AROUSAL_SCOPE_IDS.indexOf(d.arousalBarScope as SeidrArousalBarScope) >= 0) {
+		base.arousalBarScope = d.arousalBarScope as SeidrArousalBarScope;
+	}
 	return base;
 }

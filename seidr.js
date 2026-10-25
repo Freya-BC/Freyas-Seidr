@@ -1,4 +1,4 @@
-/* Seidr v1.0.24 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.29 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.24";
+  Seidr.VERSION = "1.0.29";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -18,7 +18,7 @@
     pull: { x: 75, y: 0 },
     cuddle: { x: 0, y: -50 }
   };
-  Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
+  Seidr.BOOKMARK_GIST_ID = "aaf3ff1d74aec0d971e2739b27a08b96";
   Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
   Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
   Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
@@ -1767,7 +1767,7 @@
           var list = ChatRoomCharacterDrawlist;
           var character = list && list[charIdx];
           if (character && typeof character.MemberNumber === "number") {
-            seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom };
+            seidrNatural[character.MemberNumber] = { X: charX, Y: charY, Zoom: zoom, Space: space };
           }
         } catch (e) {
         }
@@ -1818,6 +1818,539 @@
     clusterOrder: seidrClusterOrder,
     reorder: seidrReorderDrawlist
   };
+
+  // src/settings/model.ts
+  var AROUSAL_BAR_MODES = [
+    { id: "off", label: "Club default" },
+    { id: "alwaysHide", label: "Always hide" },
+    { id: "untilChange", label: "Show on change" },
+    { id: "bottomBar", label: "Bottom bar" }
+  ];
+  var AROUSAL_BAR_SCOPES = [
+    { id: "self", label: "Self only" },
+    { id: "seidrCluster", label: "Seidr holds" },
+    { id: "all", label: "Everyone" }
+  ];
+  var AROUSAL_MODE_IDS = AROUSAL_BAR_MODES.map(function(m) {
+    return m.id;
+  });
+  var AROUSAL_SCOPE_IDS = AROUSAL_BAR_SCOPES.map(function(s) {
+    return s.id;
+  });
+  var RM_LAUNCHER_POSITIONS = [
+    { id: "topLeft", label: "Top Left" },
+    { id: "topRight", label: "Top Right" },
+    { id: "bottomLeft", label: "Bottom Left" },
+    { id: "bottomRight", label: "Bottom Right" },
+    { id: "middleLeft", label: "Middle Left" },
+    { id: "middleRight", label: "Middle Right" },
+    { id: "chatLeft", label: "Chat Left" },
+    { id: "chatTop", label: "Chat Top" },
+    { id: "chatBottom", label: "Chat Bottom" }
+  ];
+  var POSITION_IDS = RM_LAUNCHER_POSITIONS.map(function(p) {
+    return p.id;
+  });
+  var SEIDR_DRAW_OFFSET_MIN = -400;
+  var SEIDR_DRAW_OFFSET_MAX = 400;
+  function seidrDefaultDrawOffsets() {
+    return {
+      pull: { x: 75, y: 0 },
+      cuddle: { x: 0, y: -50 }
+    };
+  }
+  function seidrClampDrawCoord(raw, fallback) {
+    const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) return fallback;
+    const rounded = Math.round(n);
+    if (rounded < SEIDR_DRAW_OFFSET_MIN) return SEIDR_DRAW_OFFSET_MIN;
+    if (rounded > SEIDR_DRAW_OFFSET_MAX) return SEIDR_DRAW_OFFSET_MAX;
+    return rounded;
+  }
+  function seidrClampPullX(raw, fallback) {
+    const n = seidrClampDrawCoord(raw, fallback);
+    return Math.abs(n);
+  }
+  function seidrNormalizeDrawOffsetPair(raw, fallback) {
+    const src = raw && typeof raw === "object" ? raw : null;
+    return {
+      x: seidrClampDrawCoord(src && src.x, fallback.x),
+      y: seidrClampDrawCoord(src && src.y, fallback.y)
+    };
+  }
+  function migrateLegacyPull(raw) {
+    const left = raw.pullLeft && typeof raw.pullLeft === "object" ? raw.pullLeft : null;
+    const right = raw.pullRight && typeof raw.pullRight === "object" ? raw.pullRight : null;
+    if (!left && !right) return null;
+    const lx = left && typeof left.x === "number" && Number.isFinite(left.x) ? Math.abs(left.x) : 0;
+    const rx = right && typeof right.x === "number" && Number.isFinite(right.x) ? Math.abs(right.x) : 0;
+    const x = lx || rx || 75;
+    let y = 0;
+    if (left && typeof left.y === "number" && Number.isFinite(left.y)) y = left.y;
+    else if (right && typeof right.y === "number" && Number.isFinite(right.y)) y = right.y;
+    return { x: seidrClampPullX(x, 75), y: seidrClampDrawCoord(y, 0) };
+  }
+  function seidrNormalizeDrawOffsets(raw, fallback) {
+    const base = fallback ? seidrCloneDrawOffsets(fallback) : seidrDefaultDrawOffsets();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    let pull = base.pull;
+    if (d.pull && typeof d.pull === "object") {
+      const p = d.pull;
+      pull = {
+        x: seidrClampPullX(p.x, base.pull.x),
+        y: seidrClampDrawCoord(p.y, base.pull.y)
+      };
+    } else {
+      const migrated = migrateLegacyPull(d);
+      if (migrated) pull = migrated;
+    }
+    const cuddle = seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle);
+    return { pull, cuddle };
+  }
+  function seidrCloneDrawOffsets(o) {
+    return {
+      pull: { x: o.pull.x, y: o.pull.y },
+      cuddle: { x: o.cuddle.x, y: o.cuddle.y }
+    };
+  }
+  function seidrDefaultSettings() {
+    return {
+      roomManagerEnabled: true,
+      showQuickmenuButton: true,
+      launcherPosition: "chatTop",
+      drawOffsets: seidrDefaultDrawOffsets(),
+      arousalBarMode: "off",
+      arousalBarScope: "seidrCluster"
+    };
+  }
+  function seidrNormalizeSettings(raw) {
+    const base = seidrDefaultSettings();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
+    if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
+    if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition) >= 0) {
+      base.launcherPosition = d.launcherPosition;
+    }
+    base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
+    if (typeof d.arousalBarMode === "string" && AROUSAL_MODE_IDS.indexOf(d.arousalBarMode) >= 0) {
+      base.arousalBarMode = d.arousalBarMode;
+    }
+    if (typeof d.arousalBarScope === "string" && AROUSAL_SCOPE_IDS.indexOf(d.arousalBarScope) >= 0) {
+      base.arousalBarScope = d.arousalBarScope;
+    }
+    return base;
+  }
+
+  // src/roomManager/model.ts
+  function rmEmptyStore() {
+    return {
+      version: Seidr.RM_DATA_VERSION || 1,
+      room: {},
+      access: {},
+      backgrounds: [],
+      maps: [],
+      ui: {},
+      settings: seidrDefaultSettings()
+    };
+  }
+  function rmNormalizeStore(data) {
+    const base = rmEmptyStore();
+    if (!data || typeof data !== "object") return base;
+    const d = data;
+    base.version = typeof d.version === "number" ? d.version : base.version;
+    base.room = d.room && typeof d.room === "object" ? d.room : {};
+    base.access = d.access && typeof d.access === "object" ? d.access : {};
+    if (Array.isArray(d.backgrounds)) base.backgrounds = d.backgrounds;
+    else if (d.background && typeof d.background === "object") {
+      base.backgrounds = [];
+    }
+    base.maps = Array.isArray(d.maps) ? d.maps : [];
+    base.ui = d.ui && typeof d.ui === "object" ? d.ui : {};
+    base.settings = seidrNormalizeSettings(d.settings);
+    return base;
+  }
+  function rmNewId(prefix) {
+    return prefix + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  }
+  function rmIsShown() {
+    return !!Seidr.SHOW_ROOM_MANAGER;
+  }
+
+  // src/roomManager/storage.ts
+  var _store = null;
+  var _lastBytes = 0;
+  function lz() {
+    try {
+      if (typeof LZString !== "undefined" && LZString) return LZString;
+    } catch (e) {
+    }
+    return null;
+  }
+  function pack(obj) {
+    const json = JSON.stringify(obj);
+    const L = lz();
+    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
+    if (L && typeof L.compressToUTF16 === "function" && json.length > 400) {
+      return prefix + L.compressToUTF16(json);
+    }
+    return json;
+  }
+  function unpack(raw) {
+    if (raw == null || raw === "") return null;
+    if (typeof raw === "object") return raw;
+    if (typeof raw !== "string") return null;
+    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
+    try {
+      if (raw.startsWith(prefix)) {
+        const L = lz();
+        if (!L || typeof L.decompressFromUTF16 !== "function") return null;
+        const plain = L.decompressFromUTF16(raw.slice(prefix.length));
+        return plain ? JSON.parse(plain) : null;
+      }
+      if (typeof LZString !== "undefined" && LZString.decompressFromBase64) {
+        const plain = LZString.decompressFromBase64(raw);
+        if (plain) return JSON.parse(plain);
+      }
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn("[Seidr RM] unpack failed", e);
+      return null;
+    }
+  }
+  function rmGetStore() {
+    if (_store) return _store;
+    let data = null;
+    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
+    try {
+      if (Player && Player.ExtensionSettings && Player.ExtensionSettings[key] != null) {
+        const raw = Player.ExtensionSettings[key];
+        if (typeof raw === "string") _lastBytes = raw.length;
+        data = unpack(raw);
+      }
+    } catch (e) {
+      console.warn("[Seidr RM] ES read failed", e);
+    }
+    _store = rmNormalizeStore(data);
+    return _store;
+  }
+  function rmSaveStore() {
+    const store = rmGetStore();
+    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
+    const packed = pack(store);
+    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
+    _lastBytes = packed.length;
+    if (packed.length > max) {
+      return { ok: false, error: "Storage full (" + rmFormatBytes(packed.length) + " / " + rmFormatBytes(max) + ")", bytes: packed.length };
+    }
+    try {
+      if (!Player.ExtensionSettings) Player.ExtensionSettings = {};
+      Player.ExtensionSettings[key] = packed;
+      if (typeof ServerPlayerExtensionSettingsSync === "function") {
+        ServerPlayerExtensionSettingsSync(key);
+      }
+    } catch (e) {
+      console.warn("[Seidr RM] ES write failed", e);
+      return { ok: false, error: "Save failed", bytes: packed.length };
+    }
+    return { ok: true, bytes: packed.length };
+  }
+  function rmInvalidateStore() {
+    _store = null;
+  }
+  function rmCompressedBytes() {
+    if (_lastBytes) return _lastBytes;
+    try {
+      const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
+      const raw = Player && Player.ExtensionSettings && Player.ExtensionSettings[key];
+      if (typeof raw === "string") {
+        _lastBytes = raw.length;
+        return _lastBytes;
+      }
+    } catch (e) {
+    }
+    return 0;
+  }
+  function rmMapsBytesEstimate(store) {
+    const s = store || rmGetStore();
+    try {
+      return pack({ maps: s.maps || [] }).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+  function rmMapBudgetBytes() {
+    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
+    const ratio = typeof Seidr.RM_MAP_BUDGET_RATIO === "number" ? Seidr.RM_MAP_BUDGET_RATIO : 0.75;
+    return Math.floor(max * ratio);
+  }
+  function rmCanSaveMaps(nextMaps) {
+    const probe = pack({ maps: nextMaps });
+    const budget = rmMapBudgetBytes();
+    if (probe.length > budget) {
+      return { ok: false, error: "Maps would exceed 75% storage budget (" + rmFormatBytes(probe.length) + " / " + rmFormatBytes(budget) + ")" };
+    }
+    const store = rmGetStore();
+    const full = pack(Object.assign({}, store, { maps: nextMaps }));
+    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
+    if (full.length > max) {
+      return { ok: false, error: "Total storage full" };
+    }
+    return { ok: true };
+  }
+  function rmFormatBytes(bytes) {
+    const n = Math.max(0, Number(bytes) || 0);
+    if (n < 1024) return n.toFixed(0) + " B";
+    return (n / 1024).toFixed(2) + " KB";
+  }
+  function rmUsageLabel() {
+    const used = rmCompressedBytes();
+    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
+    const maps = rmMapsBytesEstimate();
+    const mapCap = rmMapBudgetBytes();
+    return "Storage: " + rmFormatBytes(used) + " / " + rmFormatBytes(max) + "  (maps " + rmFormatBytes(maps) + " \xB7 75% cap " + rmFormatBytes(mapCap) + ")";
+  }
+
+  // src/settings/storage.ts
+  function seidrGetSettings() {
+    const store = rmGetStore();
+    store.settings = seidrNormalizeSettings(store.settings);
+    return store.settings;
+  }
+  function seidrSaveSettings(patch) {
+    const store = rmGetStore();
+    store.settings = seidrNormalizeSettings(Object.assign({}, seidrDefaultSettings(), store.settings, patch));
+    return rmSaveStore();
+  }
+
+  // src/arousalBars.ts
+  var SHOW_MS = 1e3;
+  var BAR_Y = 992;
+  var BAR_H = 8;
+  var EDGE = 12;
+  var GAP = 10;
+  var lastProg = {};
+  var bottomQueue = [];
+  function settingsMode() {
+    try {
+      return seidrGetSettings().arousalBarMode || "off";
+    } catch (e) {
+      return "off";
+    }
+  }
+  function settingsScope() {
+    try {
+      return seidrGetSettings().arousalBarScope || "seidrCluster";
+    } catch (e) {
+      return "seidrCluster";
+    }
+  }
+  function bctSplitEnabled(C) {
+    try {
+      const bct = C && C.BCT;
+      if (!bct) return false;
+      const s = bct.bctSettings && bct.bctSettings.splitOrgasmArousal;
+      if (s === true || s === "true") return true;
+      if (bct.splitOrgasmArousal && typeof bct.splitOrgasmArousal.arousalProgress === "number") return true;
+    } catch (e) {
+    }
+    return false;
+  }
+  function clamp01_100(n) {
+    if (!Number.isFinite(n)) return 0;
+    if (n < 0) return 0;
+    if (n > 100) return 100;
+    return n;
+  }
+  function readProgress(C) {
+    const club = C && C.ArousalSettings && typeof C.ArousalSettings.Progress === "number" ? C.ArousalSettings.Progress : 0;
+    if (bctSplitEnabled(C)) {
+      let a = club;
+      try {
+        const sp = C.BCT && C.BCT.splitOrgasmArousal;
+        if (sp && typeof sp.arousalProgress === "number") a = sp.arousalProgress;
+      } catch (e) {
+      }
+      return { arousal: clamp01_100(a), orgasm: clamp01_100(club), split: true };
+    }
+    return { arousal: clamp01_100(club), orgasm: null, split: false };
+  }
+  function inSeidrCluster(C) {
+    if (!C || typeof C.MemberNumber !== "number") return false;
+    try {
+      const hubs = typeof Seidr.getHubs === "function" ? Seidr.getHubs() : null;
+      return !!SeidrState.clusterOf(hubs, C.MemberNumber);
+    } catch (e) {
+      return false;
+    }
+  }
+  function seidrMeterApplies(C) {
+    const mode = settingsMode();
+    if (mode === "off") return false;
+    if (!C) return false;
+    const scope = settingsScope();
+    if (scope === "self") {
+      try {
+        return typeof C.IsPlayer === "function" ? !!C.IsPlayer() : false;
+      } catch (e) {
+        return false;
+      }
+    }
+    if (scope === "seidrCluster") return inSeidrCluster(C);
+    return true;
+  }
+  function untilChangeVisible(C, prog) {
+    const id = C.MemberNumber;
+    const now = typeof CommonTime === "function" ? CommonTime() : Date.now();
+    const oVal = prog.orgasm != null ? prog.orgasm : -1;
+    let st = lastProg[id];
+    if (!st) {
+      lastProg[id] = { a: prog.arousal, o: oVal, showUntil: 0 };
+      return false;
+    }
+    if (st.a !== prog.arousal || st.o !== oVal) {
+      st.a = prog.arousal;
+      st.o = oVal;
+      st.showUntil = now + SHOW_MS;
+    }
+    return now < st.showUntil;
+  }
+  function shouldSkipOnCharacter(C) {
+    if (!seidrMeterApplies(C)) return false;
+    const mode = settingsMode();
+    if (mode === "alwaysHide" || mode === "bottomBar") return true;
+    if (mode === "untilChange") {
+      return !untilChangeVisible(C, readProgress(C));
+    }
+    return false;
+  }
+  function queueBottom(C) {
+    if (!seidrMeterApplies(C)) return;
+    if (settingsMode() !== "bottomBar") return;
+    const id = C.MemberNumber;
+    for (let i = 0; i < bottomQueue.length; i++) {
+      if (bottomQueue[i].C && bottomQueue[i].C.MemberNumber === id) return;
+    }
+    bottomQueue.push({ C, prog: readProgress(C) });
+  }
+  function collectBottomFromDrawlist() {
+    const list = [];
+    const seen = {};
+    for (let i = 0; i < bottomQueue.length; i++) {
+      const row = bottomQueue[i];
+      const id = row.C && row.C.MemberNumber;
+      if (typeof id === "number") seen[id] = true;
+      list.push(row);
+    }
+    try {
+      const chars = typeof ChatRoomCharacterDrawlist !== "undefined" && ChatRoomCharacterDrawlist ? ChatRoomCharacterDrawlist : typeof ChatRoomCharacter !== "undefined" ? ChatRoomCharacter : null;
+      if (!chars || !chars.length) return list;
+      for (let i = 0; i < chars.length; i++) {
+        const C = chars[i];
+        if (!C || typeof C.MemberNumber !== "number") continue;
+        if (seen[C.MemberNumber]) continue;
+        if (!seidrMeterApplies(C)) continue;
+        seen[C.MemberNumber] = true;
+        list.push({ C, prog: readProgress(C) });
+      }
+    } catch (e) {
+    }
+    return list;
+  }
+  function flushBottomBars() {
+    if (settingsMode() !== "bottomBar") {
+      bottomQueue = [];
+      return;
+    }
+    const list = collectBottomFromDrawlist();
+    bottomQueue = [];
+    drawBottomBars(list);
+  }
+  function drawBottomBars(list) {
+    if (!list.length) return;
+    if (typeof MainCanvas === "undefined" || !MainCanvas) return;
+    const ctx = MainCanvas;
+    for (let i = 0; i < list.length; i++) {
+      let paintSlot2 = function(x, fillRatio, fillColor) {
+        ctx.fillStyle = "rgba(20,16,28,0.85)";
+        ctx.fillRect(x, trackY, slotW, h);
+        ctx.strokeStyle = "rgba(212,160,23,0.45)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, trackY + 0.5, slotW - 1, h - 1);
+        const fill = slotW * Math.max(0, Math.min(1, fillRatio));
+        if (fill > 0) {
+          ctx.fillStyle = fillColor;
+          ctx.fillRect(x, trackY, fill, h);
+        }
+      };
+      var paintSlot = paintSlot2;
+      const row = list[i];
+      const C = row.C;
+      if (!C || typeof C.MemberNumber !== "number") continue;
+      const nat = seidrNatural[C.MemberNumber];
+      if (!nat) continue;
+      const zoom = typeof nat.Zoom === "number" && nat.Zoom > 0 ? nat.Zoom : 1;
+      const charW = 500 * zoom;
+      const spaceW = typeof nat.Space === "number" && nat.Space > 0 ? nat.Space : charW;
+      const boxW = Math.min(spaceW, charW);
+      const boxX = nat.X + (spaceW > charW ? (spaceW - charW) / 2 : 0);
+      const boxY = nat.Y;
+      const edge = EDGE * zoom;
+      const gap = GAP * zoom;
+      const inner = Math.max(4, boxW - edge * 2);
+      const slotW = Math.max(2, (inner - gap) / 2);
+      const leftX = boxX + edge;
+      const rightX = leftX + slotW + gap;
+      const trackY = boxY + BAR_Y * zoom;
+      const h = Math.max(2, BAR_H * zoom);
+      const showRight = !!(row.prog.split && row.prog.orgasm != null);
+      ctx.save();
+      paintSlot2(leftX, row.prog.arousal / 100, showRight ? "#e891b8" : "#c44");
+      if (showRight) paintSlot2(rightX, (row.prog.orgasm || 0) / 100, "#c44");
+      ctx.restore();
+    }
+  }
+  var suppressMember = null;
+  function seidrInstallArousalBars() {
+    Seidr.hookFunction("DrawArousalMeter", 10, function(args, next) {
+      const C = args[0];
+      if (shouldSkipOnCharacter(C)) {
+        if (C && typeof C.MemberNumber === "number") suppressMember = C.MemberNumber;
+        if (settingsMode() === "bottomBar") queueBottom(C);
+        return;
+      }
+      if (seidrMeterApplies(C) && settingsMode() === "untilChange") {
+        untilChangeVisible(C, readProgress(C));
+      }
+      suppressMember = null;
+      return next(args);
+    });
+    Seidr.tryHook("DrawArousalThermometer", "DrawArousalThermometer", 10, function(args, next) {
+      if (suppressMember != null) return;
+      return next(args);
+    });
+    Seidr.tryHook("DrawArousalGlow", "DrawArousalGlow", 10, function(args, next) {
+      if (suppressMember != null) return;
+      return next(args);
+    });
+    Seidr.hookFunction("ChatRoomRun", 0, function(args, next) {
+      const result = next(args);
+      try {
+        if (settingsMode() !== "bottomBar") {
+          bottomQueue = [];
+        } else {
+          const inRoom = typeof CurrentScreen === "undefined" || CurrentScreen === "ChatRoom";
+          const charView = typeof ChatRoomCharacterViewIsActive !== "function" || ChatRoomCharacterViewIsActive();
+          if (inRoom && charView) flushBottomBars();
+          else bottomQueue = [];
+        }
+      } catch (e) {
+      }
+      return result;
+    });
+  }
+  Seidr.installArousalBars = seidrInstallArousalBars;
 
   // src/net.ts
   var seidrPeers = {};
@@ -2016,274 +2549,6 @@
       return next(args);
     });
   };
-
-  // src/settings/model.ts
-  var RM_LAUNCHER_POSITIONS = [
-    { id: "topLeft", label: "Top Left" },
-    { id: "topRight", label: "Top Right" },
-    { id: "bottomLeft", label: "Bottom Left" },
-    { id: "bottomRight", label: "Bottom Right" },
-    { id: "middleLeft", label: "Middle Left" },
-    { id: "middleRight", label: "Middle Right" },
-    { id: "chatLeft", label: "Chat Left" },
-    { id: "chatTop", label: "Chat Top" },
-    { id: "chatBottom", label: "Chat Bottom" }
-  ];
-  var POSITION_IDS = RM_LAUNCHER_POSITIONS.map(function(p) {
-    return p.id;
-  });
-  var SEIDR_DRAW_OFFSET_MIN = -400;
-  var SEIDR_DRAW_OFFSET_MAX = 400;
-  function seidrDefaultDrawOffsets() {
-    return {
-      pull: { x: 75, y: 0 },
-      cuddle: { x: 0, y: -50 }
-    };
-  }
-  function seidrClampDrawCoord(raw, fallback) {
-    const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseFloat(raw) : NaN;
-    if (!Number.isFinite(n)) return fallback;
-    const rounded = Math.round(n);
-    if (rounded < SEIDR_DRAW_OFFSET_MIN) return SEIDR_DRAW_OFFSET_MIN;
-    if (rounded > SEIDR_DRAW_OFFSET_MAX) return SEIDR_DRAW_OFFSET_MAX;
-    return rounded;
-  }
-  function seidrClampPullX(raw, fallback) {
-    const n = seidrClampDrawCoord(raw, fallback);
-    return Math.abs(n);
-  }
-  function seidrNormalizeDrawOffsetPair(raw, fallback) {
-    const src = raw && typeof raw === "object" ? raw : null;
-    return {
-      x: seidrClampDrawCoord(src && src.x, fallback.x),
-      y: seidrClampDrawCoord(src && src.y, fallback.y)
-    };
-  }
-  function migrateLegacyPull(raw) {
-    const left = raw.pullLeft && typeof raw.pullLeft === "object" ? raw.pullLeft : null;
-    const right = raw.pullRight && typeof raw.pullRight === "object" ? raw.pullRight : null;
-    if (!left && !right) return null;
-    const lx = left && typeof left.x === "number" && Number.isFinite(left.x) ? Math.abs(left.x) : 0;
-    const rx = right && typeof right.x === "number" && Number.isFinite(right.x) ? Math.abs(right.x) : 0;
-    const x = lx || rx || 75;
-    let y = 0;
-    if (left && typeof left.y === "number" && Number.isFinite(left.y)) y = left.y;
-    else if (right && typeof right.y === "number" && Number.isFinite(right.y)) y = right.y;
-    return { x: seidrClampPullX(x, 75), y: seidrClampDrawCoord(y, 0) };
-  }
-  function seidrNormalizeDrawOffsets(raw, fallback) {
-    const base = fallback ? seidrCloneDrawOffsets(fallback) : seidrDefaultDrawOffsets();
-    if (!raw || typeof raw !== "object") return base;
-    const d = raw;
-    let pull = base.pull;
-    if (d.pull && typeof d.pull === "object") {
-      const p = d.pull;
-      pull = {
-        x: seidrClampPullX(p.x, base.pull.x),
-        y: seidrClampDrawCoord(p.y, base.pull.y)
-      };
-    } else {
-      const migrated = migrateLegacyPull(d);
-      if (migrated) pull = migrated;
-    }
-    const cuddle = seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle);
-    return { pull, cuddle };
-  }
-  function seidrCloneDrawOffsets(o) {
-    return {
-      pull: { x: o.pull.x, y: o.pull.y },
-      cuddle: { x: o.cuddle.x, y: o.cuddle.y }
-    };
-  }
-  function seidrDefaultSettings() {
-    return {
-      roomManagerEnabled: true,
-      showQuickmenuButton: true,
-      launcherPosition: "chatTop",
-      drawOffsets: seidrDefaultDrawOffsets()
-    };
-  }
-  function seidrNormalizeSettings(raw) {
-    const base = seidrDefaultSettings();
-    if (!raw || typeof raw !== "object") return base;
-    const d = raw;
-    if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
-    if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
-    if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition) >= 0) {
-      base.launcherPosition = d.launcherPosition;
-    }
-    base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
-    return base;
-  }
-
-  // src/roomManager/model.ts
-  function rmEmptyStore() {
-    return {
-      version: Seidr.RM_DATA_VERSION || 1,
-      room: {},
-      access: {},
-      backgrounds: [],
-      maps: [],
-      ui: {},
-      settings: seidrDefaultSettings()
-    };
-  }
-  function rmNormalizeStore(data) {
-    const base = rmEmptyStore();
-    if (!data || typeof data !== "object") return base;
-    const d = data;
-    base.version = typeof d.version === "number" ? d.version : base.version;
-    base.room = d.room && typeof d.room === "object" ? d.room : {};
-    base.access = d.access && typeof d.access === "object" ? d.access : {};
-    if (Array.isArray(d.backgrounds)) base.backgrounds = d.backgrounds;
-    else if (d.background && typeof d.background === "object") {
-      base.backgrounds = [];
-    }
-    base.maps = Array.isArray(d.maps) ? d.maps : [];
-    base.ui = d.ui && typeof d.ui === "object" ? d.ui : {};
-    base.settings = seidrNormalizeSettings(d.settings);
-    return base;
-  }
-  function rmNewId(prefix) {
-    return prefix + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-  }
-  function rmIsShown() {
-    return !!Seidr.SHOW_ROOM_MANAGER;
-  }
-
-  // src/roomManager/storage.ts
-  var _store = null;
-  var _lastBytes = 0;
-  function lz() {
-    try {
-      if (typeof LZString !== "undefined" && LZString) return LZString;
-    } catch (e) {
-    }
-    return null;
-  }
-  function pack(obj) {
-    const json = JSON.stringify(obj);
-    const L = lz();
-    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
-    if (L && typeof L.compressToUTF16 === "function" && json.length > 400) {
-      return prefix + L.compressToUTF16(json);
-    }
-    return json;
-  }
-  function unpack(raw) {
-    if (raw == null || raw === "") return null;
-    if (typeof raw === "object") return raw;
-    if (typeof raw !== "string") return null;
-    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
-    try {
-      if (raw.startsWith(prefix)) {
-        const L = lz();
-        if (!L || typeof L.decompressFromUTF16 !== "function") return null;
-        const plain = L.decompressFromUTF16(raw.slice(prefix.length));
-        return plain ? JSON.parse(plain) : null;
-      }
-      if (typeof LZString !== "undefined" && LZString.decompressFromBase64) {
-        const plain = LZString.decompressFromBase64(raw);
-        if (plain) return JSON.parse(plain);
-      }
-      return JSON.parse(raw);
-    } catch (e) {
-      console.warn("[Seidr RM] unpack failed", e);
-      return null;
-    }
-  }
-  function rmGetStore() {
-    if (_store) return _store;
-    let data = null;
-    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
-    try {
-      if (Player && Player.ExtensionSettings && Player.ExtensionSettings[key] != null) {
-        const raw = Player.ExtensionSettings[key];
-        if (typeof raw === "string") _lastBytes = raw.length;
-        data = unpack(raw);
-      }
-    } catch (e) {
-      console.warn("[Seidr RM] ES read failed", e);
-    }
-    _store = rmNormalizeStore(data);
-    return _store;
-  }
-  function rmSaveStore() {
-    const store = rmGetStore();
-    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
-    const packed = pack(store);
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    _lastBytes = packed.length;
-    if (packed.length > max) {
-      return { ok: false, error: "Storage full (" + rmFormatBytes(packed.length) + " / " + rmFormatBytes(max) + ")", bytes: packed.length };
-    }
-    try {
-      if (!Player.ExtensionSettings) Player.ExtensionSettings = {};
-      Player.ExtensionSettings[key] = packed;
-      if (typeof ServerPlayerExtensionSettingsSync === "function") {
-        ServerPlayerExtensionSettingsSync(key);
-      }
-    } catch (e) {
-      console.warn("[Seidr RM] ES write failed", e);
-      return { ok: false, error: "Save failed", bytes: packed.length };
-    }
-    return { ok: true, bytes: packed.length };
-  }
-  function rmInvalidateStore() {
-    _store = null;
-  }
-  function rmCompressedBytes() {
-    if (_lastBytes) return _lastBytes;
-    try {
-      const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
-      const raw = Player && Player.ExtensionSettings && Player.ExtensionSettings[key];
-      if (typeof raw === "string") {
-        _lastBytes = raw.length;
-        return _lastBytes;
-      }
-    } catch (e) {
-    }
-    return 0;
-  }
-  function rmMapsBytesEstimate(store) {
-    const s = store || rmGetStore();
-    try {
-      return pack({ maps: s.maps || [] }).length;
-    } catch (e) {
-      return 0;
-    }
-  }
-  function rmMapBudgetBytes() {
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    const ratio = typeof Seidr.RM_MAP_BUDGET_RATIO === "number" ? Seidr.RM_MAP_BUDGET_RATIO : 0.75;
-    return Math.floor(max * ratio);
-  }
-  function rmCanSaveMaps(nextMaps) {
-    const probe = pack({ maps: nextMaps });
-    const budget = rmMapBudgetBytes();
-    if (probe.length > budget) {
-      return { ok: false, error: "Maps would exceed 75% storage budget (" + rmFormatBytes(probe.length) + " / " + rmFormatBytes(budget) + ")" };
-    }
-    const store = rmGetStore();
-    const full = pack(Object.assign({}, store, { maps: nextMaps }));
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    if (full.length > max) {
-      return { ok: false, error: "Total storage full" };
-    }
-    return { ok: true };
-  }
-  function rmFormatBytes(bytes) {
-    const n = Math.max(0, Number(bytes) || 0);
-    if (n < 1024) return n.toFixed(0) + " B";
-    return (n / 1024).toFixed(2) + " KB";
-  }
-  function rmUsageLabel() {
-    const used = rmCompressedBytes();
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    const maps = rmMapsBytesEstimate();
-    const mapCap = rmMapBudgetBytes();
-    return "Storage: " + rmFormatBytes(used) + " / " + rmFormatBytes(max) + "  (maps " + rmFormatBytes(maps) + " \xB7 75% cap " + rmFormatBytes(mapCap) + ")";
-  }
 
   // src/roomManager/styles.ts
   function rmStylesCss() {
@@ -3435,18 +3700,6 @@
   Seidr.rmRefreshUi = rmRefreshUi;
   Seidr.rmUpdateApplyUi = rmUpdateApplyUi;
 
-  // src/settings/storage.ts
-  function seidrGetSettings() {
-    const store = rmGetStore();
-    store.settings = seidrNormalizeSettings(store.settings);
-    return store.settings;
-  }
-  function seidrSaveSettings(patch) {
-    const store = rmGetStore();
-    store.settings = seidrNormalizeSettings(Object.assign({}, seidrDefaultSettings(), store.settings, patch));
-    return rmSaveStore();
-  }
-
   // src/roomManager/shell.ts
   var root = null;
   var btn = null;
@@ -3987,12 +4240,13 @@
       "#seidr-settings-panel {",
       "  pointer-events: auto; position: fixed; z-index: 120;",
       "  display: none; flex-direction: column;",
-      "  width: min(92vw, 460px); min-width: 300px;",
-      "  max-height: min(85vh, 640px);",
+      "  width: min(92vw, 460px); height: min(85vh, 640px);",
+      "  min-width: 300px; min-height: 240px;",
+      "  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);",
       "  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;",
       "  box-shadow: 0 12px 40px rgba(0,0,0,0.5);",
-      "  overflow: hidden;",
+      "  overflow: hidden; resize: both;",
       "  font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;",
       "  left: 50%; top: 18%; transform: translateX(-50%);",
       "}",
@@ -4017,11 +4271,36 @@
       ".seidr-settings-body {",
       "  flex: 1; min-height: 0; overflow: auto; padding: 12px 14px;",
       "  display: flex; flex-direction: column; gap: 14px;",
+      "  scrollbar-width: thin;",
+      "  scrollbar-color: rgba(212,160,23,0.55) rgba(20,16,28,0.9);",
+      "}",
+      ".seidr-settings-body::-webkit-scrollbar { width: 8px; }",
+      ".seidr-settings-body::-webkit-scrollbar-track {",
+      "  background: rgba(20,16,28,0.9); border-radius: 4px;",
+      "}",
+      ".seidr-settings-body::-webkit-scrollbar-thumb {",
+      "  background: rgba(212,160,23,0.55); border-radius: 4px;",
+      "}",
+      ".seidr-settings-body::-webkit-scrollbar-thumb:hover {",
+      "  background: rgba(212,160,23,0.8);",
       "}",
       ".seidr-settings-sec {",
       "  background: rgba(42, 34, 56, 0.85); border: 1px solid rgba(255,255,255,0.1);",
       "  border-radius: 6px; padding: 10px;",
       "}",
+      ".seidr-settings-sec > summary {",
+      "  margin: 0; font-size: 11px; letter-spacing: 0.05em;",
+      "  text-transform: uppercase; color: #d4a017;",
+      "  cursor: pointer; list-style: none; user-select: none;",
+      "  display: flex; align-items: center; gap: 6px;",
+      "}",
+      ".seidr-settings-sec > summary::-webkit-details-marker { display: none; }",
+      ".seidr-settings-sec > summary::before {",
+      '  content: "\u25B8"; display: inline-block; width: 0.9em; color: #d4a017;',
+      "  transition: transform 0.12s ease;",
+      "}",
+      ".seidr-settings-sec[open] > summary::before { transform: rotate(90deg); }",
+      ".seidr-settings-sec[open] > summary { margin-bottom: 8px; }",
       ".seidr-settings-sec h3 {",
       "  margin: 0 0 8px; font-size: 11px; letter-spacing: 0.05em;",
       "  text-transform: uppercase; color: #d4a017;",
@@ -4031,6 +4310,17 @@
       "}",
       ".seidr-settings-row label {",
       "  display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; min-width: 0;",
+      "}",
+      ".seidr-settings-field-row {",
+      "  display: flex; flex-wrap: nowrap; gap: 8px; align-items: center;",
+      "}",
+      ".seidr-settings-field-label {",
+      "  flex: 0 0 72px; font-size: 12px; color: #f0e6d4; line-height: 1.35;",
+      "}",
+      ".seidr-settings-field-row select {",
+      "  flex: 1; min-width: 0;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4; border: 1px solid rgba(255,255,255,0.14);",
+      "  border-radius: 4px; padding: 6px 8px;",
       "}",
       ".seidr-settings-row select {",
       "  flex: 1; min-width: 160px;",
@@ -4109,9 +4399,15 @@
     const opts = RM_LAUNCHER_POSITIONS.map(function(p) {
       return '<option value="' + p.id + '">' + p.label + "</option>";
     }).join("");
+    const modeOpts = AROUSAL_BAR_MODES.map(function(m) {
+      return '<option value="' + m.id + '">' + m.label + "</option>";
+    }).join("");
+    const scopeOpts = AROUSAL_BAR_SCOPES.map(function(s) {
+      return '<option value="' + s.id + '">' + s.label + "</option>";
+    }).join("");
     body.innerHTML = [
-      '<section class="seidr-settings-sec">',
-      "<h3>Room Manager</h3>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Room Manager</summary>",
       '<div class="seidr-settings-row">',
       '<label><input type="checkbox" id="seidr-set-rm-enabled" /> Activate Room Manager</label>',
       "</div>",
@@ -4124,16 +4420,16 @@
       '<button type="button" id="seidr-set-open-rm">Open Room Manager</button>',
       "</div>",
       '<p class="seidr-settings-hint" id="seidr-set-open-rm-msg"></p>',
-      "</section>",
-      '<section class="seidr-settings-sec">',
-      "<h3>Launcher position</h3>",
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Launcher position</summary>",
       '<div class="seidr-settings-row">',
       '<select id="seidr-set-rm-pos">' + opts + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
-      "</section>",
-      '<section class="seidr-settings-sec">',
-      "<h3>Drawing</h3>",
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Drawing</summary>",
       '<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only \u2014 hitboxes stay put. Save Drawing to keep.</p>',
       poseRow("pull", "Pull"),
       poseRow("cuddle", "Cuddle"),
@@ -4141,7 +4437,20 @@
       '<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
       "</div>",
       '<p class="seidr-settings-hint" id="seidr-set-draw-msg"></p>',
-      "</section>"
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Arousal bars</summary>",
+      '<p class="seidr-settings-hint">Hide or relocate Club / BCTweaks arousal meters (on-character thermometer and split orgasm track).</p>',
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Mode</span>',
+      '<select id="seidr-set-arousal-mode">' + modeOpts + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Who</span>',
+      '<select id="seidr-set-arousal-scope">' + scopeOpts + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
+      "</details>"
     ].join("");
   }
   function setDrawMsg(text) {
@@ -4196,22 +4505,30 @@
     const en = $2("seidr-set-rm-enabled");
     const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
+    const am = $2("seidr-set-arousal-mode");
+    const as = $2("seidr-set-arousal-scope");
     if (en) en.checked = !!s.roomManagerEnabled;
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
+    if (am) am.value = s.arousalBarMode;
+    if (as) as.value = s.arousalBarScope;
     seidrBeginDrawDraft();
   }
   function seidrBindSettingsUi(onChange) {
     const en = $2("seidr-set-rm-enabled");
     const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
+    const am = $2("seidr-set-arousal-mode");
+    const ascope = $2("seidr-set-arousal-scope");
     const openRm = $2("seidr-set-open-rm");
     const openMsg = $2("seidr-set-open-rm-msg");
     function persist() {
       const patch = {
         roomManagerEnabled: !!(en && en.checked),
         showQuickmenuButton: !!(qm && qm.checked),
-        launcherPosition: pos && pos.value ? pos.value : "chatTop"
+        launcherPosition: pos && pos.value ? pos.value : "chatTop",
+        arousalBarMode: am && am.value ? am.value : "off",
+        arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster"
       };
       seidrSaveSettings(patch);
       if (onChange) onChange();
@@ -4219,6 +4536,8 @@
     if (en) en.addEventListener("change", persist);
     if (qm) qm.addEventListener("change", persist);
     if (pos) pos.addEventListener("change", persist);
+    if (am) am.addEventListener("change", persist);
+    if (ascope) ascope.addEventListener("change", persist);
     if (openRm) {
       openRm.addEventListener("click", function() {
         const s = seidrGetSettings();
@@ -4372,6 +4691,9 @@
     seidrEnsureSettingsShell();
     if (!panel2) return;
     seidrRefreshSettingsUi();
+    panel2.querySelectorAll("details").forEach(function(d) {
+      d.removeAttribute("open");
+    });
     panel2.classList.add("seidr-settings-open");
     panel2.removeAttribute("hidden");
   }
@@ -4522,6 +4844,13 @@
     Seidr.registerBcModSdk();
     Seidr.installActivities();
     Seidr.installDraw();
+    if (typeof Seidr.installArousalBars === "function") {
+      try {
+        Seidr.installArousalBars();
+      } catch (e) {
+        console.warn("[Seidr] Arousal bars", e);
+      }
+    }
     Seidr.installNet();
     if (typeof Seidr.installRoomManager === "function") {
       try {

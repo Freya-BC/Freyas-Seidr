@@ -1,6 +1,8 @@
 /** Seidr settings panel body */
 import { Seidr } from "../seidr";
 import {
+	AROUSAL_BAR_MODES,
+	AROUSAL_BAR_SCOPES,
 	RM_LAUNCHER_POSITIONS,
 	seidrCloneDrawOffsets,
 	seidrDefaultDrawOffsets,
@@ -8,6 +10,8 @@ import {
 	SEIDR_DRAW_OFFSET_MAX,
 	SEIDR_DRAW_OFFSET_MIN,
 	type RmLauncherPosition,
+	type SeidrArousalBarMode,
+	type SeidrArousalBarScope,
 	type SeidrDrawOffsets,
 } from "./model";
 import { seidrApplyDrawOffsets } from "./drawOffsets";
@@ -43,9 +47,15 @@ export function seidrBuildSettingsBody() {
 	const opts = RM_LAUNCHER_POSITIONS.map(function (p) {
 		return '<option value="' + p.id + '">' + p.label + "</option>";
 	}).join("");
+	const modeOpts = AROUSAL_BAR_MODES.map(function (m) {
+		return '<option value="' + m.id + '">' + m.label + "</option>";
+	}).join("");
+	const scopeOpts = AROUSAL_BAR_SCOPES.map(function (s) {
+		return '<option value="' + s.id + '">' + s.label + "</option>";
+	}).join("");
 	body.innerHTML = [
-		'<section class="seidr-settings-sec">',
-		"<h3>Room Manager</h3>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Room Manager</summary>",
 		'<div class="seidr-settings-row">',
 		'<label><input type="checkbox" id="seidr-set-rm-enabled" /> Activate Room Manager</label>',
 		"</div>",
@@ -58,16 +68,16 @@ export function seidrBuildSettingsBody() {
 		'<button type="button" id="seidr-set-open-rm">Open Room Manager</button>',
 		"</div>",
 		'<p class="seidr-settings-hint" id="seidr-set-open-rm-msg"></p>',
-		"</section>",
-		'<section class="seidr-settings-sec">',
-		"<h3>Launcher position</h3>",
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Launcher position</summary>",
 		'<div class="seidr-settings-row">',
 		'<select id="seidr-set-rm-pos">' + opts + "</select>",
 		"</div>",
 		'<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
-		"</section>",
-		'<section class="seidr-settings-sec">',
-		"<h3>Drawing</h3>",
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Drawing</summary>",
 		'<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only — hitboxes stay put. Save Drawing to keep.</p>',
 		poseRow("pull", "Pull"),
 		poseRow("cuddle", "Cuddle"),
@@ -75,7 +85,20 @@ export function seidrBuildSettingsBody() {
 		'<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
 		"</div>",
 		'<p class="seidr-settings-hint" id="seidr-set-draw-msg"></p>',
-		"</section>",
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Arousal bars</summary>",
+		'<p class="seidr-settings-hint">Hide or relocate Club / BCTweaks arousal meters (on-character thermometer and split orgasm track).</p>',
+		'<div class="seidr-settings-field-row">',
+		'<span class="seidr-settings-field-label">Mode</span>',
+		'<select id="seidr-set-arousal-mode">' + modeOpts + "</select>",
+		"</div>",
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">Who</span>',
+		'<select id="seidr-set-arousal-scope">' + scopeOpts + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
+		"</details>",
 	].join("");
 }
 
@@ -138,9 +161,13 @@ export function seidrRefreshSettingsUi() {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
+	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
+	const as = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
 	if (en) en.checked = !!s.roomManagerEnabled;
 	if (qm) qm.checked = s.showQuickmenuButton !== false;
 	if (pos) pos.value = s.launcherPosition;
+	if (am) am.value = s.arousalBarMode;
+	if (as) as.value = s.arousalBarScope;
 	seidrBeginDrawDraft();
 }
 
@@ -148,6 +175,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
+	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
+	const ascope = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
 	const openRm = $("seidr-set-open-rm") as HTMLButtonElement | null;
 	const openMsg = $("seidr-set-open-rm-msg");
 	function persist() {
@@ -155,6 +184,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			roomManagerEnabled: !!(en && en.checked),
 			showQuickmenuButton: !!(qm && qm.checked),
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
+			arousalBarMode: (am && am.value ? am.value : "off") as SeidrArousalBarMode,
+			arousalBarScope: (ascope && ascope.value ? ascope.value : "seidrCluster") as SeidrArousalBarScope,
 		};
 		seidrSaveSettings(patch);
 		if (onChange) onChange();
@@ -162,6 +193,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (en) en.addEventListener("change", persist);
 	if (qm) qm.addEventListener("change", persist);
 	if (pos) pos.addEventListener("change", persist);
+	if (am) am.addEventListener("change", persist);
+	if (ascope) ascope.addEventListener("change", persist);
 	if (openRm) {
 		openRm.addEventListener("click", function () {
 			const s = seidrGetSettings();

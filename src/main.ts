@@ -8,6 +8,7 @@ import "./undress";
 import "./core/sdk";
 import "./activities";
 import "./draw";
+import "./arousalBars";
 import "./net";
 import "./roomManager/index";
 import "./settings/index";
@@ -93,6 +94,9 @@ function installHooks() {
 	Seidr.registerBcModSdk();
 	Seidr.installActivities();
 	Seidr.installDraw();
+	if (typeof Seidr.installArousalBars === "function") {
+		try { Seidr.installArousalBars(); } catch (e) { console.warn("[Seidr] Arousal bars", e); }
+	}
 	Seidr.installNet();
 	if (typeof Seidr.installRoomManager === "function") {
 		try { Seidr.installRoomManager(); } catch (e) { console.warn("[Seidr] Room Manager", e); }

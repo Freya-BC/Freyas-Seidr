@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.24";
+Seidr.VERSION = "1.0.29";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -15,7 +15,8 @@ Seidr.drawOffsets = {
 	pull: { x: 75, y: 0 },
 	cuddle: { x: 0, y: -50 },
 };
-Seidr.BOOKMARK_GIST_ID = "9bbf11dc304132b1dc2d8e8ff4eea168";
+/** Dev bookmark gist (feature channel). Empty → next push-gist creates a new public gist. */
+Seidr.BOOKMARK_GIST_ID = "aaf3ff1d74aec0d971e2739b27a08b96";
 Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
 Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
 Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
