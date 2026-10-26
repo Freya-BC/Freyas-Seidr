@@ -2,7 +2,7 @@
 
 Open **Preference → Extensions → Seidr** (Seidr logo). The panel returns you to the game after opening (same pattern as Freyas Better Maps).
 
-Tabs: **General** | **Actions** (when Actions are enabled in the build).
+Tabs: **General** | **Actions** | **Commands** (feature flags may hide a tab in some builds).
 
 ---
 
@@ -85,6 +85,29 @@ Refreshes when you open / refresh Settings. See README **Storage**.
 Full editor for custom Activity Menu entries: list, chat, items, conditions, arousal template, sound, pose, icons, export/import.
 
 See [ACTIONS.md](ACTIONS.md).
+
+---
+
+## Commands tab
+
+Chat slash-command setup (`/a` / `/action`):
+
+### People
+
+- **Add person** → dropdown of saved people → editor underneath  
+- **Alias** + **Member ID** (text) → **Save person** / **Delete**  
+- Used for `/a` targets and to disambiguate duplicate room names  
+
+### Actions
+
+- **Add action** → dropdown of saved bindings → editor underneath (same pattern as the Actions tab)  
+- **Call name** (what you type in chat)  
+- **Slot** dropdown, then **Activity** dropdown for that slot (Club / Seidr / mods)  
+- **Save action** / **Delete**  
+
+In the chat box, **Tab** opens autocomplete for member and action tokens. Details: [COMMANDS.md](COMMANDS.md).
+
+These bindings are separate from the **Actions** tab (Activity Menu).
 
 ---
 

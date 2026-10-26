@@ -2,11 +2,11 @@
 
 ![Seidr](assets/freyas-seidr-logo.png)
 
-**Seidr** is a Bondage Club plugin for holds, undress, custom Activity Menu actions, room admin tools, and related quality-of-life settings. Hold poses sync between Seidr peers; activity chat lines stay readable for everyone in the room, including clients without the mod.
+**Seidr** is a Bondage Club plugin for holds, undress, custom Activity Menu actions, chat slash commands, room admin tools, and related quality-of-life settings. Hold poses sync between Seidr peers; activity chat lines stay readable for everyone in the room, including clients without the mod.
 
 | | |
 |---|---|
-| **Version** | 1.0.44 |
+| **Version** | 1.0.47 |
 | **Author** | Freya |
 | **Pages** | https://freya-bc.github.io/Freyas-Seidr/ |
 | **FUSAM loader** | https://freya-bc.github.io/Freyas-Seidr/loader.js |
@@ -20,13 +20,14 @@
 3. [Holds](#holds)
 4. [Undress](#undress)
 5. [Custom Actions](#custom-actions)
-6. [Fast Open](#fast-open)
-7. [Room Manager](#room-manager)
-8. [Settings](#settings)
-9. [Echo coexistence](#echo-coexistence)
-10. [Storage](#storage)
-11. [Build (maintainers)](#build-maintainers)
-12. [Detailed docs](#detailed-docs)
+6. [Chat Commands](#chat-commands)
+7. [Fast Open](#fast-open)
+8. [Room Manager](#room-manager)
+9. [Settings](#settings)
+10. [Echo coexistence](#echo-coexistence)
+11. [Storage](#storage)
+12. [Build (maintainers)](#build-maintainers)
+13. [Detailed docs](#detailed-docs)
 
 ---
 
@@ -53,6 +54,7 @@ Open **Preference → Extensions → Seidr** (Seidr logo) for the settings panel
 | **Holds** | Pull Left / Right, Cuddle, Remove, Leave on Item Torso — shared poses for Seidr peers |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
+| **Chat Commands** | `/a` / `/action <member> <action>` with Tab autocomplete; bind call names in Settings → Commands |
 | **Fast Open** | Modifier-click a character to open Activity View on a chosen Item\* slot |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, maps |
 | **Drawing** | Pull / cuddle visual spacing (models only; hitboxes stay put) |
@@ -112,6 +114,31 @@ More detail: [`docs/ACTIONS.md`](docs/ACTIONS.md).
 
 ---
 
+## Chat Commands
+
+Run a bound activity from chat:
+
+```
+/a <member> <action>
+/action <member> <action>
+```
+
+| | |
+|---|---|
+| **Member** | Member ID, Commands → People alias, or room Name/Nickname. Multi-word: `"Long Nick"`. |
+| **Action** | Call name from **Settings → Commands → Actions** (rest of the line; spaces OK). |
+
+Define bindings under **Settings → Commands**:
+
+1. **People** — optional alias → Member ID (helps when names collide).
+2. **Actions** — call name → slot → Club/Seidr/mod activity (dropdown + editor, like the Actions tab).
+
+**Tab** in the chat box opens Seidr autocomplete (W/S or arrows, E/Enter, Esc). Local warnings appear if the member is missing, ambiguous, or the activity is unavailable.
+
+More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
+
+---
+
 ## Fast Open
 
 **Settings → General → Fast Open Actions** (on by default):
@@ -164,6 +191,10 @@ More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 Full editor for custom Activity Menu entries (see [Custom Actions](#custom-actions)).
 
+### Commands
+
+People aliases and `/a` action bindings (see [Chat Commands](#chat-commands)).
+
 More detail: [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 ---
@@ -187,7 +218,8 @@ Almost all Seidr data lives in one synced bag:
 | Total bag | ~180 KB compressed |
 | Maps share | at most **75%** of that budget |
 | Named maps | ≤ 10 |
-| Custom actions | ≤ 50 |
+| Custom Activity Menu actions | ≤ 50 |
+| Chat command people / actions | ≤ 50 each |
 | Custom action icon URLs | ≤ 10 |
 
 Background **preview thumbnails** use browser localStorage only (not the synced bag).
@@ -214,6 +246,7 @@ Requires Node 18+. Source is TypeScript under `src/` with `bc-stubs`. Public Rel
 | [`docs/HOLDS.md`](docs/HOLDS.md) | Pull / cuddle / remove / leave, badges, peers |
 | [`docs/UNDRESS.md`](docs/UNDRESS.md) | Clothing undress + Echo layers |
 | [`docs/ACTIONS.md`](docs/ACTIONS.md) | Custom Activity Menu actions |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | `/a` chat commands, People, Tab autocomplete |
 | [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md) | Admin room / access / backgrounds / maps |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference |
 
