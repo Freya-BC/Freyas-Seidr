@@ -20,6 +20,7 @@ import { seidrRestraintSlots } from "../actions/model";
 import { seidrApplyDrawOffsets } from "./drawOffsets";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
 import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
+import { seidrBuildCommandsTab, seidrRefreshCommandsTab } from "../commands/ui";
 import { rmFormatBytes, rmUsageBreakdown } from "../roomManager/storage";
 
 function $(id: string): HTMLElement | null {
@@ -183,11 +184,15 @@ export function seidrBuildSettingsBody() {
 	const tabs = $("seidr-settings-tabs");
 	if (!body) return;
 	const showActions = Seidr.SHOW_ACTIONS !== false;
+	const showCommands = Seidr.SHOW_COMMANDS !== false;
 	if (tabs) {
 		tabs.innerHTML = [
 			'<button type="button" class="seidr-settings-tab seidr-settings-tab-on" data-seidr-tab="general">General</button>',
 			showActions
 				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>'
+				: "",
+			showCommands
+				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>'
 				: "",
 		].join("");
 	}
@@ -198,10 +203,17 @@ export function seidrBuildSettingsBody() {
 		showActions
 			? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>'
 			: "",
+		showCommands
+			? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>'
+			: "",
 	].join("");
 	if (showActions) {
 		const actPane = $("seidr-settings-pane-actions");
 		if (actPane) seidrBuildActionsTab(actPane);
+	}
+	if (showCommands) {
+		const cmdPane = $("seidr-settings-pane-commands");
+		if (cmdPane) seidrBuildCommandsTab(cmdPane);
 	}
 	const tabRoot = tabs || body;
 	tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function (btn) {
@@ -292,6 +304,7 @@ export function seidrRefreshSettingsUi() {
 	seidrBeginDrawDraft();
 	seidrRefreshStorageUi();
 	if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
+	if (Seidr.SHOW_COMMANDS !== false) seidrRefreshCommandsTab();
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {

@@ -10,6 +10,7 @@ import "./activities";
 import "./draw";
 import "./arousalBars";
 import "./actions/index";
+import "./commands/index";
 import "./fastOpen";
 import "./net";
 import "./roomManager/index";
@@ -31,11 +32,11 @@ Seidr.prepareReload = function () {
 	}
 	Seidr._booted = false;
 	Seidr._hookState = {};
-	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles"].forEach(function (id) {
+	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
-	["seidr-rm-root", "seidr-settings-root"].forEach(function (id) {
+	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
@@ -104,6 +105,9 @@ function installHooks() {
 	}
 	if (typeof Seidr.installActions === "function") {
 		try { Seidr.installActions(); } catch (e) { console.warn("[Seidr] Actions", e); }
+	}
+	if (typeof Seidr.installCommands === "function") {
+		try { Seidr.installCommands(); } catch (e) { console.warn("[Seidr] Commands", e); }
 	}
 	Seidr.installNet();
 	if (typeof Seidr.installRoomManager === "function") {

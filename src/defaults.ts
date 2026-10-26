@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.44";
+Seidr.VERSION = "1.0.47";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -25,6 +25,8 @@ Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-lo
 Seidr.SHOW_ROOM_MANAGER = true;
 /** User Actions (Activity Menu) — Dev channel. */
 Seidr.SHOW_ACTIONS = true;
+/** Chat /a commands + Commands settings tab. */
+Seidr.SHOW_COMMANDS = true;
 Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
 Seidr.RM_DATA_VERSION = 1;
 Seidr.RM_MAX_COMPRESSED = 180000;
