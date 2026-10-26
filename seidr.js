@@ -1,4 +1,4 @@
-/* Seidr v1.0.29 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.44 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.29";
+  Seidr.VERSION = "1.0.44";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -24,12 +24,14 @@
   Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
   Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
   Seidr.SHOW_ROOM_MANAGER = true;
+  Seidr.SHOW_ACTIONS = true;
   Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
   Seidr.RM_DATA_VERSION = 1;
   Seidr.RM_MAX_COMPRESSED = 18e4;
   Seidr.RM_MAP_BUDGET_RATIO = 0.75;
   Seidr.RM_MAP_MAX = 10;
   Seidr.RM_LZ_PREFIX = "SeidrRm1:";
+  Seidr.ACT_LZ_PREFIX = "SeidrAct1:";
 
   // src/state.ts
   var SLOTS = ["left", "right", "cuddle"];
@@ -764,45 +766,45 @@
     }
     return false;
   }
-  function seidrUndressDynamicLabel(act, character) {
-    if (!act || !act.undress) return act && act.label ? act.label : "Undress";
-    if (act.bundle) return act.label || "Undress all " + (act.family || "clothes");
-    var worn = seidrWornClothName(character, act.clothGroup);
+  function seidrUndressDynamicLabel(act2, character) {
+    if (!act2 || !act2.undress) return act2 && act2.label ? act2.label : "Undress";
+    if (act2.bundle) return act2.label || "Undress all " + (act2.family || "clothes");
+    var worn = seidrWornClothName(character, act2.clothGroup);
     if (worn) return "Undress " + worn;
-    return seidrUndressFallbackLabel(act);
+    return seidrUndressFallbackLabel(act2);
   }
-  function seidrUndressBuildChat(act, actor, acted, selfRun) {
-    if (!act || !act.undress) return "";
+  function seidrUndressBuildChat(act2, actor, acted, selfRun) {
+    if (!act2 || !act2.undress) return "";
     var wearer = selfRun ? actor : acted;
-    var clothing = act.bundle ? act.noun || "clothing" : seidrWornClothName(wearer, act.clothGroup) || act.noun || "clothing";
+    var clothing = act2.bundle ? act2.noun || "clothing" : seidrWornClothName(wearer, act2.clothGroup) || act2.noun || "clothing";
     var possessive = seidrPronounPossessive(actor);
-    var lines = selfRun ? act.selfTexts : act.otherTexts;
+    var lines = selfRun ? act2.selfTexts : act2.otherTexts;
     var template = seidrPickRandom(lines);
     if (!template) {
       template = selfRun ? "{SourceName} takes off {SourcePronounPossessive} {ClothingItem(Slot1)}" : "{SourceName} takes {TargetName}'s {ClothingItem(Slot1)} off";
     }
     return seidrUndressFillTemplate(template, clothing, possessive);
   }
-  function seidrUndressWriteDialogCache(act, selfRun, text) {
-    if (!act || !text || typeof ActivityDictionaryLoad !== "function") return;
+  function seidrUndressWriteDialogCache(act2, selfRun, text) {
+    if (!act2 || !text || typeof ActivityDictionaryLoad !== "function") return;
     try {
       const cache = ActivityDictionaryLoad();
       if (!cache || !cache.cache) return;
-      const zone = act.zone || "ItemTorso";
-      const key = (selfRun ? "ChatSelf-" : "ChatOther-") + zone + "-" + act.name;
+      const zone = act2.zone || "ItemTorso";
+      const key = (selfRun ? "ChatSelf-" : "ChatOther-") + zone + "-" + act2.name;
       cache.cache[key] = text;
     } catch (e) {
     }
   }
-  function seidrUndressPrepareChat(actor, acted, act) {
-    if (!act || !act.undress) return;
+  function seidrUndressPrepareChat(actor, acted, act2) {
+    if (!act2 || !act2.undress) return;
     var selfRun = !!(actor && acted && actor.MemberNumber === acted.MemberNumber);
-    var text = seidrUndressBuildChat(act, actor, acted, selfRun);
+    var text = seidrUndressBuildChat(act2, actor, acted, selfRun);
     seidrPendingUndressChat = {
-      name: act.name,
+      name: act2.name,
       text
     };
-    seidrUndressWriteDialogCache(act, selfRun, text);
+    seidrUndressWriteDialogCache(act2, selfRun, text);
   }
   function seidrUndressConsumePending(activityName) {
     if (!seidrPendingUndressChat || seidrPendingUndressChat.name !== activityName) return "";
@@ -860,14 +862,14 @@
   }
   function seidrUndressWriteLabels(cache, character) {
     if (!cache || !cache.cache) return;
-    seidrBuildUndressActivities().forEach(function(act) {
-      var label = seidrUndressDynamicLabel(act, character);
-      cache.cache["Activity" + act.name] = label;
-      var zone = act.zone;
-      cache.cache["Label-ChatOther-" + zone + "-" + act.name] = label;
-      cache.cache["Label-ChatSelf-" + zone + "-" + act.name] = label;
-      delete cache.cache["ChatOther-" + zone + "-" + act.name];
-      delete cache.cache["ChatSelf-" + zone + "-" + act.name];
+    seidrBuildUndressActivities().forEach(function(act2) {
+      var label = seidrUndressDynamicLabel(act2, character);
+      cache.cache["Activity" + act2.name] = label;
+      var zone = act2.zone;
+      cache.cache["Label-ChatOther-" + zone + "-" + act2.name] = label;
+      cache.cache["Label-ChatSelf-" + zone + "-" + act2.name] = label;
+      delete cache.cache["ChatOther-" + zone + "-" + act2.name];
+      delete cache.cache["ChatSelf-" + zone + "-" + act2.name];
     });
   }
   function seidrUndressRefreshLabels() {
@@ -1076,13 +1078,13 @@
   function seidrMergeUndressActivities() {
     if (typeof Seidr.undressActivities !== "function") return;
     var seen = {};
-    SEIDR_ACTIVITIES.forEach(function(act) {
-      if (act && act.name) seen[act.name] = true;
+    SEIDR_ACTIVITIES.forEach(function(act2) {
+      if (act2 && act2.name) seen[act2.name] = true;
     });
-    Seidr.undressActivities().forEach(function(act) {
-      if (!act || !act.name || seen[act.name]) return;
-      seen[act.name] = true;
-      SEIDR_ACTIVITIES.push(act);
+    Seidr.undressActivities().forEach(function(act2) {
+      if (!act2 || !act2.name || seen[act2.name]) return;
+      seen[act2.name] = true;
+      SEIDR_ACTIVITIES.push(act2);
     });
   }
   function seidrSvg(body) {
@@ -1136,20 +1138,20 @@
     }
     return max + 1;
   }
-  function seidrActZones(act) {
-    if (act && act.zone) return [act.zone];
+  function seidrActZones(act2) {
+    if (act2 && act2.zone) return [act2.zone];
     return Seidr.GROUPS.slice();
   }
   function seidrWriteLabels(cache) {
     if (!cache || !cache.cache) return;
-    SEIDR_ACTIVITIES.forEach(function(act) {
-      if (act.undress) return;
-      cache.cache["Activity" + act.name] = act.label;
-      seidrActZones(act).forEach(function(group) {
-        cache.cache["Label-ChatOther-" + group + "-" + act.name] = act.label;
-        cache.cache["Label-ChatSelf-" + group + "-" + act.name] = act.label;
-        cache.cache["ChatOther-" + group + "-" + act.name] = act.chat;
-        cache.cache["ChatSelf-" + group + "-" + act.name] = act.chatSelf || act.chat;
+    SEIDR_ACTIVITIES.forEach(function(act2) {
+      if (act2.undress) return;
+      cache.cache["Activity" + act2.name] = act2.label;
+      seidrActZones(act2).forEach(function(group) {
+        cache.cache["Label-ChatOther-" + group + "-" + act2.name] = act2.label;
+        cache.cache["Label-ChatSelf-" + group + "-" + act2.name] = act2.label;
+        cache.cache["ChatOther-" + group + "-" + act2.name] = act2.chat;
+        cache.cache["ChatSelf-" + group + "-" + act2.name] = act2.chatSelf || act2.chat;
       });
     });
     if (typeof Seidr.undressWriteLabels === "function") {
@@ -1157,16 +1159,16 @@
       Seidr.undressWriteLabels(cache, focused || (typeof Player !== "undefined" ? Player : null));
     }
   }
-  function seidrBindActivity(act) {
-    var prereq = act.needsHands ? ["UseHands", act.prereq] : [act.prereq];
-    var zones = seidrActZones(act);
+  function seidrBindActivity(act2) {
+    var prereq = act2.needsHands ? ["UseHands", act2.prereq] : [act2.prereq];
+    var zones = seidrActZones(act2);
     return {
-      Name: act.name,
+      Name: act2.name,
       MaxProgress: 0,
       MaxProgressSelf: 0,
       Prerequisite: prereq,
       Target: zones.slice(),
-      TargetSelf: act.self ? zones.slice() : void 0
+      TargetSelf: act2.self ? zones.slice() : void 0
     };
   }
   function seidrEnsureLabels() {
@@ -1184,15 +1186,15 @@
     if (seidrActivitiesRegistered) return;
     if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return;
     seidrMergeUndressActivities();
-    SEIDR_ACTIVITIES.forEach(function(act) {
+    SEIDR_ACTIVITIES.forEach(function(act2) {
       var existing = null;
       for (var i = 0; i < ActivityFemale3DCG.length; i++) {
-        if (ActivityFemale3DCG[i] && ActivityFemale3DCG[i].Name === act.name) {
+        if (ActivityFemale3DCG[i] && ActivityFemale3DCG[i].Name === act2.name) {
           existing = ActivityFemale3DCG[i];
           break;
         }
       }
-      var bound = seidrBindActivity(act);
+      var bound = seidrBindActivity(act2);
       if (existing) {
         if (typeof existing.ActivityID !== "number") existing.ActivityID = seidrNextActivityId();
         existing.MaxProgress = bound.MaxProgress;
@@ -1206,7 +1208,7 @@
       bound.ActivityID = seidrNextActivityId();
       ActivityFemale3DCG.push(bound);
       if (typeof ActivityFemale3DCGOrdering !== "undefined" && Array.isArray(ActivityFemale3DCGOrdering)) {
-        ActivityFemale3DCGOrdering.push(act.name);
+        ActivityFemale3DCGOrdering.push(act2.name);
       }
     });
     seidrActivitiesRegistered = true;
@@ -1242,11 +1244,11 @@
     return SeidrState.canRemoveSlot(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
   }
   function seidrApplyNamed(hubs, source, target, name) {
-    var act = seidrActivityByName(name);
-    if (!act || typeof source !== "number" || typeof target !== "number") return hubs;
-    if (act.undress) return hubs;
-    if (act.slot) return SeidrState.applySlot(hubs, source, act.slot, target);
-    if (act.removeSlot) return SeidrState.clearSlot(hubs, source, act.removeSlot);
+    var act2 = seidrActivityByName(name);
+    if (!act2 || typeof source !== "number" || typeof target !== "number") return hubs;
+    if (act2.undress) return hubs;
+    if (act2.slot) return SeidrState.applySlot(hubs, source, act2.slot, target);
+    if (act2.removeSlot) return SeidrState.clearSlot(hubs, source, act2.removeSlot);
     if (source === target) return SeidrState.leaveSelf(hubs, source);
     return SeidrState.removeRelation(hubs, source, target);
   }
@@ -1265,17 +1267,27 @@
     return match ? match[1] : "";
   }
   var SEIDR_MISSING_TAG_PREFIX = 'MISSING TEXT IN "ActivityDictionary.csv": ';
+  function seidrStripClubSoundSuffix(name) {
+    if (typeof name !== "string" || !name) return name;
+    if (name.length >= 6 && name.slice(-6) === "-Spank") return name.slice(0, -6);
+    if (name.length >= 5 && name.slice(-5) === "-Slap") return name.slice(0, -5);
+    return name;
+  }
   function seidrDialogForContent(content) {
     var match = /^(Chat(?:Other|Self))-[^-]+-(.+)$/.exec(content || "");
     if (!match) return "";
-    var act = seidrActivityByName(match[2]);
-    if (!act) return "";
-    if (act.undress && typeof Seidr.undressConsumePending === "function") {
-      var pending = Seidr.undressConsumePending(act.name);
+    if (typeof Seidr.actionDialogForContent === "function") {
+      var custom = Seidr.actionDialogForContent(content);
+      if (custom) return custom;
+    }
+    var act2 = seidrActivityByName(seidrStripClubSoundSuffix(match[2]));
+    if (!act2) return "";
+    if (act2.undress && typeof Seidr.undressConsumePending === "function") {
+      var pending = Seidr.undressConsumePending(act2.name);
       if (pending) return pending;
     }
-    if (match[1] === "ChatSelf") return act.chatSelf || act.chat;
-    return act.chat;
+    if (match[1] === "ChatSelf") return act2.chatSelf || act2.chat;
+    return act2.chat;
   }
   function seidrInjectActivityDictionaryText(data) {
     if (!data || data.Type !== "Activity" || typeof data.Content !== "string") return;
@@ -1326,23 +1338,23 @@
       seidrClearBadge(button);
       button.classList.remove("seidr-slot-active");
       button.removeAttribute("data-seidr-state");
-      var act = seidrActivityByName(name);
-      if (!act || act.undress) continue;
+      var act2 = seidrActivityByName(name);
+      if (!act2 || act2.undress) continue;
       var letter = "";
       var tip = "";
       var active = false;
-      if (act.slot) {
-        var held = SeidrState.occupant(hubs, Player.MemberNumber, act.slot);
+      if (act2.slot) {
+        var held = SeidrState.occupant(hubs, Player.MemberNumber, act2.slot);
         if (held != null) {
-          letter = act.slot === "cuddle" ? "C" : act.slot === "left" ? "L" : "R";
-          tip = act.label + ": " + seidrCharName(held);
+          letter = act2.slot === "cuddle" ? "C" : act2.slot === "left" ? "L" : "R";
+          tip = act2.label + ": " + seidrCharName(held);
           active = focusedN === held;
         }
-      } else if (act.removeSlot) {
-        var removeHeld = SeidrState.occupant(hubs, Player.MemberNumber, act.removeSlot);
+      } else if (act2.removeSlot) {
+        var removeHeld = SeidrState.occupant(hubs, Player.MemberNumber, act2.removeSlot);
         if (removeHeld != null) {
-          letter = act.removeSlot === "cuddle" ? "C" : act.removeSlot === "left" ? "L" : "R";
-          tip = act.label + ": " + seidrCharName(removeHeld);
+          letter = act2.removeSlot === "cuddle" ? "C" : act2.removeSlot === "left" ? "L" : "R";
+          tip = act2.label + ": " + seidrCharName(removeHeld);
           active = focusedN === removeHeld || focusedN === Player.MemberNumber;
         }
       } else if (focusedN != null) {
@@ -1449,17 +1461,17 @@
       var acted = args[1];
       var itemActivity = args[3];
       var actName = itemActivity && itemActivity.Activity && itemActivity.Activity.Name;
-      var act = seidrActivityByName(actName);
-      if (act && act.undress && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()) {
+      var act2 = seidrActivityByName(actName);
+      if (act2 && act2.undress && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()) {
         try {
           if (typeof Seidr.undressPrepareChat === "function") {
-            Seidr.undressPrepareChat(actor, acted, act);
+            Seidr.undressPrepareChat(actor, acted, act2);
           }
         } catch (ePrep) {
           console.warn("[Seidr] undress prep", ePrep);
         }
         var stripTarget = acted;
-        var stripGroups = act.clothGroups && act.clothGroups.length ? act.clothGroups.slice() : act.clothGroup;
+        var stripGroups = act2.clothGroups && act2.clothGroups.length ? act2.clothGroups.slice() : act2.clothGroup;
         var undressResult = next(args);
         try {
           if (typeof Seidr.undressStripDeferred === "function") {
@@ -1474,7 +1486,7 @@
       }
       var result = next(args);
       try {
-        if (!actor || !acted || !act) return result;
+        if (!actor || !acted || !act2) return result;
         if (typeof actor.IsPlayer !== "function" || !actor.IsPlayer()) return result;
         var before = Seidr.getHubs();
         var nextHubs = seidrApplyNamed(before, actor.MemberNumber, acted.MemberNumber, actName);
@@ -1819,7 +1831,515 @@
     reorder: seidrReorderDrawlist
   };
 
+  // src/actions/model.ts
+  var SEIDR_ACTION_ITEMS_MAX = 12;
+  var SEIDR_CUSTOM_ICONS_MAX = 10;
+  var SEIDR_ACTION_PREFIX = "Seidr_Act_";
+  var SEIDR_ACTIONS_MAX = 50;
+  var SEIDR_COND_MAX_GROUPS = 4;
+  var SEIDR_COND_MAX_RULES = 8;
+  var SEIDR_ACTION_CHAT_MAX = 500;
+  function seidrDefaultActionIcon() {
+    return { source: "seidr", id: "mark" };
+  }
+  function seidrNormalizeActionIcon(raw) {
+    const def = seidrDefaultActionIcon();
+    if (!raw || typeof raw !== "object") return def;
+    const d = raw;
+    const source = d.source;
+    const id = typeof d.id === "string" ? d.id.trim() : "";
+    if (!id) return def;
+    if (source === "seidr" || source === "activity" || source === "custom") {
+      return { source, id: id.slice(0, 128) };
+    }
+    return def;
+  }
+  function seidrNormalizeCustomActionIcons(raw) {
+    const out = [];
+    if (!Array.isArray(raw)) return out;
+    const seen = {};
+    for (let i = 0; i < raw.length && out.length < SEIDR_CUSTOM_ICONS_MAX; i++) {
+      const row = raw[i];
+      if (!row || typeof row !== "object") continue;
+      const r = row;
+      const id = typeof r.id === "string" ? r.id.trim().slice(0, 64) : "";
+      const url = typeof r.url === "string" ? r.url.trim().slice(0, 2048) : "";
+      if (!id || !url || seen[id]) continue;
+      if (!/^https?:\/\//i.test(url)) continue;
+      seen[id] = true;
+      const label = typeof r.label === "string" && r.label.trim() ? r.label.trim().slice(0, 48) : id;
+      out.push({ id, url, label });
+    }
+    return out;
+  }
+  var SEIDR_ACTION_CHAT_TOKENS = [
+    { token: "SourceCharacter", hint: "Actor name" },
+    { token: "TargetCharacter", hint: "Target name (Other); often TargetCharacter's \u2026" },
+    { token: "PronounPossessive", hint: "Actor her/his/their (Self lines)" },
+    { token: "PronounSelf", hint: "Actor herself/himself/themself" },
+    { token: "TargetPronounPossessive", hint: "Target her/his/their (rare)" },
+    { token: "ActivityAsset", hint: "Used item name (item activities)" }
+  ];
+  function seidrDefaultChatOther(name) {
+    return 'SourceCharacter performs "' + name + '" on TargetCharacter.';
+  }
+  function seidrDefaultChatSelf(name) {
+    return 'SourceCharacter performs "' + name + '" on PronounSelf.';
+  }
+  var SEIDR_ACTION_AUDIENCES = [
+    { id: "both", label: "Self and others" },
+    { id: "selfOnly", label: "Self only" },
+    { id: "othersOnly", label: "Others only" }
+  ];
+  var SEIDR_COND_TYPES = [
+    { id: "wearing", label: "wearing", extra: "slot" },
+    { id: "isGagged", label: "is gagged", extra: null },
+    { id: "isBlind", label: "is blindfolded", extra: null },
+    { id: "isDeaf", label: "is deaf", extra: null },
+    { id: "canUseHands", label: "can use hands", extra: null },
+    { id: "canMoveLegs", label: "can move legs", extra: null },
+    { id: "canChangePose", label: "can change pose to", extra: "pose" },
+    { id: "accessible", label: "is accessible", extra: "zone" },
+    { id: "hasPenis", label: "has a penis", extra: null },
+    { id: "hasVagina", label: "has a vagina", extra: null },
+    { id: "hasBreasts", label: "has breasts", extra: null }
+  ];
+  var SEIDR_ACTION_SLOTS = [
+    { id: "ItemArms", label: "Arms" },
+    { id: "ItemHands", label: "Hands" },
+    { id: "ItemMouth", label: "Mouth" },
+    { id: "ItemMouth2", label: "Mouth 2" },
+    { id: "ItemMouth3", label: "Mouth 3" },
+    { id: "ItemHead", label: "Head" },
+    { id: "ItemHood", label: "Hood" },
+    { id: "ItemEars", label: "Ears" },
+    { id: "ItemNeck", label: "Neck" },
+    { id: "ItemNeckAccessories", label: "Neck Acc." },
+    { id: "ItemTorso", label: "Torso" },
+    { id: "ItemPelvis", label: "Pelvis" },
+    { id: "ItemBreast", label: "Breast" },
+    { id: "ItemNipples", label: "Nipples" },
+    { id: "ItemVulva", label: "Vulva" },
+    { id: "ItemVulvaPiercings", label: "Vulva Pierc." },
+    { id: "ItemButt", label: "Butt" },
+    { id: "ItemLegs", label: "Legs" },
+    { id: "ItemFeet", label: "Feet" },
+    { id: "ItemBoots", label: "Boots" },
+    { id: "ItemDevices", label: "Devices" },
+    { id: "Cloth", label: "Cloth" },
+    { id: "ClothLower", label: "Cloth Lower" },
+    { id: "ClothAccessory", label: "Cloth Acc." },
+    { id: "Bra", label: "Bra" },
+    { id: "Panties", label: "Panties" },
+    { id: "Socks", label: "Socks" },
+    { id: "Shoes", label: "Shoes" },
+    { id: "Gloves", label: "Gloves" },
+    { id: "Hat", label: "Hat" }
+  ];
+  function seidrRestraintSlots() {
+    return SEIDR_ACTION_SLOTS.filter(function(s) {
+      return s.id.indexOf("Item") === 0;
+    });
+  }
+  var SEIDR_ACTION_POSES = [
+    { id: "BaseLower", label: "Standing (legs)" },
+    { id: "BaseUpper", label: "Hands relaxed" },
+    { id: "LegsClosed", label: "Legs closed" },
+    { id: "Kneel", label: "Kneel" },
+    { id: "KneelingSpread", label: "Kneeling spread" },
+    { id: "Yoked", label: "Yoked" },
+    { id: "OverTheHead", label: "Over the head" },
+    { id: "BackBoxTie", label: "Back box tie" },
+    { id: "BackElbowTouch", label: "Back elbow touch" },
+    { id: "AllFours", label: "All fours" }
+  ];
+  var SEIDR_ACTION_SOUNDS = [
+    "SpankSkin",
+    "SmackCrop",
+    "Whip1",
+    "Whip2",
+    "ClothSlip",
+    "Zipper1",
+    "LockSmall",
+    "Unlock",
+    "ChainShort",
+    "CuffsMetal",
+    "BellSmall",
+    "Squeak",
+    "Inflation",
+    "Deflation",
+    "VibrationTeaseLow",
+    "VibrationTeaseMedium",
+    "VibrationEdgeLow",
+    "VibrationEdgeMedium",
+    "VibrationEdgeHigh",
+    "VibrationMaximum"
+  ];
+  function act(id, label) {
+    return { id, label };
+  }
+  var SEIDR_AROUSAL_COMMON = [
+    act("Caress", "Caress"),
+    act("Kiss", "Kiss"),
+    act("FrenchKiss", "French kiss"),
+    act("Lick", "Lick"),
+    act("Suck", "Suck"),
+    act("DeepThroat", "Deep throat"),
+    act("Nibble", "Nibble"),
+    act("Bite", "Bite"),
+    act("Grope", "Grope"),
+    act("Pinch", "Pinch"),
+    act("Spank", "Spank"),
+    act("Slap", "Slap"),
+    act("Tickle", "Tickle"),
+    act("Rub", "Rub"),
+    act("Cuddle", "Cuddle"),
+    act("MassageHands", "Massage (hands)"),
+    act("MassageFeet", "Massage (feet)"),
+    act("MasturbateHand", "Masturbate (hand)"),
+    act("MasturbateFist", "Masturbate (fist)"),
+    act("MasturbateTongue", "Masturbate (tongue)"),
+    act("MasturbateFoot", "Masturbate (foot)"),
+    act("MasturbateItem", "Masturbate (item)"),
+    act("PenetrateSlow", "Penetrate (slow)"),
+    act("PenetrateFast", "Penetrate (fast)"),
+    act("Choke", "Choke"),
+    act("Pet", "Pet")
+  ];
+  var SEIDR_AROUSAL_ACTIVITY_GROUPS = [
+    {
+      label: "Mouth",
+      activities: [
+        act("Whisper", "Whisper"),
+        act("MoanGag", "Moan (gag)"),
+        act("MoanGagTalk", "Moan talk (gag)"),
+        act("MoanGagWhimper", "Whimper (gag)"),
+        act("MoanGagGroan", "Groan (gag)"),
+        act("MoanGagAngry", "Angry moan (gag)"),
+        act("MoanGagGiggle", "Giggle (gag)"),
+        act("GagKiss", "Gag kiss"),
+        act("ChewItem", "Chew item"),
+        act("SpitOutGag", "Spit out gag"),
+        act("Nibble", "Nibble"),
+        act("Lick", "Lick"),
+        act("PoliteKiss", "Polite kiss"),
+        act("Kiss", "Kiss"),
+        act("GaggedKiss", "Gagged kiss"),
+        act("FrenchKiss", "French kiss"),
+        act("Suck", "Suck"),
+        act("MasturbateTongue", "Masturbate (tongue)"),
+        act("Bite", "Bite")
+      ]
+    },
+    {
+      label: "Hand",
+      activities: [
+        act("Caress", "Caress"),
+        act("Clean", "Clean"),
+        act("MassageHands", "Massage (hands)"),
+        act("TakeCare", "Take care"),
+        act("Tickle", "Tickle"),
+        act("Pet", "Pet"),
+        act("Grope", "Grope"),
+        act("Pinch", "Pinch"),
+        act("HandGag", "Hand gag"),
+        act("Slap", "Slap"),
+        act("Spank", "Spank"),
+        act("Pull", "Pull"),
+        act("Choke", "Choke"),
+        act("MasturbateHand", "Masturbate (hand)"),
+        act("MasturbateFist", "Masturbate (fist)")
+      ]
+    },
+    {
+      label: "Feet",
+      activities: [
+        act("MassageFeet", "Massage (feet)"),
+        act("MasturbateFoot", "Masturbate (foot)"),
+        act("Step", "Step"),
+        act("Kick", "Kick")
+      ]
+    },
+    {
+      label: "Body",
+      activities: [
+        act("Cuddle", "Cuddle"),
+        act("Rub", "Rub"),
+        act("StruggleArms", "Struggle (arms)"),
+        act("StruggleLegs", "Struggle (legs)"),
+        act("Sit", "Sit"),
+        act("RestHead", "Rest head")
+      ]
+    },
+    {
+      label: "Head",
+      activities: [
+        act("Nod", "Nod"),
+        act("Wiggle", "Wiggle")
+      ]
+    },
+    {
+      label: "Item",
+      activities: [
+        act("ShakeItem", "Shake item"),
+        act("PowderItem", "Powder item"),
+        act("SpankItem", "Spank item"),
+        act("TickleItem", "Tickle item"),
+        act("RubItem", "Rub item"),
+        act("SqueezeItem", "Squeeze item"),
+        act("RollItem", "Roll item"),
+        act("MasturbateItem", "Masturbate (item)"),
+        act("PourItem", "Pour item"),
+        act("ShockItem", "Shock item"),
+        act("Inject", "Inject"),
+        act("PenetrateSlow", "Penetrate (slow)"),
+        act("PenetrateFast", "Penetrate (fast)"),
+        act("SipItem", "Sip item"),
+        act("EatItem", "Eat item"),
+        act("Scratch", "Scratch"),
+        act("ThrowItem", "Throw item"),
+        act("CollarGrab", "Collar grab")
+      ]
+    },
+    {
+      label: "Family",
+      activities: [
+        act("SistersHug", "Sisters hug"),
+        act("BrothersHandshake", "Brothers handshake"),
+        act("SiblingsCheekKiss", "Siblings cheek kiss"),
+        act("SiblingsHug", "Siblings hug"),
+        act("BrushItem", "Brush item"),
+        act("DeepThroat", "Deep throat"),
+        act("SuckPenetrateItem", "Suck penetrate item")
+      ]
+    }
+  ];
+  var SEIDR_AROUSAL_ACTIVITY_IDS = (function() {
+    const ids = [];
+    const seen = {};
+    function add(list) {
+      list.forEach(function(a) {
+        if (seen[a.id]) return;
+        seen[a.id] = true;
+        ids.push(a.id);
+      });
+    }
+    add(SEIDR_AROUSAL_COMMON);
+    SEIDR_AROUSAL_ACTIVITY_GROUPS.forEach(function(g) {
+      add(g.activities);
+    });
+    return ids;
+  })();
+  function seidrArousalActivityLabel(id) {
+    for (let i = 0; i < SEIDR_AROUSAL_COMMON.length; i++) {
+      if (SEIDR_AROUSAL_COMMON[i].id === id) return SEIDR_AROUSAL_COMMON[i].label;
+    }
+    for (let g = 0; g < SEIDR_AROUSAL_ACTIVITY_GROUPS.length; g++) {
+      const list = SEIDR_AROUSAL_ACTIVITY_GROUPS[g].activities;
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].id === id) return list[i].label;
+      }
+    }
+    return id || "Caress";
+  }
+  function seidrArousalPickerGroups() {
+    const commonIds = {};
+    SEIDR_AROUSAL_COMMON.forEach(function(a) {
+      commonIds[a.id] = true;
+    });
+    const out = [
+      { label: "Common", activities: SEIDR_AROUSAL_COMMON.slice() }
+    ];
+    SEIDR_AROUSAL_ACTIVITY_GROUPS.forEach(function(g) {
+      const rest = g.activities.filter(function(a) {
+        return !commonIds[a.id];
+      });
+      if (rest.length) out.push({ label: g.label, activities: rest });
+    });
+    return out;
+  }
+  var AUDIENCE_IDS = SEIDR_ACTION_AUDIENCES.map(function(a) {
+    return a.id;
+  });
+  var COND_TYPE_IDS = SEIDR_COND_TYPES.map(function(t) {
+    return t.id;
+  });
+  function seidrActionActivityName(id) {
+    return SEIDR_ACTION_PREFIX + String(id);
+  }
+  function seidrStripClubSoundSuffix2(name) {
+    if (typeof name !== "string" || !name) return name;
+    if (name.length >= 6 && name.slice(-6) === "-Spank") return name.slice(0, -6);
+    if (name.length >= 5 && name.slice(-5) === "-Slap") return name.slice(0, -5);
+    return name;
+  }
+  function seidrParseActionActivityName(name) {
+    const bare = seidrStripClubSoundSuffix2(typeof name === "string" ? name : "");
+    if (!bare || bare.indexOf(SEIDR_ACTION_PREFIX) !== 0) return null;
+    const n = parseInt(bare.slice(SEIDR_ACTION_PREFIX.length), 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  function seidrDefaultActionsBag() {
+    return { nextId: 1, list: [] };
+  }
+  function normalizeRule(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const r = raw;
+    const type = typeof r.type === "string" && COND_TYPE_IDS.indexOf(r.type) >= 0 ? r.type : null;
+    if (!type) return null;
+    const who = r.who === "source" ? "source" : "target";
+    const out = { who, type, not: !!r.not };
+    if (type === "wearing" && typeof r.slot === "string" && r.slot) out.slot = r.slot;
+    if (type === "canChangePose" && typeof r.pose === "string" && r.pose) out.pose = r.pose;
+    if (type === "accessible" && (r.zone === "penis" || r.zone === "vagina" || r.zone === "nipples")) {
+      out.zone = r.zone;
+    }
+    return out;
+  }
+  function normalizeGroups(raw) {
+    if (!raw || typeof raw !== "object") return [];
+    const g = raw.groups;
+    if (!Array.isArray(g)) return [];
+    const groups = [];
+    let ruleCount = 0;
+    for (let i = 0; i < g.length && groups.length < SEIDR_COND_MAX_GROUPS; i++) {
+      const entry = g[i];
+      const rulesRaw = entry && typeof entry === "object" ? entry.rules : null;
+      if (!Array.isArray(rulesRaw)) continue;
+      const rules = [];
+      for (let j = 0; j < rulesRaw.length && ruleCount < SEIDR_COND_MAX_RULES; j++) {
+        const rule = normalizeRule(rulesRaw[j]);
+        if (!rule) continue;
+        rules.push(rule);
+        ruleCount++;
+      }
+      if (rules.length) groups.push({ rules });
+    }
+    return groups;
+  }
+  function normalizeItems(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    const seen = {};
+    for (let i = 0; i < raw.length && out.length < SEIDR_ACTION_ITEMS_MAX; i++) {
+      const entry = raw[i];
+      if (!entry || typeof entry !== "object") continue;
+      const slot = typeof entry.slot === "string" ? entry.slot.trim() : "";
+      const name = typeof entry.name === "string" ? entry.name.trim() : "";
+      if (!slot || !name) continue;
+      const key = slot + "\0" + name;
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push({ slot, name });
+    }
+    return out;
+  }
+  function normalizeEffects(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    const e = raw;
+    if (e.arousal && typeof e.arousal === "object") {
+      const rawAct = typeof e.arousal.activity === "string" ? e.arousal.activity : "";
+      out.arousal = {
+        enabled: !!e.arousal.enabled,
+        activity: rawAct && SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(rawAct) >= 0 ? rawAct : "Caress"
+      };
+    }
+    if (e.sound && typeof e.sound === "object") {
+      out.sound = {
+        enabled: !!e.sound.enabled,
+        sound: typeof e.sound.sound === "string" && e.sound.sound ? e.sound.sound : SEIDR_ACTION_SOUNDS[0]
+      };
+    }
+    if (e.pose && typeof e.pose === "object") {
+      out.pose = {
+        enabled: !!e.pose.enabled,
+        pose: typeof e.pose.pose === "string" && e.pose.pose ? e.pose.pose : "Kneel"
+      };
+    }
+    return out;
+  }
+  function seidrNormalizeAction(raw, fallbackId) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : fallbackId || 0;
+    if (!id) return null;
+    const name = typeof d.name === "string" && d.name.trim() ? d.name.trim().slice(0, 48) : "Action " + id;
+    const slots = [];
+    if (Array.isArray(d.slots)) {
+      d.slots.forEach(function(s) {
+        if (typeof s === "string" && s && slots.indexOf(s) < 0) slots.push(s);
+      });
+    }
+    if (!slots.length) slots.push("ItemTorso");
+    const audience = typeof d.audience === "string" && AUDIENCE_IDS.indexOf(d.audience) >= 0 ? d.audience : "both";
+    const chatOther2 = typeof d.chatOther === "string" && d.chatOther.trim() ? d.chatOther.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatOther(name);
+    const chatSelf2 = typeof d.chatSelf === "string" && d.chatSelf.trim() ? d.chatSelf.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatSelf(name);
+    return {
+      id,
+      name,
+      slots: slots.slice(0, 8),
+      audience,
+      chatOther: chatOther2,
+      chatSelf: chatSelf2,
+      icon: seidrNormalizeActionIcon(d.icon),
+      items: normalizeItems(d.items),
+      conditions: { groups: normalizeGroups(d.conditions) },
+      effects: normalizeEffects(d.effects)
+    };
+  }
+  function seidrNormalizeActionsBag(raw) {
+    const base = seidrDefaultActionsBag();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    const list = [];
+    const seen = {};
+    if (Array.isArray(d.list)) {
+      for (let i = 0; i < d.list.length && list.length < SEIDR_ACTIONS_MAX; i++) {
+        const act2 = seidrNormalizeAction(d.list[i]);
+        if (!act2 || seen[act2.id]) continue;
+        seen[act2.id] = true;
+        list.push(act2);
+      }
+    }
+    let nextId = typeof d.nextId === "number" && d.nextId > 0 ? Math.floor(d.nextId) : 1;
+    list.forEach(function(a) {
+      if (a.id >= nextId) nextId = a.id + 1;
+    });
+    base.nextId = nextId;
+    base.list = list;
+    return base;
+  }
+  function seidrDefaultAction(id) {
+    const name = "Action " + id;
+    return {
+      id,
+      name,
+      slots: ["ItemTorso"],
+      audience: "both",
+      chatOther: seidrDefaultChatOther(name),
+      chatSelf: seidrDefaultChatSelf(name),
+      icon: seidrDefaultActionIcon(),
+      items: [],
+      conditions: { groups: [] },
+      effects: {
+        arousal: { enabled: false, activity: "Caress" },
+        sound: { enabled: false, sound: "SpankSkin" },
+        pose: { enabled: false, pose: "Kneel" }
+      }
+    };
+  }
+
   // src/settings/model.ts
+  var FAST_OPEN_MODIFIERS = [
+    { id: "Shift", label: "Shift" },
+    { id: "Ctrl", label: "Ctrl" },
+    { id: "Alt", label: "Alt" },
+    { id: "Meta", label: "Cmd (Meta)" }
+  ];
+  var FAST_OPEN_MOD_IDS = FAST_OPEN_MODIFIERS.map(function(m) {
+    return m.id;
+  });
   var AROUSAL_BAR_MODES = [
     { id: "off", label: "Club default" },
     { id: "alwaysHide", label: "Always hide" },
@@ -1914,6 +2434,14 @@
       cuddle: { x: o.cuddle.x, y: o.cuddle.y }
     };
   }
+  function normalizeFastOpenSlot(raw) {
+    const slots = seidrRestraintSlots();
+    const ids = slots.map(function(s) {
+      return s.id;
+    });
+    if (typeof raw === "string" && ids.indexOf(raw) >= 0) return raw;
+    return "ItemTorso";
+  }
   function seidrDefaultSettings() {
     return {
       roomManagerEnabled: true,
@@ -1921,7 +2449,12 @@
       launcherPosition: "chatTop",
       drawOffsets: seidrDefaultDrawOffsets(),
       arousalBarMode: "off",
-      arousalBarScope: "seidrCluster"
+      arousalBarScope: "seidrCluster",
+      fastOpenActionsEnabled: true,
+      fastOpenActionsModifier: "Shift",
+      fastOpenActionsSlot: "ItemTorso",
+      customActionIcons: [],
+      actions: { nextId: 1, list: [] }
     };
   }
   function seidrNormalizeSettings(raw) {
@@ -1940,6 +2473,15 @@
     if (typeof d.arousalBarScope === "string" && AROUSAL_SCOPE_IDS.indexOf(d.arousalBarScope) >= 0) {
       base.arousalBarScope = d.arousalBarScope;
     }
+    if (typeof d.fastOpenActionsEnabled === "boolean") {
+      base.fastOpenActionsEnabled = d.fastOpenActionsEnabled;
+    }
+    if (typeof d.fastOpenActionsModifier === "string" && FAST_OPEN_MOD_IDS.indexOf(d.fastOpenActionsModifier) >= 0) {
+      base.fastOpenActionsModifier = d.fastOpenActionsModifier;
+    }
+    base.fastOpenActionsSlot = normalizeFastOpenSlot(d.fastOpenActionsSlot);
+    base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
+    base.actions = seidrNormalizeActionsBag(d.actions);
     return base;
   }
 
@@ -2103,6 +2645,38 @@
     const n = Math.max(0, Number(bytes) || 0);
     if (n < 1024) return n.toFixed(0) + " B";
     return (n / 1024).toFixed(2) + " KB";
+  }
+  function rmSliceBytes(slice) {
+    try {
+      return pack(slice).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+  function rmUsageBreakdown(store) {
+    const s = store || rmGetStore();
+    const settings = s.settings || {};
+    const actions = settings.actions;
+    const settingsRest = {};
+    try {
+      Object.keys(settings).forEach(function(k) {
+        if (k === "actions") return;
+        settingsRest[k] = settings[k];
+      });
+    } catch (e) {
+    }
+    return {
+      total: rmCompressedBytes() || rmSliceBytes(s),
+      max: Seidr.RM_MAX_COMPRESSED || 18e4,
+      maps: rmSliceBytes({ maps: s.maps || [] }),
+      room: rmSliceBytes({ room: s.room || {} }),
+      access: rmSliceBytes({ access: s.access || {} }),
+      backgrounds: rmSliceBytes({ backgrounds: s.backgrounds || [] }),
+      actions: rmSliceBytes({ actions: actions != null ? actions : { nextId: 1, list: [] } }),
+      settings: rmSliceBytes({ settings: settingsRest }),
+      ui: rmSliceBytes({ ui: s.ui || {} }),
+      mapBudget: rmMapBudgetBytes()
+    };
   }
   function rmUsageLabel() {
     const used = rmCompressedBytes();
@@ -2351,6 +2925,972 @@
     });
   }
   Seidr.installArousalBars = seidrInstallArousalBars;
+
+  // src/actions/conditions.ts
+  function seidrActionItemsOk(action, acted) {
+    const items = action && action.items;
+    if (!items || !items.length) return true;
+    if (!acted || typeof InventoryGet !== "function") return false;
+    for (let i = 0; i < items.length; i++) {
+      const ref = items[i];
+      if (!ref || !ref.slot || !ref.name) continue;
+      try {
+        const worn = InventoryGet(acted, ref.slot);
+        if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
+      } catch (e) {
+      }
+    }
+    return false;
+  }
+  function charOf(who, source, target) {
+    return who === "source" ? source : target;
+  }
+  function evalRule(rule, source, target) {
+    const C = charOf(rule.who, source, target);
+    if (!C) return false;
+    let ok = false;
+    try {
+      switch (rule.type) {
+        case "wearing":
+          ok = !!(rule.slot && typeof InventoryGet === "function" && InventoryGet(C, rule.slot));
+          break;
+        case "isGagged":
+          ok = typeof C.CanTalk === "function" ? !C.CanTalk() : false;
+          break;
+        case "isBlind":
+          ok = typeof C.IsBlind === "function" ? !!C.IsBlind() : false;
+          break;
+        case "isDeaf":
+          ok = typeof C.IsDeaf === "function" ? !!C.IsDeaf() : false;
+          break;
+        case "canUseHands":
+          ok = typeof C.CanInteract === "function" ? !!C.CanInteract() : true;
+          break;
+        case "canMoveLegs":
+          ok = typeof C.CanWalk === "function" ? !!C.CanWalk() : true;
+          break;
+        case "canChangePose": {
+          const pose = rule.pose || "Kneel";
+          if (typeof PoseCanChangeUnaided === "function") ok = !!PoseCanChangeUnaided(C, pose);
+          else if (typeof C.CanChangeToPose === "function") ok = !!C.CanChangeToPose(pose);
+          else ok = true;
+          break;
+        }
+        case "accessible": {
+          const zone = rule.zone || "vagina";
+          if (zone === "penis" && typeof C.AccessPenis === "function") ok = !!C.AccessPenis();
+          else if (zone === "vagina" && typeof C.AccessVulva === "function") ok = !!C.AccessVulva();
+          else if (zone === "nipples" && typeof C.AccessBreastFull === "function") ok = !!C.AccessBreastFull();
+          else ok = true;
+          break;
+        }
+        case "hasPenis":
+          ok = typeof C.HasPenis === "function" ? !!C.HasPenis() : false;
+          break;
+        case "hasVagina":
+          ok = typeof C.HasVagina === "function" ? !!C.HasVagina() : false;
+          break;
+        case "hasBreasts":
+          ok = typeof C.HasBreasts === "function" ? !!C.HasBreasts() : false;
+          break;
+        default:
+          ok = false;
+      }
+    } catch (e) {
+      ok = false;
+    }
+    return rule.not ? !ok : ok;
+  }
+  function seidrActionConditionsOk(action, source, target) {
+    const groups = action && action.conditions && action.conditions.groups;
+    if (!groups || !groups.length) return true;
+    for (let i = 0; i < groups.length; i++) {
+      const rules = groups[i] && groups[i].rules;
+      if (!rules || !rules.length) continue;
+      let all = true;
+      for (let j = 0; j < rules.length; j++) {
+        if (!evalRule(rules[j], source, target)) {
+          all = false;
+          break;
+        }
+      }
+      if (all) return true;
+    }
+    return false;
+  }
+  function seidrActionAudienceOk(action, source, target) {
+    if (!source || !target) return false;
+    const self = source === target || typeof source.MemberNumber === "number" && typeof target.MemberNumber === "number" && source.MemberNumber === target.MemberNumber;
+    if (action.audience === "selfOnly") return self;
+    if (action.audience === "othersOnly") return !self;
+    return true;
+  }
+  function seidrActionAvailable(action, source, target) {
+    if (!seidrActionAudienceOk(action, source, target)) return false;
+    if (!seidrActionItemsOk(action, target)) return false;
+    return seidrActionConditionsOk(action, source, target);
+  }
+
+  // src/actions/icons.ts
+  function svgDataUri(inner) {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="#241c30"/>' + inner + "</svg>";
+    return "data:image/svg+xml," + encodeURIComponent(svg);
+  }
+  var SEIDR_BUILTIN_ICONS = [
+    {
+      id: "mark",
+      label: "Mark",
+      url: svgDataUri(
+        '<text x="32" y="42" text-anchor="middle" font-size="28" font-family="sans-serif" font-weight="700" fill="#e0b15a">A</text>'
+      )
+    },
+    {
+      id: "hand",
+      label: "Hand",
+      url: svgDataUri(
+        '<path d="M22 36 V18 a4 4 0 0 1 8 0 v10 M30 28 V14 a4 4 0 0 1 8 0 v16 M38 30 V16 a4 4 0 0 1 8 0 v20 M46 34 V24 a4 4 0 0 1 6 3 v15 a12 12 0 0 1-12 12 H28 a10 10 0 0 1-10-10 V36 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="3" stroke-linejoin="round"/>'
+      )
+    },
+    {
+      id: "kiss",
+      label: "Kiss",
+      url: svgDataUri(
+        '<path d="M20 28 Q26 18 32 28 Q38 18 44 28 Q38 42 32 48 Q26 42 20 28z" fill="#c06080" stroke="#e0b15a" stroke-width="2"/>'
+      )
+    },
+    {
+      id: "heart",
+      label: "Heart",
+      url: svgDataUri(
+        '<path d="M32 50 L14 32 a12 12 0 0 1 18-16 a12 12 0 0 1 18 16z" fill="#c06080"/>'
+      )
+    },
+    {
+      id: "pull",
+      label: "Pull",
+      url: svgDataUri(
+        '<path d="M12 32 H44 M36 22 L48 32 L36 42" fill="none" stroke="#e0b15a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
+      )
+    },
+    {
+      id: "spark",
+      label: "Spark",
+      url: svgDataUri(
+        '<path d="M32 10 L36 26 L52 28 L38 38 L42 54 L32 44 L22 54 L26 38 L12 28 L28 26z" fill="#e0b15a"/>'
+      )
+    },
+    {
+      id: "cuddle",
+      label: "Cuddle",
+      url: svgDataUri(
+        '<circle cx="24" cy="28" r="10" fill="none" stroke="#e0b15a" stroke-width="3"/><circle cx="40" cy="28" r="10" fill="none" stroke="#c09050" stroke-width="3"/>'
+      )
+    },
+    {
+      id: "star",
+      label: "Star",
+      url: svgDataUri(
+        '<text x="32" y="44" text-anchor="middle" font-size="32" fill="#e0b15a">\u2605</text>'
+      )
+    }
+  ];
+  var SEIDR_ACTIVITY_ICON_IDS = [
+    "Bite",
+    "BrothersHandshake",
+    "Caress",
+    "Choke",
+    "Clean",
+    "CollarGrab",
+    "Cuddle",
+    "FrenchKiss",
+    "GagKiss",
+    "GaggedKiss",
+    "Grope",
+    "HandGag",
+    "Inject",
+    "Kick",
+    "Kiss",
+    "Lick",
+    "MassageFeet",
+    "MassageHands",
+    "MasturbateFist",
+    "MasturbateFoot",
+    "MasturbateHand",
+    "MasturbateTongue",
+    "MoanGag",
+    "MoanGagAngry",
+    "MoanGagGiggle",
+    "MoanGagGroan",
+    "MoanGagTalk",
+    "MoanGagWhimper",
+    "Nibble",
+    "Nod",
+    "PenetrateFast",
+    "PenetrateSlow",
+    "Pet",
+    "Pinch",
+    "PoliteKiss",
+    "Pull",
+    "RestHead",
+    "Rub",
+    "SiblingsCheekKiss",
+    "SiblingsHug",
+    "SistersHug",
+    "Sit",
+    "Slap",
+    "Spank",
+    "Step",
+    "StruggleArms",
+    "StruggleLegs",
+    "Suck",
+    "TakeCare",
+    "Tickle",
+    "Whisper",
+    "Wiggle"
+  ];
+  function seidrActivityIconUrl(id) {
+    return "./Icons/Activity/" + id + ".png";
+  }
+  function seidrBuiltinIconById(id) {
+    for (let i = 0; i < SEIDR_BUILTIN_ICONS.length; i++) {
+      if (SEIDR_BUILTIN_ICONS[i].id === id) return SEIDR_BUILTIN_ICONS[i];
+    }
+    return null;
+  }
+  function seidrCustomIconsFromSettings() {
+    try {
+      const s = seidrGetSettings();
+      const list = s && Array.isArray(s.customActionIcons) ? s.customActionIcons : [];
+      return list;
+    } catch (e) {
+      return [];
+    }
+  }
+  function seidrResolveActionIconUrl(action, customList) {
+    const icon = seidrNormalizeActionIcon(action && action.icon);
+    return seidrResolveIconRef(icon, customList);
+  }
+  function seidrResolveIconRef(icon, customList) {
+    const ref = seidrNormalizeActionIcon(icon);
+    if (ref.source === "seidr") {
+      const b = seidrBuiltinIconById(ref.id);
+      return b ? b.url : SEIDR_BUILTIN_ICONS[0].url;
+    }
+    if (ref.source === "activity") {
+      if (SEIDR_ACTIVITY_ICON_IDS.indexOf(ref.id) >= 0) return seidrActivityIconUrl(ref.id);
+      return SEIDR_BUILTIN_ICONS[0].url;
+    }
+    if (ref.source === "custom") {
+      const customs = customList || seidrCustomIconsFromSettings();
+      for (let i = 0; i < customs.length; i++) {
+        if (customs[i].id === ref.id) return customs[i].url;
+      }
+      return SEIDR_BUILTIN_ICONS[0].url;
+    }
+    return SEIDR_BUILTIN_ICONS[0].url;
+  }
+  function seidrIconLabel(icon, customList) {
+    const ref = seidrNormalizeActionIcon(icon) || seidrDefaultActionIcon();
+    if (ref.source === "seidr") {
+      const b = seidrBuiltinIconById(ref.id);
+      return b ? b.label : ref.id;
+    }
+    if (ref.source === "activity") return ref.id;
+    const customs = customList || seidrCustomIconsFromSettings();
+    for (let i = 0; i < customs.length; i++) {
+      if (customs[i].id === ref.id) return customs[i].label || customs[i].id;
+    }
+    return ref.id;
+  }
+  function seidrValidateImageUrl(url) {
+    const trimmed = String(url || "").trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return Promise.resolve({ ok: false, error: "URL must start with http:// or https://" });
+    }
+    return new Promise(function(resolve) {
+      const img = new Image();
+      let settled = false;
+      const done = function(result) {
+        if (settled) return;
+        settled = true;
+        resolve(result);
+      };
+      const timer = setTimeout(function() {
+        done({ ok: false, error: "Image load timed out" });
+      }, 8e3);
+      img.onload = function() {
+        clearTimeout(timer);
+        done({ ok: true });
+      };
+      img.onerror = function() {
+        clearTimeout(timer);
+        done({ ok: false, error: "Not a valid image URL" });
+      };
+      img.src = trimmed;
+    });
+  }
+
+  // src/actions/store.ts
+  function seidrGetActionsBag() {
+    try {
+      const s = seidrGetSettings();
+      return seidrNormalizeActionsBag(s.actions);
+    } catch (e) {
+      return seidrDefaultActionsBag();
+    }
+  }
+  function seidrSaveActionsBag(bag) {
+    const normalized = seidrNormalizeActionsBag(bag);
+    return seidrSaveSettings({ actions: normalized });
+  }
+  function seidrListActions() {
+    return seidrGetActionsBag().list.slice();
+  }
+  function seidrGetActionById(id) {
+    const list = seidrGetActionsBag().list;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+  function seidrAddAction() {
+    const bag = seidrGetActionsBag();
+    if (bag.list.length >= SEIDR_ACTIONS_MAX) return null;
+    const act2 = seidrDefaultAction(bag.nextId);
+    bag.nextId = act2.id + 1;
+    bag.list.push(act2);
+    const saved = seidrSaveActionsBag(bag);
+    if (!saved.ok) return null;
+    return act2;
+  }
+  function seidrUpdateAction(action) {
+    const norm = seidrNormalizeAction(action);
+    if (!norm) return { ok: false, error: "Invalid action" };
+    const bag = seidrGetActionsBag();
+    let found = false;
+    for (let i = 0; i < bag.list.length; i++) {
+      if (bag.list[i].id === norm.id) {
+        bag.list[i] = norm;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      if (bag.list.length >= SEIDR_ACTIONS_MAX) return { ok: false, error: "Action limit reached" };
+      bag.list.push(norm);
+      if (norm.id >= bag.nextId) bag.nextId = norm.id + 1;
+    }
+    return seidrSaveActionsBag(bag);
+  }
+  function seidrDeleteAction(id) {
+    const bag = seidrGetActionsBag();
+    bag.list = bag.list.filter(function(a) {
+      return a.id !== id;
+    });
+    return seidrSaveActionsBag(bag);
+  }
+  function seidrImportSelectedActions(actions) {
+    const bag = seidrGetActionsBag();
+    let imported = 0;
+    let skipped = 0;
+    const list = Array.isArray(actions) ? actions : [];
+    for (let i = 0; i < list.length; i++) {
+      if (bag.list.length >= SEIDR_ACTIONS_MAX) {
+        skipped += list.length - i;
+        break;
+      }
+      const id = bag.nextId;
+      const norm = seidrNormalizeAction(Object.assign({}, list[i], { id }), id);
+      if (!norm) {
+        skipped += 1;
+        continue;
+      }
+      bag.list.push(norm);
+      bag.nextId = id + 1;
+      imported += 1;
+    }
+    const saved = seidrSaveActionsBag(bag);
+    if (!saved.ok) {
+      return { ok: false, imported: 0, skipped: list.length, error: saved.error || "Save failed" };
+    }
+    return { ok: true, imported, skipped };
+  }
+
+  // src/actions/runtime.ts
+  var PREREQ_PREFIX = "Seidr_CanAct_";
+  var SEIDR_SOUND_TAG = "SeidrSound";
+  var CLUB_SPANK_SUFFIX = "-Spank";
+  function nextActivityId() {
+    let max = 9500;
+    if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return max + 1;
+    for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+      const id = ActivityFemale3DCG[i] && ActivityFemale3DCG[i].ActivityID;
+      if (typeof id === "number" && id > max) max = id;
+    }
+    return max + 1;
+  }
+  function findFemale3(name) {
+    if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return null;
+    for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+      if (ActivityFemale3DCG[i] && ActivityFemale3DCG[i].Name === name) return ActivityFemale3DCG[i];
+    }
+    return null;
+  }
+  function arousalMax(action) {
+    if (!action.effects || !action.effects.arousal || !action.effects.arousal.enabled) return 0;
+    const baseName = action.effects.arousal.activity;
+    const base = findFemale3(baseName);
+    if (base && typeof base.MaxProgress === "number" && base.MaxProgress > 0) return base.MaxProgress;
+    return 80;
+  }
+  function arousalMaxSelf(action) {
+    if (!action.effects || !action.effects.arousal || !action.effects.arousal.enabled) return 0;
+    const baseName = action.effects.arousal.activity;
+    const base = findFemale3(baseName);
+    if (base && typeof base.MaxProgressSelf === "number") return base.MaxProgressSelf;
+    if (base && typeof base.MaxProgress === "number") return base.MaxProgress;
+    return 100;
+  }
+  function chatOther(action) {
+    return action.chatOther && action.chatOther.trim() ? action.chatOther.trim() : seidrDefaultChatOther(action.name);
+  }
+  function chatSelf(action) {
+    return action.chatSelf && action.chatSelf.trim() ? action.chatSelf.trim() : seidrDefaultChatSelf(action.name);
+  }
+  function arousalTemplate(action) {
+    if (!action.effects || !action.effects.arousal || !action.effects.arousal.enabled) return null;
+    const name = action.effects.arousal.activity;
+    return typeof name === "string" && name ? name : "Caress";
+  }
+  function activityNameFromArgs(A) {
+    if (typeof A === "string") return A;
+    if (A && typeof A === "object" && typeof A.Name === "string") {
+      return A.Name;
+    }
+    return "";
+  }
+  function seidrActNameFromChatData(data) {
+    if (!data) return "";
+    if (typeof data.Content === "string") {
+      const m = /Chat(?:Other|Self)-[^-]+-(.+)$/.exec(data.Content);
+      if (m) return seidrStripClubSoundSuffix2(m[1]);
+    }
+    if (Array.isArray(data.Dictionary)) {
+      for (let i = 0; i < data.Dictionary.length; i++) {
+        const entry = data.Dictionary[i];
+        if (entry && typeof entry.ActivityName === "string" && seidrParseActionActivityName(entry.ActivityName) != null) {
+          return seidrStripClubSoundSuffix2(entry.ActivityName);
+        }
+      }
+    }
+    return "";
+  }
+  function contentTriggersClubSpank(content) {
+    return typeof content === "string" && (content.slice(-6) === "-Spank" || content.slice(-5) === "-Slap");
+  }
+  function soundOk(name) {
+    return typeof name === "string" && SEIDR_ACTION_SOUNDS.indexOf(name) >= 0;
+  }
+  function soundFromDictionary(data) {
+    if (!data || !Array.isArray(data.Dictionary)) return null;
+    for (let i = 0; i < data.Dictionary.length; i++) {
+      const entry = data.Dictionary[i];
+      if (entry && entry.Tag === SEIDR_SOUND_TAG && soundOk(entry.Text)) return entry.Text;
+    }
+    return null;
+  }
+  function upsertDictTag(data, tag, text) {
+    if (!Array.isArray(data.Dictionary)) data.Dictionary = [];
+    for (let i = 0; i < data.Dictionary.length; i++) {
+      const entry = data.Dictionary[i];
+      if (entry && entry.Tag === tag) {
+        entry.Text = text;
+        return;
+      }
+    }
+    data.Dictionary.push({ Tag: tag, Text: text });
+  }
+  function focusGroupFromContent(content) {
+    const m = /^Chat(?:Other|Self)-([^-]+)-/.exec(content || "");
+    return m ? m[1] : "";
+  }
+  function targetMemberFromDictionary(data) {
+    if (!data || !Array.isArray(data.Dictionary)) return null;
+    for (let i = 0; i < data.Dictionary.length; i++) {
+      const entry = data.Dictionary[i];
+      if (!entry) continue;
+      if (typeof entry.TargetCharacter === "number") return entry.TargetCharacter;
+      if (typeof entry.MemberNumber === "number" && entry.Tag === "TargetCharacter") {
+        return entry.MemberNumber;
+      }
+    }
+    return null;
+  }
+  function findCharacterByMember(member) {
+    if (member == null) return null;
+    try {
+      if (typeof Player !== "undefined" && Player && Player.MemberNumber === member) return Player;
+    } catch (e) {
+    }
+    try {
+      if (typeof ChatRoomCharacter !== "undefined" && Array.isArray(ChatRoomCharacter)) {
+        for (let i = 0; i < ChatRoomCharacter.length; i++) {
+          const C = ChatRoomCharacter[i];
+          if (C && C.MemberNumber === member) return C;
+        }
+      }
+    } catch (e2) {
+    }
+    return null;
+  }
+  function wornItemOn(C, group) {
+    if (!C || !group || typeof InventoryGet !== "function") return null;
+    try {
+      return InventoryGet(C, group) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function injectActivityAsset(data, action) {
+    if (!data || typeof data.Content !== "string") return;
+    if (!Array.isArray(data.Dictionary)) data.Dictionary = [];
+    for (let i = 0; i < data.Dictionary.length; i++) {
+      const e = data.Dictionary[i];
+      if (e && e.Tag === "ActivityAsset") return;
+    }
+    const group = focusGroupFromContent(data.Content);
+    const targetN = targetMemberFromDictionary(data);
+    let acted = findCharacterByMember(targetN);
+    if (!acted && typeof Player !== "undefined") acted = Player;
+    let item = group ? wornItemOn(acted, group) : null;
+    if (!item && action.slots) {
+      for (let s = 0; s < action.slots.length; s++) {
+        item = wornItemOn(acted, action.slots[s]);
+        if (item) break;
+      }
+    }
+    if (!item || !item.Asset || !item.Asset.Name || !item.Asset.Group) return;
+    const entry = {
+      Tag: "ActivityAsset",
+      AssetName: item.Asset.Name,
+      GroupName: item.Asset.Group.Name
+    };
+    if (item.Craft && item.Craft.Name) entry.CraftName = item.Craft.Name;
+    data.Dictionary.push(entry);
+  }
+  function enrichOutboundSeidrActivity(data) {
+    if (!data || data.Type !== "Activity") return;
+    const actName = seidrActNameFromChatData(data);
+    const id = seidrParseActionActivityName(actName);
+    if (id == null) return;
+    const action = seidrGetActionById(id);
+    if (!action) return;
+    if (!Array.isArray(data.Dictionary)) data.Dictionary = [];
+    try {
+      injectActivityAsset(data, action);
+    } catch (eAsset) {
+    }
+    const fx = action.effects || {};
+    if (fx.sound && fx.sound.enabled && soundOk(fx.sound.sound)) {
+      upsertDictTag(data, SEIDR_SOUND_TAG, fx.sound.sound);
+      if (fx.sound.sound === "SpankSkin" && typeof data.Content === "string" && !contentTriggersClubSpank(data.Content)) {
+        data.Content = data.Content + CLUB_SPANK_SUFFIX;
+      }
+    }
+    const template = arousalTemplate(action);
+    if (!template) return;
+    for (let j = 0; j < data.Dictionary.length; j++) {
+      const entry = data.Dictionary[j];
+      if (entry && typeof entry.ActivityName === "string") {
+        entry.ActivityName = template;
+        return;
+      }
+    }
+    data.Dictionary.push({ ActivityName: template });
+  }
+  function writeLabels(cache, actions) {
+    if (!cache || !cache.cache) return;
+    actions.forEach(function(action) {
+      const actName = seidrActionActivityName(action.id);
+      const other = chatOther(action);
+      const self = chatSelf(action);
+      cache.cache["Activity" + actName] = action.name;
+      action.slots.forEach(function(group) {
+        cache.cache["Label-ChatOther-" + group + "-" + actName] = action.name;
+        cache.cache["Label-ChatSelf-" + group + "-" + actName] = action.name;
+        cache.cache["ChatOther-" + group + "-" + actName] = other;
+        cache.cache["ChatSelf-" + group + "-" + actName] = self;
+        cache.cache["ChatOther-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = other;
+        cache.cache["ChatSelf-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = self;
+      });
+    });
+  }
+  function ensureLabels(actions) {
+    if (typeof ActivityDictionaryLoad !== "function") return;
+    const cache = ActivityDictionaryLoad();
+    writeLabels(cache, actions);
+  }
+  function removeStaleActivities(keep) {
+    if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return;
+    for (let i = ActivityFemale3DCG.length - 1; i >= 0; i--) {
+      const row = ActivityFemale3DCG[i];
+      if (!row || typeof row.Name !== "string") continue;
+      if (row.Name.indexOf("Seidr_Act_") !== 0) continue;
+      if (keep[row.Name]) continue;
+      ActivityFemale3DCG.splice(i, 1);
+    }
+    if (typeof ActivityFemale3DCGOrdering !== "undefined" && Array.isArray(ActivityFemale3DCGOrdering)) {
+      for (let j = ActivityFemale3DCGOrdering.length - 1; j >= 0; j--) {
+        const n = ActivityFemale3DCGOrdering[j];
+        if (typeof n === "string" && n.indexOf("Seidr_Act_") === 0 && !keep[n]) {
+          ActivityFemale3DCGOrdering.splice(j, 1);
+        }
+      }
+    }
+  }
+  function bindAction(action) {
+    const zones = action.slots.slice();
+    const max = arousalMax(action);
+    const maxSelf = arousalMaxSelf(action);
+    const selfOk = action.audience === "selfOnly" || action.audience === "both";
+    const otherOk = action.audience === "othersOnly" || action.audience === "both";
+    const bound = {
+      Name: seidrActionActivityName(action.id),
+      ActivityID: 0,
+      MaxProgress: max,
+      MaxProgressSelf: maxSelf,
+      Prerequisite: [PREREQ_PREFIX + action.id],
+      Target: otherOk ? zones.slice() : selfOk ? zones.slice() : zones.slice()
+    };
+    if (selfOk) bound.TargetSelf = zones.slice();
+    return bound;
+  }
+  function seidrSyncUserActions() {
+    if (Seidr.SHOW_ACTIONS === false) return;
+    if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return;
+    const actions = seidrListActions();
+    const keep = {};
+    actions.forEach(function(action) {
+      const name = seidrActionActivityName(action.id);
+      keep[name] = true;
+      const bound = bindAction(action);
+      let existing = findFemale3(name);
+      if (existing) {
+        if (typeof existing.ActivityID !== "number") existing.ActivityID = nextActivityId();
+        existing.MaxProgress = bound.MaxProgress;
+        existing.MaxProgressSelf = bound.MaxProgressSelf;
+        existing.Prerequisite = bound.Prerequisite;
+        existing.Target = bound.Target;
+        if (bound.TargetSelf) existing.TargetSelf = bound.TargetSelf;
+        else delete existing.TargetSelf;
+      } else {
+        bound.ActivityID = nextActivityId();
+        ActivityFemale3DCG.push(bound);
+        if (typeof ActivityFemale3DCGOrdering !== "undefined" && Array.isArray(ActivityFemale3DCGOrdering)) {
+          ActivityFemale3DCGOrdering.push(name);
+        }
+      }
+    });
+    removeStaleActivities(keep);
+    ensureLabels(actions);
+  }
+  function applyPose(C, pose) {
+    if (!C || !pose) return;
+    try {
+      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
+      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
+    } catch (e) {
+    }
+    try {
+      if (typeof ChatRoomCharacterUpdate === "function") {
+        ChatRoomCharacterUpdate(C);
+      } else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
+        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
+      }
+    } catch (e2) {
+    }
+  }
+  function canPoseTarget(actor, acted) {
+    if (!actor || !acted) return false;
+    if (actor === acted || actor.IsPlayer && actor.IsPlayer() && acted.IsPlayer && acted.IsPlayer()) return true;
+    try {
+      if (typeof ServerChatRoomGetAllowItem === "function") {
+        return !!ServerChatRoomGetAllowItem(actor, acted);
+      }
+    } catch (e) {
+    }
+    return !!acted.AllowItem;
+  }
+  function runSideEffects(action, actor, acted) {
+    const fx = action.effects || {};
+    if (fx.pose && fx.pose.enabled && fx.pose.pose) {
+      const self = actor === acted || typeof actor.MemberNumber === "number" && actor.MemberNumber === acted.MemberNumber;
+      if (self || canPoseTarget(actor, acted)) {
+        applyPose(self ? actor : acted, fx.pose.pose);
+      }
+    }
+  }
+  function prereqOk(actionId, acting, acted) {
+    const action = seidrGetActionById(actionId);
+    if (!action) return false;
+    return seidrActionAvailable(action, acting, acted);
+  }
+  function seidrActionDialogForContent(content) {
+    const match = /^(Chat(?:Other|Self))-[^-]+-(.+)$/.exec(content || "");
+    if (!match) return "";
+    const id = seidrParseActionActivityName(seidrStripClubSoundSuffix2(match[2]));
+    if (id == null) return "";
+    const action = seidrGetActionById(id);
+    if (!action) return "";
+    return match[1] === "ChatSelf" ? chatSelf(action) : chatOther(action);
+  }
+  function seidrInstallUserActions() {
+    if (Seidr.SHOW_ACTIONS === false) return;
+    seidrSyncUserActions();
+    Seidr.hookFunction("PreferenceGetActivityFactor", 1, function(args, next) {
+      const type = args[1];
+      const id = typeof type === "string" ? seidrParseActionActivityName(type) : null;
+      if (id == null) return next(args);
+      const action = seidrGetActionById(id);
+      if (!action) return 0;
+      const template = arousalTemplate(action);
+      if (template) {
+        const nextArgs = args.slice();
+        nextArgs[1] = template;
+        return next(nextArgs);
+      }
+      return 2;
+    });
+    Seidr.hookFunction("ActivityEffect", 5, function(args, next) {
+      const name = activityNameFromArgs(args[2]);
+      const id = seidrParseActionActivityName(name);
+      if (id == null) return next(args);
+      const action = seidrGetActionById(id);
+      if (!action) return;
+      const template = arousalTemplate(action);
+      if (!template) return;
+      const nextArgs = args.slice();
+      nextArgs[2] = template;
+      return next(nextArgs);
+    });
+    Seidr.hookFunction("ServerSend", 6, function(args, next) {
+      try {
+        if (args && args[0] === "ChatRoomChat") enrichOutboundSeidrActivity(args[1]);
+      } catch (e) {
+      }
+      return next(args);
+    });
+    Seidr.hookFunction("AudioPlaySoundForChatMessage", 5, function(args, next) {
+      try {
+        const data = args[0];
+        const metadata = args[3];
+        if (data && data.Type === "Activity" && contentTriggersClubSpank(data.Content)) {
+          return next(args);
+        }
+        const seidrSnd = soundFromDictionary(data);
+        if (seidrSnd && data && data.Type === "Activity" && metadata) {
+          const involved = typeof ChatRoomMessageInvolvesPlayer === "function" ? ChatRoomMessageInvolvesPlayer(data) : true;
+          if (typeof AudioShouldSilenceSound === "function" && AudioShouldSilenceSound(involved)) {
+            return false;
+          }
+          const soundEffect = [seidrSnd, 0];
+          const Target = metadata.TargetCharacter;
+          if (Target) {
+            try {
+              if (Target.MemberNumber === Player.MemberNumber) soundEffect[1] += 3;
+              else if (data.Sender !== Player.MemberNumber) soundEffect[1] -= 3;
+            } catch (eVol) {
+            }
+            if (typeof AudioPlaySoundEffect === "function") AudioPlaySoundEffect(soundEffect);
+            return false;
+          }
+        }
+      } catch (e) {
+      }
+      return next(args);
+    });
+    Seidr.hookFunction("ActivityCheckPrerequisite", 110, function(args, next) {
+      const name = args[0];
+      if (typeof name === "string" && name.indexOf(PREREQ_PREFIX) === 0) {
+        const id = parseInt(name.slice(PREREQ_PREFIX.length), 10);
+        if (!Number.isFinite(id)) return false;
+        try {
+          return prereqOk(id, args[1], args[2]);
+        } catch (e) {
+          return false;
+        }
+      }
+      return next(args);
+    });
+    Seidr.hookFunction("ActivityRun", 6, function(args, next) {
+      const actor = args[0];
+      const acted = args[1];
+      const itemActivity = args[3];
+      const actName = itemActivity && itemActivity.Activity && itemActivity.Activity.Name;
+      const id = typeof actName === "string" ? seidrParseActionActivityName(actName) : null;
+      const action = id != null ? seidrGetActionById(id) : null;
+      const result = next(args);
+      if (action && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()) {
+        try {
+          runSideEffects(action, actor, acted);
+        } catch (e) {
+          console.warn("[Seidr] action fx", e);
+        }
+      }
+      return result;
+    });
+    Seidr.tryHook("ElementButton.CreateForActivity", "ElementButton.CreateForActivity", 6, function(args, next) {
+      const activity = args[1];
+      const actName = activity && activity.Activity && activity.Activity.Name;
+      const id = typeof actName === "string" ? seidrParseActionActivityName(actName) : null;
+      if (id != null) {
+        const action = seidrGetActionById(id);
+        const label = action && action.name || "Action";
+        args[4] = Object.assign({}, args[4] || {}, {
+          image: seidrResolveActionIconUrl(action),
+          tooltip: label
+        });
+      }
+      return next(args);
+    });
+    Seidr.syncUserActions = seidrSyncUserActions;
+    Seidr.actionDialogForContent = seidrActionDialogForContent;
+  }
+
+  // src/actions/index.ts
+  function seidrInstallActions() {
+    if (Seidr.SHOW_ACTIONS === false) return;
+    seidrInstallUserActions();
+  }
+  Seidr.installActions = seidrInstallActions;
+  Seidr.syncUserActions = seidrSyncUserActions;
+
+  // src/fastOpen.ts
+  var clickShift = false;
+  var clickCtrl = false;
+  var clickAlt = false;
+  var clickMeta = false;
+  var installed = false;
+  var PREFERRED_ACTIVITY_GROUPS = [
+    "ItemTorso",
+    "ItemArms",
+    "ItemMouth",
+    "ItemBreast",
+    "ItemPelvis",
+    "ItemLegs",
+    "ItemHead"
+  ];
+  function rememberClickMods(e) {
+    if (!e) return;
+    clickShift = !!e.shiftKey;
+    clickCtrl = !!e.ctrlKey;
+    clickAlt = !!e.altKey;
+    clickMeta = !!e.metaKey;
+  }
+  function clearClickMods() {
+    clickShift = false;
+    clickCtrl = false;
+    clickAlt = false;
+    clickMeta = false;
+  }
+  function modifierHeld(mod) {
+    switch (mod) {
+      case "Ctrl":
+        return clickCtrl;
+      case "Alt":
+        return clickAlt;
+      case "Meta":
+        return clickMeta;
+      case "Shift":
+      default:
+        return clickShift;
+    }
+  }
+  function tryGroup(C, family, name) {
+    if (!name) return null;
+    let g = null;
+    if (typeof AssetGroupGet === "function") {
+      try {
+        g = AssetGroupGet(family, name) || null;
+      } catch (e) {
+        g = null;
+      }
+    }
+    if (!g) return null;
+    if (typeof ActivityAllowedForGroup === "function") {
+      try {
+        const list = ActivityAllowedForGroup(C, name);
+        if (list && list.length) return g;
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return g;
+  }
+  function pickActivityGroup(C) {
+    if (!C) return null;
+    const family = C.AssetFamily || "Female3DCG";
+    let preferred = "ItemTorso";
+    try {
+      preferred = seidrGetSettings().fastOpenActionsSlot || "ItemTorso";
+    } catch (e) {
+    }
+    const hit = tryGroup(C, family, preferred);
+    if (hit) return hit;
+    for (let i = 0; i < PREFERRED_ACTIVITY_GROUPS.length; i++) {
+      const name = PREFERRED_ACTIVITY_GROUPS[i];
+      if (name === preferred) continue;
+      const g = tryGroup(C, family, name);
+      if (g) return g;
+    }
+    if (typeof AssetGroupGet === "function") {
+      try {
+        return AssetGroupGet(family, preferred) || AssetGroupGet(family, "ItemTorso") || null;
+      } catch (e2) {
+        return null;
+      }
+    }
+    return null;
+  }
+  function openActivitiesOn(C) {
+    if (!C) return false;
+    if (typeof ChatRoomFocusCharacter !== "function") return false;
+    try {
+      ChatRoomFocusCharacter(C);
+      const group = pickActivityGroup(C);
+      if (group && typeof DialogChangeFocusToGroup === "function") {
+        DialogChangeFocusToGroup(C, group);
+      }
+      if (typeof DialogChangeMode === "function") {
+        DialogChangeMode("activities");
+      }
+      return true;
+    } catch (e) {
+      console.warn("[Seidr] Fast Open Actions", e);
+      return false;
+    }
+  }
+  function seidrInstallFastOpen() {
+    if (installed) return;
+    installed = true;
+    if (typeof document !== "undefined") {
+      document.addEventListener("mousedown", rememberClickMods, true);
+      document.addEventListener("pointerdown", rememberClickMods, true);
+    }
+    Seidr.hookFunction("ChatRoomCharacterViewClickCharacter", 12, function(args, next) {
+      const s = seidrGetSettings();
+      const enabled = s.fastOpenActionsEnabled !== false;
+      const mod = s.fastOpenActionsModifier || "Shift";
+      if (enabled && modifierHeld(mod)) {
+        clearClickMods();
+        if (openActivitiesOn(args[0])) return;
+      }
+      clearClickMods();
+      return next(args);
+    });
+  }
+  Seidr.installFastOpen = seidrInstallFastOpen;
 
   // src/net.ts
   var seidrPeers = {};
@@ -3493,9 +5033,9 @@
     body.addEventListener("click", function(ev) {
       const t = ev.target.closest("[data-rm]");
       if (!t) return;
-      const act = t.getAttribute("data-rm");
+      const act2 = t.getAttribute("data-rm");
       const store = rmGetStore();
-      if (act === "room-save") {
+      if (act2 === "room-save") {
         const name = promptName("Save room config as:");
         if (!name) return;
         if (store.room[name] && !confirmAct("Overwrite \u201C" + name + "\u201D?")) return;
@@ -3508,7 +5048,7 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Room config saved" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "room-overwrite") {
+      } else if (act2 === "room-overwrite") {
         const sel = $("seidr-rm-room-sel");
         if (!sel || !sel.value) {
           setMsg("Select a config");
@@ -3524,7 +5064,7 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Overwritten" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "room-load") {
+      } else if (act2 === "room-load") {
         if (!rmCanApplyToRoom()) {
           setMsg("Open ChatRoom or ChatAdmin to Load");
           return;
@@ -3546,7 +5086,7 @@
         } else {
           setMsg("Filled ChatAdmin fields");
         }
-      } else if (act === "room-delete") {
+      } else if (act2 === "room-delete") {
         const sel = $("seidr-rm-room-sel");
         if (!sel || !sel.value) {
           setMsg("Select a config");
@@ -3557,7 +5097,7 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Deleted" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "access-save") {
+      } else if (act2 === "access-save") {
         const name = promptName("Save access list as:");
         if (!name) return;
         if (store.access[name] && !confirmAct("Overwrite \u201C" + name + "\u201D?")) return;
@@ -3570,7 +5110,7 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Access saved" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "access-overwrite") {
+      } else if (act2 === "access-overwrite") {
         const sel = $("seidr-rm-access-sel");
         if (!sel || !sel.value) {
           setMsg("Select access");
@@ -3586,7 +5126,7 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Overwritten" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "access-load") {
+      } else if (act2 === "access-load") {
         if (!rmCanApplyToRoom()) {
           setMsg("Open ChatRoom or ChatAdmin to Load");
           return;
@@ -3608,7 +5148,7 @@
         } else {
           setMsg("Filled access lists in ChatAdmin");
         }
-      } else if (act === "access-delete") {
+      } else if (act2 === "access-delete") {
         const sel = $("seidr-rm-access-sel");
         if (!sel || !sel.value) {
           setMsg("Select access");
@@ -3619,9 +5159,9 @@
         const s = rmSaveStore();
         setMsg(s.ok ? "Deleted" : s.error || "Failed");
         rmRefreshUi();
-      } else if (act === "bg-add") {
+      } else if (act2 === "bg-add") {
         openBgDialog();
-      } else if (act === "map-save-as") {
+      } else if (act2 === "map-save-as") {
         const name = promptName("Save map as:");
         if (!name) return;
         const maps = rmListMaps();
@@ -3632,7 +5172,7 @@
         const r = rmSaveNamedMap(name, existing && existing.id);
         setMsg(r.ok ? "Map saved" : r.error || "Failed");
         rmRefreshUi();
-      } else if (act === "map-overwrite") {
+      } else if (act2 === "map-overwrite") {
         const sel = $("seidr-rm-map-sel");
         if (!sel || !sel.value) {
           setMsg("Select a map");
@@ -3644,7 +5184,7 @@
         const r = rmSaveNamedMap(sel.value, id);
         setMsg(r.ok ? "Overwritten" : r.error || "Failed");
         rmRefreshUi();
-      } else if (act === "map-load") {
+      } else if (act2 === "map-load") {
         if (!rmCanApplyToRoom()) {
           setMsg("Open ChatRoom or ChatAdmin to Load");
           return;
@@ -3663,7 +5203,7 @@
         }
         const r = rmLoadNamedMap(id);
         setMsg(r.ok ? "Map loaded" : r.error || "Failed");
-      } else if (act === "map-delete") {
+      } else if (act2 === "map-delete") {
         const sel = $("seidr-rm-map-sel");
         if (!sel || !sel.value) {
           setMsg("Select a map");
@@ -4117,7 +5657,7 @@
   Seidr.rmChatAdminClickButton = rmChatAdminClickButton;
 
   // src/roomManager/index.ts
-  var installed = false;
+  var installed2 = false;
   var tick = null;
   function onScreenTick() {
     rmUpdateLauncherVisibility();
@@ -4128,11 +5668,11 @@
   }
   function rmInstall() {
     if (!rmIsShown()) return;
-    if (installed) {
+    if (installed2) {
       rmUpdateLauncherVisibility();
       return;
     }
-    installed = true;
+    installed2 = true;
     rmInvalidateStore();
     rmEnsureShell();
     rmUpdateLauncherVisibility();
@@ -4214,7 +5754,7 @@
       tick = null;
     }
     rmDestroyShell();
-    installed = false;
+    installed2 = false;
   }
   Seidr.installRoomManager = rmInstall;
   Seidr.uninstallRoomManager = rmUninstall;
@@ -4268,12 +5808,28 @@
       "  background: transparent; color: inherit; cursor: pointer;",
       "}",
       ".seidr-settings-icon-btn:hover { border-color: #d4a017; color: #d4a017; }",
+      ".seidr-settings-tabs {",
+      "  flex-shrink: 0; display: flex; gap: 4px; padding: 8px 10px 0;",
+      "  background: rgba(42, 34, 56, 0.95); border-bottom: 1px solid rgba(255,255,255,0.1);",
+      "}",
+      ".seidr-settings-tab {",
+      "  background: transparent; color: #a898b0; border: 1px solid transparent;",
+      "  border-radius: 6px 6px 0 0; padding: 6px 12px; cursor: pointer;",
+      "  font: inherit; text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;",
+      "}",
+      ".seidr-settings-tab:hover { color: #d4a017; }",
+      ".seidr-settings-tab-on {",
+      "  color: #d4a017; border-color: rgba(255,255,255,0.12); border-bottom-color: transparent;",
+      "  background: rgba(28, 22, 38, 0.96);",
+      "}",
       ".seidr-settings-body {",
       "  flex: 1; min-height: 0; overflow: auto; padding: 12px 14px;",
       "  display: flex; flex-direction: column; gap: 14px;",
       "  scrollbar-width: thin;",
       "  scrollbar-color: rgba(212,160,23,0.55) rgba(20,16,28,0.9);",
       "}",
+      ".seidr-settings-pane { display: none; flex-direction: column; gap: 14px; }",
+      ".seidr-settings-pane-on { display: flex; }",
       ".seidr-settings-body::-webkit-scrollbar { width: 8px; }",
       ".seidr-settings-body::-webkit-scrollbar-track {",
       "  background: rgba(20,16,28,0.9); border-radius: 4px;",
@@ -4317,6 +5873,20 @@
       ".seidr-settings-field-label {",
       "  flex: 0 0 72px; font-size: 12px; color: #f0e6d4; line-height: 1.35;",
       "}",
+      ".seidr-set-storage-bar {",
+      "  height: 6px; margin: 6px 0 10px; border-radius: 3px;",
+      "  background: rgba(20,16,28,0.9); border: 1px solid rgba(255,255,255,0.1);",
+      "  overflow: hidden;",
+      "}",
+      ".seidr-set-storage-bar-fill {",
+      "  height: 100%; width: 0%; background: #d4a017;",
+      "  transition: width 0.15s ease;",
+      "}",
+      ".seidr-set-storage-rows { display: flex; flex-direction: column; gap: 4px; }",
+      ".seidr-set-storage-row .seidr-settings-field-label { flex: 1; }",
+      ".seidr-set-storage-val {",
+      "  flex: 0 0 auto; font-size: 12px; color: #c8b8a0; font-variant-numeric: tabular-nums;",
+      "}",
       ".seidr-settings-field-row select {",
       "  flex: 1; min-width: 0;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4; border: 1px solid rgba(255,255,255,0.14);",
@@ -4359,7 +5929,217 @@
       ".seidr-settings-draw-actions { margin-top: 10px; }",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
-      "}"
+      "}",
+      '.seidr-settings-field-row input[type="text"] {',
+      "  flex: 1; min-width: 0;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "}",
+      ".seidr-act-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }",
+      ".seidr-act-list-item {",
+      "  text-align: left; background: rgba(42,34,56,0.85); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 8px 10px; cursor: pointer;",
+      "}",
+      ".seidr-act-list-item:hover, .seidr-act-list-on { border-color: #d4a017; }",
+      ".seidr-act-editor { margin-top: 12px; }",
+      ".seidr-act-slots { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }",
+      ".seidr-act-slot {",
+      "  background: rgba(20,16,28,0.9); color: #a898b0;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 4px 8px; cursor: pointer;",
+      "  font: inherit; font-size: 11px;",
+      "}",
+      ".seidr-act-slot-on { color: #f0e6d4; border-color: #d4a017; background: rgba(60,48,80,0.9); }",
+      ".seidr-act-group {",
+      "  margin-top: 8px; padding: 8px; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;",
+      "  background: rgba(20,16,28,0.45);",
+      "}",
+      ".seidr-act-group-head { font-size: 11px; color: #d4a017; margin-bottom: 6px; }",
+      ".seidr-act-rule {",
+      "  display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px;",
+      "}",
+      ".seidr-act-rule select {",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4; border: 1px solid rgba(255,255,255,0.14);",
+      "  border-radius: 4px; padding: 4px 6px; max-width: 140px;",
+      "}",
+      ".seidr-act-ph-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }",
+      ".seidr-act-ph {",
+      "  background: rgba(20,16,28,0.9); color: #c8b8a0;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 3px 6px;",
+      "  cursor: pointer; font: inherit; font-size: 10px;",
+      "}",
+      ".seidr-act-ph:hover { border-color: #d4a017; color: #f0e6d4; }",
+      "#seidr-act-chat-other, #seidr-act-chat-self {",
+      "  width: 100%; box-sizing: border-box; margin-top: 4px;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "  font: inherit; resize: vertical;",
+      "}",
+      ".seidr-act-btn {",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px;",
+      "  padding: 5px 10px; cursor: pointer; font: inherit; font-size: 12px;",
+      "}",
+      ".seidr-act-btn:hover { border-color: #d4a017; color: #d4a017; }",
+      ".seidr-act-btn-danger:hover { border-color: #c06060; color: #e09090; }",
+      ".seidr-act-btn-icon { padding: 2px 8px; min-width: 28px; }",
+      ".seidr-act-arousal-picker { margin-top: 8px; position: relative; }",
+      ".seidr-act-arousal-toggle {",
+      "  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box;",
+      "  text-align: left; cursor: pointer; font: inherit;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 8px 10px;",
+      "}",
+      ".seidr-act-arousal-toggle:hover, .seidr-act-arousal-open .seidr-act-arousal-toggle {",
+      "  border-color: #d4a017;",
+      "}",
+      ".seidr-act-arousal-toggle-lab {",
+      "  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: #d4a017;",
+      "}",
+      ".seidr-act-arousal-toggle strong { flex: 1; color: #f0e6d4; font-weight: 600; }",
+      ".seidr-act-arousal-caret { color: #a898b0; font-size: 11px; }",
+      ".seidr-act-arousal-dropdown {",
+      "  margin-top: 6px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;",
+      "  background: rgba(20,16,28,0.96); padding: 8px;",
+      "}",
+      "#seidr-act-arousal-filter {",
+      "  width: 100%; box-sizing: border-box;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "  font: inherit;",
+      "}",
+      ".seidr-act-arousal-results {",
+      "  margin-top: 6px; max-height: 200px; overflow-y: auto;",
+      "}",
+      ".seidr-act-arousal-group {",
+      "  font-size: 11px; color: #d4a017; padding: 6px 8px 2px; margin-top: 2px;",
+      "}",
+      ".seidr-act-arousal-opt {",
+      "  display: block; width: 100%; text-align: left; box-sizing: border-box;",
+      "  background: transparent; color: #f0e6d4;",
+      "  border: 1px solid transparent; border-radius: 4px; padding: 5px 8px;",
+      "  cursor: pointer; font: inherit; font-size: 12px;",
+      "}",
+      ".seidr-act-arousal-opt:hover { background: rgba(60,48,80,0.7); }",
+      ".seidr-act-arousal-opt-on { border-color: #d4a017; background: rgba(60,48,80,0.9); }",
+      ".seidr-act-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }",
+      ".seidr-act-item-chip {",
+      "  background: rgba(60,48,80,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(212,160,23,0.45); border-radius: 4px;",
+      "  padding: 4px 8px; cursor: pointer; font: inherit; font-size: 11px;",
+      "}",
+      ".seidr-act-item-chip:hover { border-color: #c06060; color: #e09090; }",
+      ".seidr-act-items-picker { margin-top: 6px; }",
+      ".seidr-act-items-dropdown {",
+      "  margin-top: 6px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;",
+      "  background: rgba(20,16,28,0.96); padding: 8px;",
+      "}",
+      "#seidr-act-items-slot, #seidr-act-items-filter {",
+      "  flex: 1; min-width: 120px;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 5px 8px;",
+      "}",
+      ".seidr-act-items-results { margin-top: 4px; max-height: 200px; overflow-y: auto; }",
+      ".seidr-act-item-opt {",
+      "  display: block; width: 100%; text-align: left; box-sizing: border-box;",
+      "  background: transparent; color: #f0e6d4;",
+      "  border: 1px solid transparent; border-radius: 4px; padding: 5px 8px;",
+      "  cursor: pointer; font: inherit; font-size: 12px;",
+      "}",
+      ".seidr-act-item-opt:hover { background: rgba(60,48,80,0.7); }",
+      ".seidr-act-item-opt-on { border-color: #d4a017; background: rgba(60,48,80,0.9); }",
+      ".seidr-act-io-text {",
+      "  display: block; width: 100%; box-sizing: border-box; margin-top: 6px;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "  font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;",
+      "  resize: vertical;",
+      "}",
+      ".seidr-act-import-panel {",
+      "  margin-top: 8px; padding: 8px;",
+      "  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;",
+      "  background: rgba(20,16,28,0.6);",
+      "}",
+      ".seidr-act-import-list {",
+      "  max-height: 180px; overflow-y: auto; margin-top: 6px;",
+      "  display: flex; flex-direction: column; gap: 4px;",
+      "}",
+      ".seidr-act-import-row {",
+      "  display: flex; align-items: center; gap: 8px;",
+      "  color: #f0e6d4; font-size: 13px; cursor: pointer;",
+      "}",
+      ".seidr-act-icon-row { display: flex; align-items: center; gap: 12px; }",
+      ".seidr-act-icon-preview {",
+      "  width: 40px; height: 40px; object-fit: contain;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 6px;",
+      "  background: rgba(20,16,28,0.9);",
+      "}",
+      ".seidr-act-icon-modal {",
+      "  position: absolute; inset: 0; z-index: 30;",
+      "  background: rgba(8,6,12,0.72);",
+      "  display: flex; align-items: center; justify-content: center;",
+      "  padding: 12px;",
+      "}",
+      ".seidr-act-icon-modal-card {",
+      "  width: min(100%, 420px); max-height: calc(100% - 8px);",
+      "  display: flex; flex-direction: column; box-sizing: border-box;",
+      "  background: rgba(28,22,38,0.98); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;",
+      "  box-shadow: 0 12px 40px rgba(0,0,0,0.5);",
+      "  overflow: hidden;",
+      "  font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;",
+      "}",
+      ".seidr-act-icon-modal-head {",
+      "  flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;",
+      "  padding: 8px 10px; background: rgba(42,34,56,0.95);",
+      "  border-bottom: 1px solid rgba(255,255,255,0.1);",
+      "}",
+      "#seidr-act-icon-search {",
+      "  flex-shrink: 0; width: auto; box-sizing: border-box; margin: 8px 10px 0;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "}",
+      "#seidr-act-icon-url, #seidr-act-icon-url-label {",
+      "  flex: 1; min-width: 100px; box-sizing: border-box;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "}",
+      ".seidr-act-icon-scroll {",
+      "  flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 12px;",
+      "  scrollbar-width: thin;",
+      "  scrollbar-color: rgba(212,160,23,0.55) rgba(20,16,28,0.9);",
+      "}",
+      ".seidr-act-icon-scroll::-webkit-scrollbar { width: 8px; }",
+      ".seidr-act-icon-scroll::-webkit-scrollbar-track {",
+      "  background: rgba(20,16,28,0.9); border-radius: 4px;",
+      "}",
+      ".seidr-act-icon-scroll::-webkit-scrollbar-thumb {",
+      "  background: rgba(212,160,23,0.55); border-radius: 4px;",
+      "}",
+      ".seidr-act-icon-scroll::-webkit-scrollbar-thumb:hover {",
+      "  background: rgba(212,160,23,0.75);",
+      "}",
+      ".seidr-act-icon-grid { margin-top: 4px; }",
+      ".seidr-act-icon-sec {",
+      "  font-size: 11px; color: #d4a017; margin: 10px 0 4px; letter-spacing: 0.04em;",
+      "  text-transform: uppercase;",
+      "}",
+      ".seidr-act-icon-sec-grid {",
+      "  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px;",
+      "}",
+      ".seidr-act-icon-cell {",
+      "  display: flex; flex-direction: column; align-items: center; gap: 4px;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;",
+      "  padding: 6px 4px; cursor: pointer; font: inherit; font-size: 10px;",
+      "}",
+      ".seidr-act-icon-cell:hover { border-color: #d4a017; }",
+      ".seidr-act-icon-cell img { width: 36px; height: 36px; object-fit: contain; }",
+      ".seidr-act-icon-custom { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px; }",
+      ".seidr-act-icon-custom-row {",
+      "  display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px;",
+      "}",
+      ".seidr-act-icon-custom-row img { width: 28px; height: 28px; object-fit: contain; }",
+      ".seidr-act-icon-custom-row span { flex: 1; }"
     ].join("\n");
   }
   function seidrInjectSettingsStyles() {
@@ -4372,8 +6152,1188 @@
     el.textContent = seidrSettingsCss();
   }
 
-  // src/settings/ui.ts
+  // src/actions/io.ts
+  function lz2() {
+    try {
+      if (typeof LZString !== "undefined" && LZString) return LZString;
+    } catch (e) {
+    }
+    return null;
+  }
+  function actPrefix() {
+    return Seidr.ACT_LZ_PREFIX || "SeidrAct1:";
+  }
+  function seidrExportActionsString() {
+    const payload = {
+      v: 1,
+      kind: "SeidrActions",
+      actions: seidrListActions()
+    };
+    const json = JSON.stringify(payload);
+    const L = lz2();
+    const prefix = actPrefix();
+    if (!L || typeof L.compressToBase64 !== "function") {
+      throw new Error("LZString unavailable");
+    }
+    return prefix + L.compressToBase64(json);
+  }
+  function seidrParseActionsImport(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return { ok: false, error: "Paste an export string first" };
+    const prefix = actPrefix();
+    if (text.indexOf(prefix) !== 0) {
+      return { ok: false, error: "Not a Seidr Actions export (missing " + prefix + ")" };
+    }
+    const L = lz2();
+    if (!L || typeof L.decompressFromBase64 !== "function") {
+      return { ok: false, error: "LZString unavailable" };
+    }
+    let data = null;
+    try {
+      const plain = L.decompressFromBase64(text.slice(prefix.length));
+      if (!plain) return { ok: false, error: "Could not decompress export" };
+      data = JSON.parse(plain);
+    } catch (e) {
+      return { ok: false, error: "Invalid export data" };
+    }
+    if (!data || typeof data !== "object") return { ok: false, error: "Invalid export data" };
+    const d = data;
+    if (d.kind !== "SeidrActions" || d.v !== 1) {
+      return { ok: false, error: "Unsupported export format" };
+    }
+    if (!Array.isArray(d.actions)) {
+      return { ok: false, error: "Export has no actions list" };
+    }
+    const out = [];
+    for (let i = 0; i < d.actions.length; i++) {
+      const tmpId = i + 1;
+      const act2 = seidrNormalizeAction(d.actions[i], tmpId);
+      if (act2) out.push(act2);
+    }
+    if (!out.length) return { ok: false, error: "No valid actions in export" };
+    return { ok: true, actions: out };
+  }
+
+  // src/actions/ui.ts
+  var editId = null;
+  var draft = null;
+  var lastChatArea = null;
+  var arousalPickerOpen = false;
+  var itemsPickerOpen = false;
+  var itemsPickerSlot = "ItemMouth";
+  var itemsPickerFilter = "";
+  var importCandidates = null;
+  var SEIDR_ITEMS_RESULT_CAP = 80;
   function $2(id) {
+    return document.getElementById(id);
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function opts(list, selected) {
+    return list.map(function(o) {
+      return '<option value="' + escapeHtml(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml(o.label) + "</option>";
+    }).join("");
+  }
+  function stringOpts(list, selected) {
+    return list.map(function(o) {
+      return '<option value="' + escapeHtml(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml(o) + "</option>";
+    }).join("");
+  }
+  function arousalResultsHtml(selected, filter) {
+    const q = (filter || "").trim().toLowerCase();
+    const groups = seidrArousalPickerGroups();
+    const parts = [];
+    groups.forEach(function(g) {
+      const rows = g.activities.filter(function(a) {
+        if (!q) return true;
+        return a.label.toLowerCase().indexOf(q) >= 0 || a.id.toLowerCase().indexOf(q) >= 0;
+      });
+      if (!rows.length) return;
+      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml(g.label) + "</div>");
+      rows.forEach(function(a) {
+        parts.push(
+          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml(a.id) + '">' + escapeHtml(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml(a.id) + "</span></button>"
+        );
+      });
+    });
+    if (!parts.length) {
+      return '<p class="seidr-settings-hint">No activities match.</p>';
+    }
+    return parts.join("");
+  }
+  function arousalPickerHtml(selected) {
+    const id = selected && SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(selected) >= 0 ? selected : "Caress";
+    const open = arousalPickerOpen;
+    return [
+      '<div class="seidr-act-arousal-picker' + (open ? " seidr-act-arousal-open" : "") + '">',
+      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml(id) + '" />',
+      '<button type="button" class="seidr-act-arousal-toggle" id="seidr-act-arousal-toggle" title="Choose Club arousal template">',
+      '<span class="seidr-act-arousal-toggle-lab">Template</span>',
+      '<strong id="seidr-act-arousal-label">' + escapeHtml(seidrArousalActivityLabel(id)) + "</strong>",
+      '<span class="seidr-act-arousal-caret" aria-hidden="true">' + (open ? "\u25B4" : "\u25BE") + "</span>",
+      "</button>",
+      '<div class="seidr-act-arousal-dropdown" id="seidr-act-arousal-dropdown"' + (open ? "" : " hidden") + ">",
+      '<input type="search" id="seidr-act-arousal-filter" placeholder="Search activities\u2026" autocomplete="off" />',
+      '<div class="seidr-act-arousal-results" id="seidr-act-arousal-results">' + arousalResultsHtml(id, "") + "</div>",
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+  function restraintAssetLabel(a) {
+    if (!a) return "";
+    try {
+      if (typeof a.Description === "string" && a.Description) return a.Description;
+      if (typeof a.DynamicDescription === "function" && typeof Player !== "undefined" && Player) {
+        return String(a.DynamicDescription(Player) || a.Name || "");
+      }
+    } catch (e) {
+    }
+    return a.Name ? String(a.Name) : "";
+  }
+  function itemRefLabel(ref) {
+    const slotMeta = seidrRestraintSlots().filter(function(s) {
+      return s.id === ref.slot;
+    })[0];
+    const slotLab = slotMeta ? slotMeta.label : ref.slot;
+    let nameLab = ref.name;
+    try {
+      if (typeof AssetGet === "function") {
+        const a = AssetGet("Female3DCG", ref.slot, ref.name);
+        if (a) nameLab = restraintAssetLabel(a) || ref.name;
+      }
+    } catch (e) {
+    }
+    return slotLab + ": " + nameLab;
+  }
+  function listRestraintAssets(slot, filter) {
+    const out = [];
+    if (!slot || typeof Asset === "undefined" || !Array.isArray(Asset)) return out;
+    const q = (filter || "").trim().toLowerCase();
+    let family = "Female3DCG";
+    try {
+      if (typeof Player !== "undefined" && Player && Player.AssetFamily) {
+        family = String(Player.AssetFamily);
+      }
+    } catch (e0) {
+    }
+    try {
+      for (let i = 0; i < Asset.length; i++) {
+        const a = Asset[i];
+        if (!a || !a.Name || !a.Group || a.Group.Name !== slot) continue;
+        if (a.Group.Family && a.Group.Family !== family) continue;
+        if (a.IsLock) continue;
+        if (a.Wear === false) continue;
+        if (a.Enable === false) continue;
+        const label = restraintAssetLabel(a) || a.Name;
+        if (q) {
+          const hay = (label + " " + a.Name).toLowerCase();
+          if (hay.indexOf(q) < 0) continue;
+        }
+        out.push({ name: String(a.Name), label: String(label) });
+      }
+    } catch (e) {
+    }
+    out.sort(function(x, y) {
+      return x.label.localeCompare(y.label);
+    });
+    return out.slice(0, SEIDR_ITEMS_RESULT_CAP);
+  }
+  function itemsResultsHtml(slot, filter, selected) {
+    const rows = listRestraintAssets(slot, filter);
+    if (!rows.length) {
+      return '<p class="seidr-settings-hint">No restraints match' + (typeof Asset === "undefined" ? " (Asset catalog not loaded)." : ".") + "</p>";
+    }
+    return rows.map(function(r) {
+      const on = selected.some(function(it) {
+        return it.slot === slot && it.name === r.name;
+      });
+      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml(slot) + '" data-item-add-name="' + escapeHtml(r.name) + '">' + escapeHtml(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml(r.name) + "</span></button>";
+    }).join("");
+  }
+  function itemsBlockHtml(items) {
+    const list = items || [];
+    const slots = seidrRestraintSlots();
+    if (!slots.some(function(s) {
+      return s.id === itemsPickerSlot;
+    })) {
+      itemsPickerSlot = slots[0] ? slots[0].id : "ItemMouth";
+    }
+    const chips = list.length ? list.map(function(it, idx) {
+      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml(itemRefLabel(it)) + " \xD7</button>";
+    }).join("") : '<span class="seidr-settings-hint">None \u2014 action shows without a specific restraint.</span>';
+    const open = itemsPickerOpen;
+    return [
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Items (optional \u2014 acted must wear one listed restraint)</p>',
+      '<div class="seidr-act-items" id="seidr-act-items">' + chips + "</div>",
+      '<div class="seidr-act-items-picker' + (open ? " seidr-act-items-open" : "") + '">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-items-toggle" title="Browse Club restraints">',
+      (open ? "Hide restraint catalog \u25B4" : "Add restraint \u25BE") + "</button>",
+      '<div class="seidr-act-items-dropdown" id="seidr-act-items-dropdown"' + (open ? "" : " hidden") + ">",
+      '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;">',
+      '<select id="seidr-act-items-slot">' + opts(slots, itemsPickerSlot) + "</select>",
+      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml(itemsPickerFilter) + '" />',
+      "</div>",
+      '<div class="seidr-act-items-results" id="seidr-act-items-results">' + itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, list) + "</div>",
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+  function slotChips(selected) {
+    return SEIDR_ACTION_SLOTS.map(function(s) {
+      const on = selected.indexOf(s.id) >= 0;
+      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml(s.id) + '">' + escapeHtml(s.label) + "</button>";
+    }).join("");
+  }
+  function ruleRowHtml(rule, index) {
+    const typeMeta = SEIDR_COND_TYPES.filter(function(t) {
+      return t.id === rule.type;
+    })[0];
+    const extra = typeMeta ? typeMeta.extra : null;
+    let extraHtml = "";
+    if (extra === "slot") {
+      extraHtml = '<select data-rule-extra="slot">' + opts(SEIDR_ACTION_SLOTS, rule.slot || "ItemArms") + "</select>";
+    } else if (extra === "pose") {
+      extraHtml = '<select data-rule-extra="pose">' + opts(SEIDR_ACTION_POSES, rule.pose || "Kneel") + "</select>";
+    } else if (extra === "zone") {
+      extraHtml = '<select data-rule-extra="zone"><option value="penis"' + (rule.zone === "penis" ? " selected" : "") + '>penis</option><option value="vagina"' + (rule.zone === "vagina" || !rule.zone ? " selected" : "") + '>vagina</option><option value="nipples"' + (rule.zone === "nipples" ? " selected" : "") + ">nipples</option></select>";
+    }
+    return [
+      '<div class="seidr-act-rule" data-rule-index="' + index + '">',
+      "<select data-rule-who>",
+      '<option value="target"' + (rule.who !== "source" ? " selected" : "") + ">They</option>",
+      '<option value="source"' + (rule.who === "source" ? " selected" : "") + ">I</option>",
+      "</select>",
+      "<select data-rule-not>",
+      '<option value="0"' + (!rule.not ? " selected" : "") + ">is</option>",
+      '<option value="1"' + (rule.not ? " selected" : "") + ">is not</option>",
+      "</select>",
+      "<select data-rule-type>" + SEIDR_COND_TYPES.map(function(t) {
+        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml(t.label) + "</option>";
+      }).join("") + "</select>",
+      extraHtml,
+      '<button type="button" class="seidr-act-btn seidr-act-btn-icon" data-rule-del="' + index + '" title="Remove rule">\xD7</button>',
+      "</div>"
+    ].join("");
+  }
+  function groupsHtml(groups) {
+    if (!groups.length) {
+      return '<p class="seidr-settings-hint">No conditions \u2014 always available when audience matches.</p>';
+    }
+    return groups.map(function(g, gi) {
+      const rules = (g.rules || []).map(function(r, ri) {
+        return ruleRowHtml(r, gi * 100 + ri);
+      }).join("");
+      return [
+        '<div class="seidr-act-group" data-group="' + gi + '">',
+        '<div class="seidr-act-group-head">Group ' + (gi + 1) + " (AND)" + (gi > 0 ? ' <span class="seidr-settings-hint">OR previous</span>' : "") + ' <button type="button" class="seidr-act-btn seidr-act-btn-danger" data-group-del="' + gi + '">Remove group</button></div>',
+        rules,
+        '<button type="button" class="seidr-act-btn" data-rule-add="' + gi + '">+ Rule</button>',
+        "</div>"
+      ].join("");
+    }).join("");
+  }
+  function chatTokenChips() {
+    return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
+      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml(t.token) + '" title="' + escapeHtml(t.hint) + '">' + escapeHtml(t.token) + "</button>";
+    }).join("");
+  }
+  function insertChatToken(ta, token) {
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+    const next = ta.value.slice(0, start) + token + ta.value.slice(end);
+    if (next.length > SEIDR_ACTION_CHAT_MAX) return false;
+    ta.value = next;
+    ta.focus();
+    const pos = start + token.length;
+    ta.setSelectionRange(pos, pos);
+    return true;
+  }
+  function updateCapHint(root3) {
+    const el = root3.querySelector("#seidr-act-cap");
+    if (!el) return;
+    const n = seidrListActions().length;
+    el.textContent = n + "/" + SEIDR_ACTIONS_MAX + " Actions";
+  }
+  function renderList(root3) {
+    const list = seidrListActions();
+    const box = root3.querySelector("#seidr-act-list");
+    if (!box) return;
+    updateCapHint(root3);
+    if (!list.length) {
+      box.innerHTML = '<p class="seidr-settings-hint">No actions yet. Add one to appear in the Club Activity Menu.</p>';
+      return;
+    }
+    const optsHtml = list.map(function(a) {
+      return '<option value="' + a.id + '"' + (editId === a.id ? " selected" : "") + ">" + escapeHtml(a.name) + " (" + escapeHtml(a.slots.join(", ")) + ")</option>";
+    }).join("");
+    box.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Action</span>',
+      '<select id="seidr-act-pick">' + optsHtml + "</select>",
+      "</div>"
+    ].join("");
+  }
+  function renderEditor(root3) {
+    const wrap = root3.querySelector("#seidr-act-editor");
+    if (!wrap) return;
+    if (!draft) {
+      wrap.innerHTML = '<p class="seidr-settings-hint">Select an action or add a new one.</p>';
+      return;
+    }
+    const a = draft;
+    const arousal = a.effects.arousal || { enabled: false, activity: "Caress" };
+    const sound = a.effects.sound || { enabled: false, sound: SEIDR_ACTION_SOUNDS[0] };
+    const pose = a.effects.pose || { enabled: false, pose: "Kneel" };
+    const chatOther2 = a.chatOther || seidrDefaultChatOther(a.name);
+    const chatSelf2 = a.chatSelf || seidrDefaultChatSelf(a.name);
+    if (!a.icon) a.icon = seidrDefaultActionIcon();
+    const icon = seidrNormalizeActionIcon(a.icon);
+    const iconUrl = seidrResolveIconRef(icon);
+    const iconLab = seidrIconLabel(icon);
+    wrap.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Name</span>',
+      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml(a.name) + '" />',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Who</span>',
+      '<select id="seidr-act-audience">' + opts(SEIDR_ACTION_AUDIENCES, a.audience) + "</select>",
+      "</div>",
+      '<div class="seidr-act-icon-row" style="margin-top:10px;">',
+      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml(iconUrl) + '" alt="" width="40" height="40" />',
+      "<div>",
+      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml(iconLab) + "</p>",
+      '<button type="button" class="seidr-act-btn" id="seidr-act-icon-pick">Select icon</button>',
+      "</div>",
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Slots (Activity Menu zones)</p>',
+      '<div class="seidr-act-slots" id="seidr-act-slots">' + slotChips(a.slots) + "</div>",
+      itemsBlockHtml(a.items || []),
+      '<p class="seidr-settings-hint" style="margin-top:10px;">When visible</p>',
+      '<div id="seidr-act-conds">' + groupsHtml(a.conditions.groups) + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-add-group">+ Or this instead</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Action text (Club tags, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
+      '<div class="seidr-act-ph-row" id="seidr-act-ph">' + chatTokenChips() + "</div>",
+      `<p class="seidr-settings-hint">Club style: SourceCharacter kisses TargetCharacter's lips. / SourceCharacter touches PronounPossessive arms.</p>`,
+      '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Other</label>',
+      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml(chatOther2) + "</textarea>",
+      '<p class="seidr-settings-hint" id="seidr-act-chat-other-count">' + chatOther2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
+      '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Self</label>',
+      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml(chatSelf2) + "</textarea>",
+      '<p class="seidr-settings-hint" id="seidr-act-chat-self-count">' + chatSelf2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Effects</p>',
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-act-arousal-on"' + (arousal.enabled ? " checked" : "") + " /> Add arousal</label>",
+      "</div>",
+      arousalPickerHtml(arousal.activity || "Caress"),
+      '<p class="seidr-settings-hint">Click Template to search Club activities. Chat text stays your action name.</p>',
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<label><input type="checkbox" id="seidr-act-sound-on"' + (sound.enabled ? " checked" : "") + " /> Play sound</label>",
+      '<select id="seidr-act-sound">' + stringOpts(SEIDR_ACTION_SOUNDS, sound.sound) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<label><input type="checkbox" id="seidr-act-pose-on"' + (pose.enabled ? " checked" : "") + " /> Set pose</label>",
+      '<select id="seidr-act-pose">' + opts(SEIDR_ACTION_POSES, pose.pose) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-row seidr-settings-draw-actions" style="margin-top:12px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-save">Save action</button>',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-act-delete">Delete</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-act-msg"></p>'
+    ].join("");
+  }
+  function readDraftFromDom(root3) {
+    if (!draft) return null;
+    const nameEl = root3.querySelector("#seidr-act-name");
+    const audEl = root3.querySelector("#seidr-act-audience");
+    const chatOtherEl = root3.querySelector("#seidr-act-chat-other");
+    const chatSelfEl = root3.querySelector("#seidr-act-chat-self");
+    const name = nameEl && nameEl.value.trim() ? nameEl.value.trim() : draft.name;
+    const next = {
+      id: draft.id,
+      name,
+      slots: draft.slots.slice(),
+      audience: audEl && audEl.value ? audEl.value : draft.audience,
+      chatOther: chatOtherEl && chatOtherEl.value.trim() ? chatOtherEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatOther(name),
+      chatSelf: chatSelfEl && chatSelfEl.value.trim() ? chatSelfEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatSelf(name),
+      icon: seidrNormalizeActionIcon(draft.icon || seidrDefaultActionIcon()),
+      items: (draft.items || []).slice(),
+      conditions: { groups: [] },
+      effects: {}
+    };
+    const slotBtns = root3.querySelectorAll(".seidr-act-slot-on");
+    const slots = [];
+    slotBtns.forEach(function(btn2) {
+      const s = btn2.getAttribute("data-slot");
+      if (s && slots.indexOf(s) < 0) slots.push(s);
+    });
+    if (slots.length) next.slots = slots;
+    const groups = [];
+    root3.querySelectorAll(".seidr-act-group").forEach(function(gEl) {
+      const rules = [];
+      gEl.querySelectorAll(".seidr-act-rule").forEach(function(rEl) {
+        const who = (rEl.querySelector("[data-rule-who]") || { value: "target" }).value;
+        const not = (rEl.querySelector("[data-rule-not]") || { value: "0" }).value === "1";
+        const type = (rEl.querySelector("[data-rule-type]") || { value: "wearing" }).value;
+        const rule = {
+          who: who === "source" ? "source" : "target",
+          type,
+          not
+        };
+        const slotEl = rEl.querySelector('[data-rule-extra="slot"]');
+        const poseEl = rEl.querySelector('[data-rule-extra="pose"]');
+        const zoneEl = rEl.querySelector('[data-rule-extra="zone"]');
+        if (slotEl) rule.slot = slotEl.value;
+        if (poseEl) rule.pose = poseEl.value;
+        if (zoneEl) rule.zone = zoneEl.value;
+        rules.push(rule);
+      });
+      if (rules.length) groups.push({ rules });
+    });
+    next.conditions = { groups };
+    const aOn = root3.querySelector("#seidr-act-arousal-on");
+    const aAct = root3.querySelector("#seidr-act-arousal-act");
+    const actVal = aAct && aAct.value || "Caress";
+    next.effects.arousal = {
+      enabled: !!(aOn && aOn.checked),
+      activity: SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(actVal) >= 0 ? actVal : "Caress"
+    };
+    const sOn = root3.querySelector("#seidr-act-sound-on");
+    const sSel = root3.querySelector("#seidr-act-sound");
+    next.effects.sound = {
+      enabled: !!(sOn && sOn.checked),
+      sound: sSel && sSel.value || SEIDR_ACTION_SOUNDS[0]
+    };
+    const pOn = root3.querySelector("#seidr-act-pose-on");
+    const pSel = root3.querySelector("#seidr-act-pose");
+    next.effects.pose = {
+      enabled: !!(pOn && pOn.checked),
+      pose: pSel && pSel.value || "Kneel"
+    };
+    draft = next;
+    return next;
+  }
+  function setMsg2(root3, text) {
+    const el = root3.querySelector("#seidr-act-msg");
+    if (el) el.textContent = text || "";
+  }
+  function afterSave() {
+    if (typeof Seidr.syncUserActions === "function") {
+      try {
+        Seidr.syncUserActions();
+      } catch (e) {
+      }
+    }
+  }
+  function bindArousalPicker(root3) {
+    const picker = root3.querySelector(".seidr-act-arousal-picker");
+    const toggle = root3.querySelector("#seidr-act-arousal-toggle");
+    const dropdown = root3.querySelector("#seidr-act-arousal-dropdown");
+    const filter = root3.querySelector("#seidr-act-arousal-filter");
+    const hidden = root3.querySelector("#seidr-act-arousal-act");
+    const results = root3.querySelector("#seidr-act-arousal-results");
+    const labelEl = root3.querySelector("#seidr-act-arousal-label");
+    const caret = root3.querySelector(".seidr-act-arousal-caret");
+    if (!toggle || !dropdown || !hidden) return;
+    function setOpen(open) {
+      arousalPickerOpen = open;
+      if (picker) picker.classList.toggle("seidr-act-arousal-open", open);
+      if (dropdown) {
+        if (open) dropdown.removeAttribute("hidden");
+        else dropdown.setAttribute("hidden", "");
+      }
+      if (caret) caret.textContent = open ? "\u25B4" : "\u25BE";
+      if (open && filter) {
+        try {
+          filter.focus();
+        } catch (e) {
+        }
+      }
+    }
+    function refreshResults() {
+      if (!results || !hidden) return;
+      const q = filter ? filter.value || "" : "";
+      results.innerHTML = arousalResultsHtml(hidden.value || "Caress", q);
+    }
+    toggle.addEventListener("click", function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      setOpen(!arousalPickerOpen);
+      if (arousalPickerOpen) refreshResults();
+    });
+    if (filter) {
+      filter.addEventListener("input", function() {
+        refreshResults();
+      });
+      filter.addEventListener("keydown", function(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          setOpen(false);
+        }
+      });
+    }
+    if (results) {
+      results.addEventListener("click", function(ev) {
+        const btn2 = ev.target.closest("[data-arousal-id]");
+        if (!btn2 || !hidden) return;
+        const id = btn2.getAttribute("data-arousal-id");
+        if (!id || SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(id) < 0) return;
+        hidden.value = id;
+        if (labelEl) labelEl.textContent = seidrArousalActivityLabel(id);
+        if (draft) {
+          if (!draft.effects) draft.effects = {};
+          if (!draft.effects.arousal) draft.effects.arousal = { enabled: false, activity: id };
+          else draft.effects.arousal.activity = id;
+        }
+        setOpen(false);
+      });
+    }
+    const onDoc = function(ev) {
+      if (!arousalPickerOpen || !picker) return;
+      if (picker.contains(ev.target)) return;
+      setOpen(false);
+      document.removeEventListener("mousedown", onDoc, true);
+    };
+    toggle.addEventListener("click", function() {
+      if (arousalPickerOpen) {
+        setTimeout(function() {
+          document.addEventListener("mousedown", onDoc, true);
+        }, 0);
+      }
+    });
+  }
+  function addItemRef(root3, slot, name) {
+    if (!draft || !slot || !name) return;
+    readDraftFromDom(root3);
+    if (!draft.items) draft.items = [];
+    const dup = draft.items.some(function(it) {
+      return it.slot === slot && it.name === name;
+    });
+    if (dup) {
+      setMsg2(root3, "Already added");
+      return;
+    }
+    if (draft.items.length >= SEIDR_ACTION_ITEMS_MAX) {
+      setMsg2(root3, "Item limit (" + SEIDR_ACTION_ITEMS_MAX + ")");
+      return;
+    }
+    draft.items.push({ slot, name });
+    itemsPickerOpen = false;
+    renderEditor(root3);
+    bindEditor(root3);
+  }
+  function bindItemsPicker(root3) {
+    const picker = root3.querySelector(".seidr-act-items-picker");
+    const toggle = root3.querySelector("#seidr-act-items-toggle");
+    const dropdown = root3.querySelector("#seidr-act-items-dropdown");
+    const slotSel = root3.querySelector("#seidr-act-items-slot");
+    const filterEl = root3.querySelector("#seidr-act-items-filter");
+    const results = root3.querySelector("#seidr-act-items-results");
+    function refreshResults() {
+      if (!results || !draft) return;
+      results.innerHTML = itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, draft.items || []);
+      results.querySelectorAll("[data-item-add-name]").forEach(function(btn2) {
+        btn2.addEventListener("click", function() {
+          const el = btn2;
+          addItemRef(
+            root3,
+            el.getAttribute("data-item-add-slot") || "",
+            el.getAttribute("data-item-add-name") || ""
+          );
+        });
+      });
+    }
+    function setOpen(open) {
+      itemsPickerOpen = open;
+      if (picker) picker.classList.toggle("seidr-act-items-open", open);
+      if (dropdown) dropdown.hidden = !open;
+      if (toggle) toggle.textContent = open ? "Hide restraint catalog \u25B4" : "Add restraint \u25BE";
+      if (open) {
+        refreshResults();
+        if (filterEl) filterEl.focus();
+      }
+    }
+    toggle?.addEventListener("click", function() {
+      setOpen(!itemsPickerOpen);
+    });
+    slotSel?.addEventListener("change", function() {
+      itemsPickerSlot = slotSel.value || "ItemMouth";
+      refreshResults();
+    });
+    filterEl?.addEventListener("input", function() {
+      itemsPickerFilter = filterEl.value || "";
+      refreshResults();
+    });
+    if (itemsPickerOpen) refreshResults();
+    root3.querySelectorAll("[data-item-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        if (!draft) return;
+        readDraftFromDom(root3);
+        const idx = parseInt(btn2.getAttribute("data-item-del") || "", 10);
+        if (!Number.isFinite(idx) || !draft.items) return;
+        draft.items.splice(idx, 1);
+        renderEditor(root3);
+        bindEditor(root3);
+      });
+    });
+  }
+  function syncChatCount(root3, which) {
+    const ta = root3.querySelector(
+      which === "other" ? "#seidr-act-chat-other" : "#seidr-act-chat-self"
+    );
+    const count = root3.querySelector(
+      which === "other" ? "#seidr-act-chat-other-count" : "#seidr-act-chat-self-count"
+    );
+    if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
+  }
+  function closeIconModal() {
+    const modal = document.getElementById("seidr-act-icon-modal");
+    if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+  }
+  function refreshOpenActivityMenuIcons() {
+    const grid = document.getElementById("dialog-activity-grid");
+    if (!grid) return;
+    seidrListActions().forEach(function(action) {
+      const name = seidrActionActivityName(action.id);
+      const btn2 = grid.querySelector('button[name="' + name + '"]');
+      if (!btn2) return;
+      const url = seidrResolveActionIconUrl(action);
+      try {
+        if (typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.SetImage === "function") {
+          ElementButton.SetImage(btn2, url);
+          return;
+        }
+      } catch (e) {
+      }
+      const img = btn2.querySelector(".button-image");
+      if (img && img instanceof HTMLImageElement) img.src = url;
+      else if (img) {
+        const css = url.indexOf("data:image") === 0 || url.indexOf("http") === 0 ? 'url("' + url + '")' : 'url("./' + url + '")';
+        img.style.setProperty("background-image", css);
+        img.style.setProperty("mask-image", css);
+      }
+    });
+  }
+  function openIconModal(root3) {
+    if (!draft) return;
+    closeIconModal();
+    readDraftFromDom(root3);
+    const customs = (seidrGetSettings().customActionIcons || []).slice();
+    const panel3 = document.getElementById("seidr-settings-panel") || document.body;
+    const modal = document.createElement("div");
+    modal.id = "seidr-act-icon-modal";
+    modal.className = "seidr-act-icon-modal";
+    modal.innerHTML = [
+      '<div class="seidr-act-icon-modal-card">',
+      '<div class="seidr-act-icon-modal-head">',
+      "<strong>Select icon</strong>",
+      '<button type="button" class="seidr-act-btn" id="seidr-act-icon-close">Close</button>',
+      "</div>",
+      '<input type="search" id="seidr-act-icon-search" placeholder="Search icons\u2026" autocomplete="off" />',
+      '<div class="seidr-act-icon-scroll" id="seidr-act-icon-scroll">',
+      '<div class="seidr-act-icon-grid" id="seidr-act-icon-grid"></div>',
+      '<div class="seidr-act-icon-custom">',
+      '<p class="seidr-settings-hint">Custom URL icons (max ' + SEIDR_CUSTOM_ICONS_MAX + ")</p>",
+      '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap;">',
+      '<input type="url" id="seidr-act-icon-url" placeholder="https://\u2026/icon.png" />',
+      '<input type="text" id="seidr-act-icon-url-label" placeholder="Label" maxlength="48" />',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-icon-add-url">Add URL</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-act-icon-custom-msg"></p>',
+      '<div id="seidr-act-icon-custom-list"></div>',
+      "</div>",
+      "</div>",
+      "</div>"
+    ].join("");
+    panel3.appendChild(modal);
+    modal.addEventListener("wheel", function(ev) {
+      ev.stopPropagation();
+    }, { passive: true });
+    function setCustomMsg(text) {
+      const el = modal.querySelector("#seidr-act-icon-custom-msg");
+      if (el) el.textContent = text || "";
+    }
+    function renderCustomList() {
+      const host = modal.querySelector("#seidr-act-icon-custom-list");
+      if (!host) return;
+      if (!customs.length) {
+        host.innerHTML = '<p class="seidr-settings-hint">No custom icons yet.</p>';
+        return;
+      }
+      host.innerHTML = customs.map(function(c) {
+        return '<div class="seidr-act-icon-custom-row"><img src="' + escapeHtml(c.url) + '" alt="" width="28" height="28" /><span>' + escapeHtml(c.label) + '</span><button type="button" class="seidr-act-btn seidr-act-btn-danger" data-custom-del="' + escapeHtml(c.id) + '">Delete</button></div>';
+      }).join("");
+      host.querySelectorAll("[data-custom-del]").forEach(function(btn2) {
+        btn2.addEventListener("click", function() {
+          const id = btn2.getAttribute("data-custom-del") || "";
+          const next = customs.filter(function(c) {
+            return c.id !== id;
+          });
+          customs.length = 0;
+          next.forEach(function(c) {
+            customs.push(c);
+          });
+          seidrSaveSettings({ customActionIcons: customs.slice() });
+          if (draft && draft.icon && draft.icon.source === "custom" && draft.icon.id === id) {
+            draft.icon = seidrDefaultActionIcon();
+          }
+          renderCustomList();
+          paintGrid(modal.querySelector("#seidr-act-icon-search")?.value || "");
+          setCustomMsg("Removed custom icon");
+        });
+      });
+    }
+    function pickIcon(icon) {
+      if (!draft) return;
+      readDraftFromDom(root3);
+      draft.icon = seidrNormalizeActionIcon(icon);
+      const saved = seidrUpdateAction(draft);
+      closeIconModal();
+      renderEditor(root3);
+      bindEditor(root3);
+      if (saved.ok) {
+        afterSave();
+        refreshOpenActivityMenuIcons();
+        setMsg2(root3, "Icon saved");
+      } else {
+        setMsg2(root3, saved.error || "Icon save failed \u2014 click Save action");
+      }
+    }
+    function paintGrid(filter) {
+      const grid = modal.querySelector("#seidr-act-icon-grid");
+      if (!grid) return;
+      const q = (filter || "").trim().toLowerCase();
+      const parts = [];
+      function pushSection(title, cells) {
+        if (!cells) return;
+        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml(title) + "</div>");
+        parts.push('<div class="seidr-act-icon-sec-grid">' + cells + "</div>");
+      }
+      const seidrCells = SEIDR_BUILTIN_ICONS.filter(function(b) {
+        if (!q) return true;
+        return b.label.toLowerCase().indexOf(q) >= 0 || b.id.toLowerCase().indexOf(q) >= 0;
+      }).map(function(b) {
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml(b.id) + '" title="' + escapeHtml(b.label) + '"><img src="' + escapeHtml(b.url) + '" alt="" /><span>' + escapeHtml(b.label) + "</span></button>";
+      }).join("");
+      pushSection("Seidr", seidrCells);
+      const actCells = SEIDR_ACTIVITY_ICON_IDS.filter(function(id) {
+        if (!q) return true;
+        return id.toLowerCase().indexOf(q) >= 0;
+      }).map(function(id) {
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml(id) + '" title="' + escapeHtml(id) + '"><img src="' + escapeHtml(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml(id) + "</span></button>";
+      }).join("");
+      pushSection("Club Activity", actCells);
+      const customCells = customs.filter(function(c) {
+        if (!q) return true;
+        return (c.label + " " + c.id).toLowerCase().indexOf(q) >= 0;
+      }).map(function(c) {
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="custom" data-icon-id="' + escapeHtml(c.id) + '" title="' + escapeHtml(c.label) + '"><img src="' + escapeHtml(c.url) + '" alt="" /><span>' + escapeHtml(c.label) + "</span></button>";
+      }).join("");
+      pushSection("Custom", customCells);
+      grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
+      grid.querySelectorAll("[data-icon-id]").forEach(function(btn2) {
+        btn2.addEventListener("click", function() {
+          const el = btn2;
+          const source = el.getAttribute("data-icon-source");
+          const id = el.getAttribute("data-icon-id") || "";
+          if (!source || !id) return;
+          pickIcon({ source, id });
+        });
+      });
+    }
+    modal.querySelector("#seidr-act-icon-close")?.addEventListener("click", closeIconModal);
+    modal.addEventListener("click", function(ev) {
+      if (ev.target === modal) closeIconModal();
+    });
+    modal.querySelector("#seidr-act-icon-search")?.addEventListener("input", function(ev) {
+      paintGrid(ev.target.value || "");
+    });
+    modal.querySelector("#seidr-act-icon-add-url")?.addEventListener("click", function() {
+      const urlEl = modal.querySelector("#seidr-act-icon-url");
+      const labEl = modal.querySelector("#seidr-act-icon-url-label");
+      const url = urlEl ? urlEl.value.trim() : "";
+      const label = labEl && labEl.value.trim() ? labEl.value.trim() : "Custom";
+      if (customs.length >= SEIDR_CUSTOM_ICONS_MAX) {
+        setCustomMsg("Custom icon limit (" + SEIDR_CUSTOM_ICONS_MAX + ")");
+        return;
+      }
+      setCustomMsg("Checking image\u2026");
+      seidrValidateImageUrl(url).then(function(res) {
+        if (res.ok === false) {
+          setCustomMsg(res.error);
+          return;
+        }
+        const id = "c" + Date.now().toString(36);
+        customs.push({ id, url, label: label.slice(0, 48) });
+        seidrSaveSettings({ customActionIcons: customs.slice() });
+        if (urlEl) urlEl.value = "";
+        if (labEl) labEl.value = "";
+        renderCustomList();
+        paintGrid(modal.querySelector("#seidr-act-icon-search")?.value || "");
+        setCustomMsg("Added \u2014 click it in the grid to use");
+      });
+    });
+    renderCustomList();
+    paintGrid("");
+  }
+  function bindEditor(root3) {
+    bindArousalPicker(root3);
+    bindItemsPicker(root3);
+    root3.querySelector("#seidr-act-icon-pick")?.addEventListener("click", function() {
+      openIconModal(root3);
+    });
+    root3.querySelectorAll("#seidr-act-chat-other, #seidr-act-chat-self").forEach(function(el) {
+      el.addEventListener("focus", function() {
+        lastChatArea = el;
+      });
+      el.addEventListener("input", function() {
+        const id = el.id;
+        syncChatCount(root3, id === "seidr-act-chat-self" ? "self" : "other");
+      });
+    });
+    root3.querySelector("#seidr-act-ph")?.addEventListener("click", function(ev) {
+      const btn2 = ev.target.closest("[data-chat-token]");
+      if (!btn2) return;
+      const token = btn2.getAttribute("data-chat-token");
+      if (!token) return;
+      const other = root3.querySelector("#seidr-act-chat-other");
+      const self = root3.querySelector("#seidr-act-chat-self");
+      const ta = lastChatArea && (lastChatArea === other || lastChatArea === self) ? lastChatArea : other;
+      if (!ta) return;
+      if (!insertChatToken(ta, token)) {
+        setMsg2(root3, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
+      } else {
+        syncChatCount(root3, ta.id === "seidr-act-chat-self" ? "self" : "other");
+      }
+    });
+    root3.querySelector("#seidr-act-slots")?.addEventListener("click", function(ev) {
+      const btn2 = ev.target.closest("[data-slot]");
+      if (!btn2 || !draft) return;
+      const slot = btn2.getAttribute("data-slot");
+      if (!slot) return;
+      const i = draft.slots.indexOf(slot);
+      if (i >= 0) {
+        if (draft.slots.length > 1) draft.slots.splice(i, 1);
+      } else {
+        draft.slots.push(slot);
+      }
+      renderEditor(root3);
+      bindEditor(root3);
+    });
+    root3.querySelector("#seidr-act-add-group")?.addEventListener("click", function() {
+      if (!draft) return;
+      readDraftFromDom(root3);
+      draft.conditions.groups.push({
+        rules: [{ who: "target", type: "wearing", slot: "ItemArms", not: false }]
+      });
+      renderEditor(root3);
+      bindEditor(root3);
+    });
+    root3.querySelectorAll("[data-group-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        if (!draft) return;
+        readDraftFromDom(root3);
+        const gi = parseInt(btn2.getAttribute("data-group-del") || "", 10);
+        if (!Number.isFinite(gi)) return;
+        draft.conditions.groups.splice(gi, 1);
+        renderEditor(root3);
+        bindEditor(root3);
+      });
+    });
+    root3.querySelectorAll("[data-rule-add]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        if (!draft) return;
+        readDraftFromDom(root3);
+        const gi = parseInt(btn2.getAttribute("data-rule-add") || "", 10);
+        const g = draft.conditions.groups[gi];
+        if (!g) return;
+        g.rules.push({ who: "target", type: "isGagged", not: false });
+        renderEditor(root3);
+        bindEditor(root3);
+      });
+    });
+    root3.querySelectorAll("[data-rule-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        if (!draft) return;
+        readDraftFromDom(root3);
+        const key = parseInt(btn2.getAttribute("data-rule-del") || "", 10);
+        const gi = Math.floor(key / 100);
+        const ri = key % 100;
+        const g = draft.conditions.groups[gi];
+        if (!g) return;
+        g.rules.splice(ri, 1);
+        if (!g.rules.length) draft.conditions.groups.splice(gi, 1);
+        renderEditor(root3);
+        bindEditor(root3);
+      });
+    });
+    root3.querySelectorAll("[data-rule-type]").forEach(function(sel) {
+      sel.addEventListener("change", function() {
+        if (!draft) return;
+        readDraftFromDom(root3);
+        renderEditor(root3);
+        bindEditor(root3);
+      });
+    });
+    root3.querySelector("#seidr-act-save")?.addEventListener("click", function() {
+      const next = readDraftFromDom(root3);
+      if (!next) return;
+      const saved = seidrUpdateAction(next);
+      if (!saved.ok) {
+        setMsg2(root3, saved.error || "Save failed");
+        return;
+      }
+      draft = next;
+      editId = next.id;
+      setMsg2(root3, "Saved");
+      renderList(root3);
+      afterSave();
+      refreshOpenActivityMenuIcons();
+      bindList(root3);
+    });
+    root3.querySelector("#seidr-act-delete")?.addEventListener("click", function() {
+      if (!draft) return;
+      const id = draft.id;
+      seidrDeleteAction(id);
+      editId = null;
+      draft = null;
+      renderList(root3);
+      renderEditor(root3);
+      afterSave();
+      bindList(root3);
+    });
+  }
+  function selectActionById(root3, id) {
+    const list = seidrListActions();
+    const found = list.filter(function(a) {
+      return a.id === id;
+    })[0];
+    if (!found) return;
+    editId = id;
+    draft = JSON.parse(JSON.stringify(found));
+    if (!draft.items) draft.items = [];
+    if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+    arousalPickerOpen = false;
+    renderList(root3);
+    renderEditor(root3);
+    bindList(root3);
+    bindEditor(root3);
+  }
+  function bindList(root3) {
+    const pick = root3.querySelector("#seidr-act-pick");
+    if (!pick) return;
+    pick.addEventListener("change", function() {
+      const id = parseInt(pick.value || "", 10);
+      if (!Number.isFinite(id)) return;
+      selectActionById(root3, id);
+    });
+  }
+  function setIoMsg(container, text) {
+    const el = container.querySelector("#seidr-act-io-msg");
+    if (el) el.textContent = text || "";
+  }
+  function renderImportPicker(container) {
+    const host = container.querySelector("#seidr-act-import-pick");
+    if (!host) return;
+    if (!importCandidates || !importCandidates.length) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const rows = importCandidates.map(function(a, idx) {
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml(a.name) + "</label>";
+    }).join("");
+    host.innerHTML = [
+      '<p class="seidr-settings-hint">Select actions to import (new ids; skips when at the ' + SEIDR_ACTIONS_MAX + " limit).</p>",
+      '<div class="seidr-act-import-list">' + rows + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px; gap:6px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-import-do">Import selected</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-import-cancel">Cancel</button>',
+      "</div>"
+    ].join("");
+    host.querySelector("#seidr-act-import-cancel")?.addEventListener("click", function() {
+      importCandidates = null;
+      const paste = container.querySelector("#seidr-act-import-paste");
+      if (paste) paste.value = "";
+      renderImportPicker(container);
+      setIoMsg(container, "");
+    });
+    host.querySelector("#seidr-act-import-do")?.addEventListener("click", function() {
+      if (!importCandidates) return;
+      const selected = [];
+      host.querySelectorAll("[data-import-idx]").forEach(function(el) {
+        const cb = el;
+        if (!cb.checked) return;
+        const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
+        if (Number.isFinite(idx) && importCandidates[idx]) selected.push(importCandidates[idx]);
+      });
+      if (!selected.length) {
+        setIoMsg(container, "Select at least one action");
+        return;
+      }
+      const result = seidrImportSelectedActions(selected);
+      if (!result.ok) {
+        setIoMsg(container, result.error || "Import failed");
+        return;
+      }
+      importCandidates = null;
+      const paste = container.querySelector("#seidr-act-import-paste");
+      if (paste) paste.value = "";
+      const panel3 = container.querySelector("#seidr-act-import-panel");
+      if (panel3) panel3.hidden = true;
+      renderImportPicker(container);
+      editId = null;
+      draft = null;
+      renderList(container);
+      renderEditor(container);
+      bindList(container);
+      afterSave();
+      let msg = "Imported " + result.imported;
+      if (result.skipped) msg += " (skipped " + result.skipped + ")";
+      setIoMsg(container, msg);
+    });
+  }
+  function bindIoPanel(container) {
+    const exportOut = container.querySelector("#seidr-act-export-out");
+    const importPanel = container.querySelector("#seidr-act-import-panel");
+    const importPaste = container.querySelector("#seidr-act-import-paste");
+    container.querySelector("#seidr-act-export")?.addEventListener("click", function() {
+      try {
+        const packed = seidrExportActionsString();
+        const exportPanel = container.querySelector("#seidr-act-export-panel");
+        if (exportPanel) exportPanel.hidden = false;
+        if (exportOut) {
+          exportOut.value = packed;
+          exportOut.focus();
+          exportOut.select();
+        }
+        setIoMsg(container, "Export ready \u2014 copy the string below");
+      } catch (e) {
+        setIoMsg(container, e instanceof Error ? e.message : "Export failed");
+      }
+    });
+    container.querySelector("#seidr-act-export-copy")?.addEventListener("click", function() {
+      if (!exportOut || !exportOut.value) {
+        setIoMsg(container, "Export first");
+        return;
+      }
+      const text = exportOut.value;
+      function ok() {
+        setIoMsg(container, "Copied to clipboard");
+      }
+      function fail() {
+        exportOut.focus();
+        exportOut.select();
+        setIoMsg(container, "Select and copy manually (Ctrl/Cmd+C)");
+      }
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText(text).then(ok, fail);
+          return;
+        }
+      } catch (e) {
+      }
+      try {
+        exportOut.focus();
+        exportOut.select();
+        if (typeof document.execCommand === "function" && document.execCommand("copy")) ok();
+        else fail();
+      } catch (e2) {
+        fail();
+      }
+    });
+    container.querySelector("#seidr-act-import")?.addEventListener("click", function() {
+      if (!importPanel) return;
+      importPanel.hidden = !importPanel.hidden;
+      if (!importPanel.hidden && importPaste) importPaste.focus();
+      if (importPanel.hidden) {
+        importCandidates = null;
+        renderImportPicker(container);
+      }
+      setIoMsg(container, "");
+    });
+    container.querySelector("#seidr-act-import-parse")?.addEventListener("click", function() {
+      const raw = importPaste ? importPaste.value : "";
+      const parsed = seidrParseActionsImport(raw);
+      if (parsed.ok === false) {
+        importCandidates = null;
+        renderImportPicker(container);
+        setIoMsg(container, parsed.error);
+        return;
+      }
+      importCandidates = parsed.actions;
+      renderImportPicker(container);
+      setIoMsg(container, "Parsed " + parsed.actions.length + " action(s) \u2014 select which to import");
+    });
+  }
+  function seidrBuildActionsTab(container) {
+    importCandidates = null;
+    closeIconModal();
+    container.innerHTML = [
+      '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-add">Add action</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-export">Export</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-import">Import</button>',
+      '<span class="seidr-settings-hint" id="seidr-act-cap">0/' + SEIDR_ACTIONS_MAX + " Actions</span>",
+      "</div>",
+      '<p class="seidr-settings-hint">Actions appear in the Club Activity Menu on the slots you pick. Arousal uses the selected BC activity for preferences only.</p>',
+      '<p class="seidr-settings-hint" id="seidr-act-io-msg"></p>',
+      '<div id="seidr-act-export-panel" hidden>',
+      '<textarea id="seidr-act-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-export-copy" title="Copy export string">Copy</button>',
+      "</div>",
+      "</div>",
+      '<div id="seidr-act-import-panel" class="seidr-act-import-panel" hidden>',
+      '<p class="seidr-settings-hint">Paste a SeidrAct1: export string, then Parse.</p>',
+      '<textarea id="seidr-act-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrAct1:\u2026"></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-act-import-parse">Parse</button>',
+      "</div>",
+      '<div id="seidr-act-import-pick" hidden></div>',
+      "</div>",
+      '<div id="seidr-act-list" class="seidr-act-list"></div>',
+      '<div id="seidr-act-editor" class="seidr-act-editor"></div>'
+    ].join("");
+    renderList(container);
+    renderEditor(container);
+    bindList(container);
+    bindEditor(container);
+    bindIoPanel(container);
+    container.querySelector("#seidr-act-add")?.addEventListener("click", function() {
+      const created = seidrAddAction();
+      if (!created) {
+        setIoMsg(container, "Action limit reached (" + SEIDR_ACTIONS_MAX + ")");
+        return;
+      }
+      editId = created.id;
+      draft = seidrDefaultAction(created.id);
+      Object.assign(draft, created);
+      if (!draft.items) draft.items = [];
+      if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+      arousalPickerOpen = false;
+      renderList(container);
+      renderEditor(container);
+      bindList(container);
+      bindEditor(container);
+      afterSave();
+    });
+  }
+  function seidrRefreshActionsTab() {
+    const pane = $2("seidr-settings-pane-actions");
+    if (!pane) return;
+    editId = null;
+    draft = null;
+    importCandidates = null;
+    seidrBuildActionsTab(pane);
+  }
+
+  // src/settings/ui.ts
+  function $3(id) {
     return document.getElementById(id);
   }
   var drawDraft = null;
@@ -4393,10 +7353,8 @@
       "</div>"
     ].join("");
   }
-  function seidrBuildSettingsBody() {
-    const body = $2("seidr-settings-body");
-    if (!body) return;
-    const opts = RM_LAUNCHER_POSITIONS.map(function(p) {
+  function seidrBuildGeneralHtml() {
+    const opts2 = RM_LAUNCHER_POSITIONS.map(function(p) {
       return '<option value="' + p.id + '">' + p.label + "</option>";
     }).join("");
     const modeOpts = AROUSAL_BAR_MODES.map(function(m) {
@@ -4405,7 +7363,28 @@
     const scopeOpts = AROUSAL_BAR_SCOPES.map(function(s) {
       return '<option value="' + s.id + '">' + s.label + "</option>";
     }).join("");
-    body.innerHTML = [
+    const modOpts = FAST_OPEN_MODIFIERS.map(function(m) {
+      return '<option value="' + m.id + '">' + m.label + "</option>";
+    }).join("");
+    const slotOpts = seidrRestraintSlots().map(function(s) {
+      return '<option value="' + s.id + '">' + s.label + "</option>";
+    }).join("");
+    return [
+      '<details class="seidr-settings-sec">',
+      "<summary>Fast Open Actions</summary>",
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-fast-open" /> Enable Fast Open Actions</label>',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Modifier</span>',
+      '<select id="seidr-set-fast-open-mod">' + modOpts + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Default slot</span>',
+      '<select id="seidr-set-fast-open-slot">' + slotOpts + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Hold the modifier and click a room character to open Club Activity View on the default slot (falls back if that zone has no activities). If FAM Shift-click is installed, pick another modifier or disable this.</p>',
+      "</details>",
       '<details class="seidr-settings-sec">',
       "<summary>Room Manager</summary>",
       '<div class="seidr-settings-row">',
@@ -4424,7 +7403,7 @@
       '<details class="seidr-settings-sec">',
       "<summary>Launcher position</summary>",
       '<div class="seidr-settings-row">',
-      '<select id="seidr-set-rm-pos">' + opts + "</select>",
+      '<select id="seidr-set-rm-pos">' + opts2 + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
       "</details>",
@@ -4450,17 +7429,94 @@
       '<select id="seidr-set-arousal-scope">' + scopeOpts + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
+      "</details>",
+      '<details class="seidr-settings-sec" open>',
+      "<summary>Storage</summary>",
+      '<p class="seidr-settings-hint" id="seidr-set-storage-total">\u2014</p>',
+      '<div class="seidr-set-storage-bar" aria-hidden="true"><div class="seidr-set-storage-bar-fill" id="seidr-set-storage-bar"></div></div>',
+      '<div class="seidr-set-storage-rows" id="seidr-set-storage-rows"></div>',
+      '<p class="seidr-settings-hint" id="seidr-set-storage-maps-hint"></p>',
       "</details>"
     ].join("");
   }
+  function storageRow(label, bytes) {
+    return '<div class="seidr-settings-field-row seidr-set-storage-row"><span class="seidr-settings-field-label">' + label + '</span><span class="seidr-set-storage-val">' + rmFormatBytes(bytes) + "</span></div>";
+  }
+  function seidrRefreshStorageUi() {
+    const totalEl = $3("seidr-set-storage-total");
+    const bar = $3("seidr-set-storage-bar");
+    const rows = $3("seidr-set-storage-rows");
+    const mapsHint = $3("seidr-set-storage-maps-hint");
+    if (!totalEl && !rows) return;
+    let b;
+    try {
+      b = rmUsageBreakdown();
+    } catch (e) {
+      if (totalEl) totalEl.textContent = "Storage unavailable";
+      return;
+    }
+    const pct = b.max > 0 ? Math.min(100, Math.round(b.total / b.max * 100)) : 0;
+    if (totalEl) {
+      totalEl.textContent = "Total " + rmFormatBytes(b.total) + " / " + rmFormatBytes(b.max) + " (" + pct + "%)";
+    }
+    if (bar) bar.style.width = pct + "%";
+    if (rows) {
+      rows.innerHTML = [
+        storageRow("Maps", b.maps),
+        storageRow("Rooms", b.room),
+        storageRow("Access", b.access),
+        storageRow("Backgrounds", b.backgrounds),
+        storageRow("Actions", b.actions),
+        storageRow("Settings", b.settings),
+        storageRow("UI", b.ui)
+      ].join("");
+    }
+    if (mapsHint) {
+      mapsHint.textContent = "Maps budget (75%): " + rmFormatBytes(b.maps) + " / " + rmFormatBytes(b.mapBudget);
+    }
+  }
+  function seidrBuildSettingsBody() {
+    const body = $3("seidr-settings-body");
+    const tabs = $3("seidr-settings-tabs");
+    if (!body) return;
+    const showActions = Seidr.SHOW_ACTIONS !== false;
+    if (tabs) {
+      tabs.innerHTML = [
+        '<button type="button" class="seidr-settings-tab seidr-settings-tab-on" data-seidr-tab="general">General</button>',
+        showActions ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>' : ""
+      ].join("");
+    }
+    body.innerHTML = [
+      '<div class="seidr-settings-pane seidr-settings-pane-on" id="seidr-settings-pane-general" data-seidr-pane="general">',
+      seidrBuildGeneralHtml(),
+      "</div>",
+      showActions ? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>' : ""
+    ].join("");
+    if (showActions) {
+      const actPane = $3("seidr-settings-pane-actions");
+      if (actPane) seidrBuildActionsTab(actPane);
+    }
+    const tabRoot = tabs || body;
+    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const tab = btn2.getAttribute("data-seidr-tab");
+        tabRoot.querySelectorAll(".seidr-settings-tab").forEach(function(t) {
+          t.classList.toggle("seidr-settings-tab-on", t.getAttribute("data-seidr-tab") === tab);
+        });
+        body.querySelectorAll(".seidr-settings-pane").forEach(function(p) {
+          p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
+        });
+      });
+    });
+  }
   function setDrawMsg(text) {
-    const el = $2("seidr-set-draw-msg");
+    const el = $3("seidr-set-draw-msg");
     if (el) el.textContent = text || "";
   }
   function fillDrawInputs(o) {
     ["pull", "cuddle"].forEach(function(pose) {
-      const x = $2("seidr-set-draw-" + pose + "-x");
-      const y = $2("seidr-set-draw-" + pose + "-y");
+      const x = $3("seidr-set-draw-" + pose + "-x");
+      const y = $3("seidr-set-draw-" + pose + "-y");
       if (x) x.value = String(o[pose].x);
       if (y) y.value = String(o[pose].y);
     });
@@ -4469,12 +7525,12 @@
     const fallback = drawDraft ? drawDraft : seidrDefaultDrawOffsets();
     return seidrNormalizeDrawOffsets({
       pull: {
-        x: $2("seidr-set-draw-pull-x")?.value,
-        y: $2("seidr-set-draw-pull-y")?.value
+        x: $3("seidr-set-draw-pull-x")?.value,
+        y: $3("seidr-set-draw-pull-y")?.value
       },
       cuddle: {
-        x: $2("seidr-set-draw-cuddle-x")?.value,
-        y: $2("seidr-set-draw-cuddle-y")?.value
+        x: $3("seidr-set-draw-cuddle-x")?.value,
+        y: $3("seidr-set-draw-cuddle-y")?.value
       }
     }, fallback);
   }
@@ -4502,33 +7558,47 @@
   }
   function seidrRefreshSettingsUi() {
     const s = seidrGetSettings();
-    const en = $2("seidr-set-rm-enabled");
-    const qm = $2("seidr-set-quickmenu");
-    const pos = $2("seidr-set-rm-pos");
-    const am = $2("seidr-set-arousal-mode");
-    const as = $2("seidr-set-arousal-scope");
+    const en = $3("seidr-set-rm-enabled");
+    const qm = $3("seidr-set-quickmenu");
+    const pos = $3("seidr-set-rm-pos");
+    const am = $3("seidr-set-arousal-mode");
+    const as = $3("seidr-set-arousal-scope");
+    const fo = $3("seidr-set-fast-open");
+    const fom = $3("seidr-set-fast-open-mod");
+    const fos = $3("seidr-set-fast-open-slot");
     if (en) en.checked = !!s.roomManagerEnabled;
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
     if (am) am.value = s.arousalBarMode;
     if (as) as.value = s.arousalBarScope;
+    if (fo) fo.checked = s.fastOpenActionsEnabled !== false;
+    if (fom) fom.value = s.fastOpenActionsModifier || "Shift";
+    if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
     seidrBeginDrawDraft();
+    seidrRefreshStorageUi();
+    if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
   }
   function seidrBindSettingsUi(onChange) {
-    const en = $2("seidr-set-rm-enabled");
-    const qm = $2("seidr-set-quickmenu");
-    const pos = $2("seidr-set-rm-pos");
-    const am = $2("seidr-set-arousal-mode");
-    const ascope = $2("seidr-set-arousal-scope");
-    const openRm = $2("seidr-set-open-rm");
-    const openMsg = $2("seidr-set-open-rm-msg");
+    const en = $3("seidr-set-rm-enabled");
+    const qm = $3("seidr-set-quickmenu");
+    const pos = $3("seidr-set-rm-pos");
+    const am = $3("seidr-set-arousal-mode");
+    const ascope = $3("seidr-set-arousal-scope");
+    const fo = $3("seidr-set-fast-open");
+    const fom = $3("seidr-set-fast-open-mod");
+    const fos = $3("seidr-set-fast-open-slot");
+    const openRm = $3("seidr-set-open-rm");
+    const openMsg = $3("seidr-set-open-rm-msg");
     function persist() {
       const patch = {
         roomManagerEnabled: !!(en && en.checked),
         showQuickmenuButton: !!(qm && qm.checked),
         launcherPosition: pos && pos.value ? pos.value : "chatTop",
         arousalBarMode: am && am.value ? am.value : "off",
-        arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster"
+        arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster",
+        fastOpenActionsEnabled: !!(fo && fo.checked),
+        fastOpenActionsModifier: fom && fom.value ? fom.value : "Shift",
+        fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso"
       };
       seidrSaveSettings(patch);
       if (onChange) onChange();
@@ -4538,6 +7608,9 @@
     if (pos) pos.addEventListener("change", persist);
     if (am) am.addEventListener("change", persist);
     if (ascope) ascope.addEventListener("change", persist);
+    if (fo) fo.addEventListener("change", persist);
+    if (fos) fos.addEventListener("change", persist);
+    if (fom) fom.addEventListener("change", persist);
     if (openRm) {
       openRm.addEventListener("click", function() {
         const s = seidrGetSettings();
@@ -4566,8 +7639,8 @@
       setDrawMsg("Preview \u2014 Save Drawing to keep");
     }
     ["pull", "cuddle"].forEach(function(pose) {
-      const x = $2("seidr-set-draw-" + pose + "-x");
-      const y = $2("seidr-set-draw-" + pose + "-y");
+      const x = $3("seidr-set-draw-" + pose + "-x");
+      const y = $3("seidr-set-draw-" + pose + "-y");
       if (x) {
         x.addEventListener("input", onDrawLive);
         x.addEventListener("change", onDrawCommit);
@@ -4589,7 +7662,7 @@
         setDrawMsg("Reset to default \u2014 Save Drawing to keep");
       });
     });
-    const saveBtn = $2("seidr-set-draw-save");
+    const saveBtn = $3("seidr-set-draw-save");
     if (saveBtn) {
       saveBtn.addEventListener("click", function() {
         const next = readDrawDraftFromInputs();
@@ -4640,6 +7713,7 @@
       '  <div class="seidr-settings-header-title">Seidr<span>Settings</span></div>',
       '  <button type="button" class="seidr-settings-icon-btn" data-seidr="close" title="Close">\xD7</button>',
       "</div>",
+      '<div class="seidr-settings-tabs" id="seidr-settings-tabs" role="tablist"></div>',
       '<div class="seidr-settings-body" id="seidr-settings-body"></div>'
     ].join("");
     root2.appendChild(panel2);
@@ -4849,6 +7923,20 @@
         Seidr.installArousalBars();
       } catch (e) {
         console.warn("[Seidr] Arousal bars", e);
+      }
+    }
+    if (typeof Seidr.installFastOpen === "function") {
+      try {
+        Seidr.installFastOpen();
+      } catch (e) {
+        console.warn("[Seidr] Fast Open", e);
+      }
+    }
+    if (typeof Seidr.installActions === "function") {
+      try {
+        Seidr.installActions();
+      } catch (e) {
+        console.warn("[Seidr] Actions", e);
       }
     }
     Seidr.installNet();

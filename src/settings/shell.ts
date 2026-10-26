@@ -47,6 +47,7 @@ export function seidrEnsureSettingsShell() {
 		'  <div class="seidr-settings-header-title">Seidr<span>Settings</span></div>',
 		'  <button type="button" class="seidr-settings-icon-btn" data-seidr="close" title="Close">×</button>',
 		"</div>",
+		'<div class="seidr-settings-tabs" id="seidr-settings-tabs" role="tablist"></div>',
 		'<div class="seidr-settings-body" id="seidr-settings-body"></div>',
 	].join("");
 	root.appendChild(panel);

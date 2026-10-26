@@ -3,6 +3,7 @@ import { Seidr } from "../seidr";
 import {
 	AROUSAL_BAR_MODES,
 	AROUSAL_BAR_SCOPES,
+	FAST_OPEN_MODIFIERS,
 	RM_LAUNCHER_POSITIONS,
 	seidrCloneDrawOffsets,
 	seidrDefaultDrawOffsets,
@@ -13,9 +14,13 @@ import {
 	type SeidrArousalBarMode,
 	type SeidrArousalBarScope,
 	type SeidrDrawOffsets,
+	type SeidrFastOpenModifier,
 } from "./model";
+import { seidrRestraintSlots } from "../actions/model";
 import { seidrApplyDrawOffsets } from "./drawOffsets";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
+import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
+import { rmFormatBytes, rmUsageBreakdown } from "../roomManager/storage";
 
 function $(id: string): HTMLElement | null {
 	return document.getElementById(id);
@@ -41,9 +46,7 @@ function poseRow(id: string, label: string): string {
 	].join("");
 }
 
-export function seidrBuildSettingsBody() {
-	const body = $("seidr-settings-body");
-	if (!body) return;
+function seidrBuildGeneralHtml(): string {
 	const opts = RM_LAUNCHER_POSITIONS.map(function (p) {
 		return '<option value="' + p.id + '">' + p.label + "</option>";
 	}).join("");
@@ -53,7 +56,28 @@ export function seidrBuildSettingsBody() {
 	const scopeOpts = AROUSAL_BAR_SCOPES.map(function (s) {
 		return '<option value="' + s.id + '">' + s.label + "</option>";
 	}).join("");
-	body.innerHTML = [
+	const modOpts = FAST_OPEN_MODIFIERS.map(function (m) {
+		return '<option value="' + m.id + '">' + m.label + "</option>";
+	}).join("");
+	const slotOpts = seidrRestraintSlots().map(function (s) {
+		return '<option value="' + s.id + '">' + s.label + "</option>";
+	}).join("");
+	return [
+		'<details class="seidr-settings-sec">',
+		"<summary>Fast Open Actions</summary>",
+		'<div class="seidr-settings-row">',
+		'<label><input type="checkbox" id="seidr-set-fast-open" /> Enable Fast Open Actions</label>',
+		"</div>",
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">Modifier</span>',
+		'<select id="seidr-set-fast-open-mod">' + modOpts + "</select>",
+		"</div>",
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">Default slot</span>',
+		'<select id="seidr-set-fast-open-slot">' + slotOpts + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Hold the modifier and click a room character to open Club Activity View on the default slot (falls back if that zone has no activities). If FAM Shift-click is installed, pick another modifier or disable this.</p>',
+		"</details>",
 		'<details class="seidr-settings-sec">',
 		"<summary>Room Manager</summary>",
 		'<div class="seidr-settings-row">',
@@ -99,7 +123,98 @@ export function seidrBuildSettingsBody() {
 		"</div>",
 		'<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
 		"</details>",
+		'<details class="seidr-settings-sec" open>',
+		"<summary>Storage</summary>",
+		'<p class="seidr-settings-hint" id="seidr-set-storage-total">—</p>',
+		'<div class="seidr-set-storage-bar" aria-hidden="true"><div class="seidr-set-storage-bar-fill" id="seidr-set-storage-bar"></div></div>',
+		'<div class="seidr-set-storage-rows" id="seidr-set-storage-rows"></div>',
+		'<p class="seidr-settings-hint" id="seidr-set-storage-maps-hint"></p>',
+		"</details>",
 	].join("");
+}
+
+function storageRow(label: string, bytes: number): string {
+	return (
+		'<div class="seidr-settings-field-row seidr-set-storage-row">' +
+		'<span class="seidr-settings-field-label">' + label + "</span>" +
+		'<span class="seidr-set-storage-val">' + rmFormatBytes(bytes) + "</span>" +
+		"</div>"
+	);
+}
+
+export function seidrRefreshStorageUi() {
+	const totalEl = $("seidr-set-storage-total");
+	const bar = $("seidr-set-storage-bar");
+	const rows = $("seidr-set-storage-rows");
+	const mapsHint = $("seidr-set-storage-maps-hint");
+	if (!totalEl && !rows) return;
+	let b;
+	try {
+		b = rmUsageBreakdown();
+	} catch (e) {
+		if (totalEl) totalEl.textContent = "Storage unavailable";
+		return;
+	}
+	const pct = b.max > 0 ? Math.min(100, Math.round((b.total / b.max) * 100)) : 0;
+	if (totalEl) {
+		totalEl.textContent = "Total " + rmFormatBytes(b.total) + " / " + rmFormatBytes(b.max) +
+			" (" + pct + "%)";
+	}
+	if (bar) bar.style.width = pct + "%";
+	if (rows) {
+		rows.innerHTML = [
+			storageRow("Maps", b.maps),
+			storageRow("Rooms", b.room),
+			storageRow("Access", b.access),
+			storageRow("Backgrounds", b.backgrounds),
+			storageRow("Actions", b.actions),
+			storageRow("Settings", b.settings),
+			storageRow("UI", b.ui),
+		].join("");
+	}
+	if (mapsHint) {
+		mapsHint.textContent = "Maps budget (75%): " + rmFormatBytes(b.maps) +
+			" / " + rmFormatBytes(b.mapBudget);
+	}
+}
+
+export function seidrBuildSettingsBody() {
+	const body = $("seidr-settings-body");
+	const tabs = $("seidr-settings-tabs");
+	if (!body) return;
+	const showActions = Seidr.SHOW_ACTIONS !== false;
+	if (tabs) {
+		tabs.innerHTML = [
+			'<button type="button" class="seidr-settings-tab seidr-settings-tab-on" data-seidr-tab="general">General</button>',
+			showActions
+				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>'
+				: "",
+		].join("");
+	}
+	body.innerHTML = [
+		'<div class="seidr-settings-pane seidr-settings-pane-on" id="seidr-settings-pane-general" data-seidr-pane="general">',
+		seidrBuildGeneralHtml(),
+		"</div>",
+		showActions
+			? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>'
+			: "",
+	].join("");
+	if (showActions) {
+		const actPane = $("seidr-settings-pane-actions");
+		if (actPane) seidrBuildActionsTab(actPane);
+	}
+	const tabRoot = tabs || body;
+	tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function (btn) {
+		btn.addEventListener("click", function () {
+			const tab = (btn as HTMLElement).getAttribute("data-seidr-tab");
+			tabRoot.querySelectorAll(".seidr-settings-tab").forEach(function (t) {
+				t.classList.toggle("seidr-settings-tab-on", t.getAttribute("data-seidr-tab") === tab);
+			});
+			body.querySelectorAll(".seidr-settings-pane").forEach(function (p) {
+				p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
+			});
+		});
+	});
 }
 
 function setDrawMsg(text: string) {
@@ -163,12 +278,20 @@ export function seidrRefreshSettingsUi() {
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const as = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
+	const fo = $("seidr-set-fast-open") as HTMLInputElement | null;
+	const fom = $("seidr-set-fast-open-mod") as HTMLSelectElement | null;
+	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
 	if (en) en.checked = !!s.roomManagerEnabled;
 	if (qm) qm.checked = s.showQuickmenuButton !== false;
 	if (pos) pos.value = s.launcherPosition;
 	if (am) am.value = s.arousalBarMode;
 	if (as) as.value = s.arousalBarScope;
+	if (fo) fo.checked = s.fastOpenActionsEnabled !== false;
+	if (fom) fom.value = s.fastOpenActionsModifier || "Shift";
+	if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
 	seidrBeginDrawDraft();
+	seidrRefreshStorageUi();
+	if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
@@ -177,6 +300,9 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const ascope = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
+	const fo = $("seidr-set-fast-open") as HTMLInputElement | null;
+	const fom = $("seidr-set-fast-open-mod") as HTMLSelectElement | null;
+	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
 	const openRm = $("seidr-set-open-rm") as HTMLButtonElement | null;
 	const openMsg = $("seidr-set-open-rm-msg");
 	function persist() {
@@ -186,6 +312,9 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
 			arousalBarMode: (am && am.value ? am.value : "off") as SeidrArousalBarMode,
 			arousalBarScope: (ascope && ascope.value ? ascope.value : "seidrCluster") as SeidrArousalBarScope,
+			fastOpenActionsEnabled: !!(fo && fo.checked),
+			fastOpenActionsModifier: (fom && fom.value ? fom.value : "Shift") as SeidrFastOpenModifier,
+			fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso",
 		};
 		seidrSaveSettings(patch);
 		if (onChange) onChange();
@@ -195,6 +324,9 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (pos) pos.addEventListener("change", persist);
 	if (am) am.addEventListener("change", persist);
 	if (ascope) ascope.addEventListener("change", persist);
+	if (fo) fo.addEventListener("change", persist);
+	if (fos) fos.addEventListener("change", persist);
+	if (fom) fom.addEventListener("change", persist);
 	if (openRm) {
 		openRm.addEventListener("click", function () {
 			const s = seidrGetSettings();

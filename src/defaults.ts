@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.29";
+Seidr.VERSION = "1.0.44";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -23,9 +23,13 @@ Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
 Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
 /** Room Manager UI — Dev-only until Release is approved. */
 Seidr.SHOW_ROOM_MANAGER = true;
+/** User Actions (Activity Menu) — Dev channel. */
+Seidr.SHOW_ACTIONS = true;
 Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
 Seidr.RM_DATA_VERSION = 1;
 Seidr.RM_MAX_COMPRESSED = 180000;
 Seidr.RM_MAP_BUDGET_RATIO = 0.75;
 Seidr.RM_MAP_MAX = 10;
 Seidr.RM_LZ_PREFIX = "SeidrRm1:";
+/** Clipboard export/import for Actions (LZ Base64). */
+Seidr.ACT_LZ_PREFIX = "SeidrAct1:";

@@ -137,6 +137,54 @@ export function rmFormatBytes(bytes: number): string {
 	return (n / 1024).toFixed(2) + " KB";
 }
 
+/** Packed size of an arbitrary slice (same LZ rules as the full bag). */
+export function rmSliceBytes(slice: unknown): number {
+	try {
+		return pack(slice).length;
+	} catch (e) {
+		return 0;
+	}
+}
+
+export type RmUsageBreakdown = {
+	total: number;
+	max: number;
+	maps: number;
+	room: number;
+	access: number;
+	backgrounds: number;
+	actions: number;
+	settings: number;
+	ui: number;
+	mapBudget: number;
+};
+
+/** Per-category compressed estimates + live total/max for Settings Storage UI. */
+export function rmUsageBreakdown(store?: RmStore): RmUsageBreakdown {
+	const s = store || rmGetStore();
+	const settings = s.settings || {};
+	const actions = (settings as { actions?: unknown }).actions;
+	const settingsRest: Record<string, unknown> = {};
+	try {
+		Object.keys(settings as object).forEach(function (k) {
+			if (k === "actions") return;
+			settingsRest[k] = (settings as Record<string, unknown>)[k];
+		});
+	} catch (e) { /* ignore */ }
+	return {
+		total: rmCompressedBytes() || rmSliceBytes(s),
+		max: Seidr.RM_MAX_COMPRESSED || 180000,
+		maps: rmSliceBytes({ maps: s.maps || [] }),
+		room: rmSliceBytes({ room: s.room || {} }),
+		access: rmSliceBytes({ access: s.access || {} }),
+		backgrounds: rmSliceBytes({ backgrounds: s.backgrounds || [] }),
+		actions: rmSliceBytes({ actions: actions != null ? actions : { nextId: 1, list: [] } }),
+		settings: rmSliceBytes({ settings: settingsRest }),
+		ui: rmSliceBytes({ ui: s.ui || {} }),
+		mapBudget: rmMapBudgetBytes(),
+	};
+}
+
 export function rmUsageLabel(): string {
 	const used = rmCompressedBytes();
 	const max = Seidr.RM_MAX_COMPRESSED || 180000;

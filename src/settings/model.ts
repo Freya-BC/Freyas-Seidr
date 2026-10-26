@@ -1,4 +1,10 @@
-/** Seidr settings — RM launcher prefs + Drawing offsets (Option A) */
+/** Seidr settings — RM launcher prefs + Drawing offsets (Option A) + Actions bag */
+import {
+	seidrNormalizeActionsBag,
+	seidrNormalizeCustomActionIcons,
+	seidrRestraintSlots,
+	type SeidrCustomActionIcon,
+} from "../actions/model";
 
 export type RmLauncherPosition =
 	| "topLeft"
@@ -22,6 +28,9 @@ export type SeidrDrawOffsets = {
 export type SeidrArousalBarMode = "off" | "alwaysHide" | "untilChange" | "bottomBar";
 export type SeidrArousalBarScope = "self" | "seidrCluster" | "all";
 
+/** Modifier held while clicking a room character for Fast Open Actions. */
+export type SeidrFastOpenModifier = "Shift" | "Ctrl" | "Alt" | "Meta";
+
 export type SeidrSettings = {
 	roomManagerEnabled: boolean;
 	/** Floating ⌂ in ChatRoom; off hides it completely (ChatAdmin BC button unaffected). */
@@ -32,7 +41,27 @@ export type SeidrSettings = {
 	/** On-character / bottom HUD arousal meter chrome. */
 	arousalBarMode: SeidrArousalBarMode;
 	arousalBarScope: SeidrArousalBarScope;
+	/** Modifier-click a room character → Club Activity View. */
+	fastOpenActionsEnabled: boolean;
+	fastOpenActionsModifier: SeidrFastOpenModifier;
+	/** Preferred Item* zone when Fast Open opens Activity View. */
+	fastOpenActionsSlot: string;
+	/** Up to 10 remote custom icons for Actions (URLs). */
+	customActionIcons: SeidrCustomActionIcon[];
+	/** User Actions bag (Activity Menu entries). Normalized in actions/model. */
+	actions?: unknown;
 };
+
+export const FAST_OPEN_MODIFIERS: { id: SeidrFastOpenModifier; label: string }[] = [
+	{ id: "Shift", label: "Shift" },
+	{ id: "Ctrl", label: "Ctrl" },
+	{ id: "Alt", label: "Alt" },
+	{ id: "Meta", label: "Cmd (Meta)" },
+];
+
+const FAST_OPEN_MOD_IDS: SeidrFastOpenModifier[] = FAST_OPEN_MODIFIERS.map(function (m) {
+	return m.id;
+});
 
 export const AROUSAL_BAR_MODES: { id: SeidrArousalBarMode; label: string }[] = [
 	{ id: "off", label: "Club default" },
@@ -144,6 +173,13 @@ export function seidrCloneDrawOffsets(o: SeidrDrawOffsets): SeidrDrawOffsets {
 	};
 }
 
+function normalizeFastOpenSlot(raw: unknown): string {
+	const slots = seidrRestraintSlots();
+	const ids = slots.map(function (s) { return s.id; });
+	if (typeof raw === "string" && ids.indexOf(raw) >= 0) return raw;
+	return "ItemTorso";
+}
+
 export function seidrDefaultSettings(): SeidrSettings {
 	return {
 		roomManagerEnabled: true,
@@ -152,6 +188,11 @@ export function seidrDefaultSettings(): SeidrSettings {
 		drawOffsets: seidrDefaultDrawOffsets(),
 		arousalBarMode: "off",
 		arousalBarScope: "seidrCluster",
+		fastOpenActionsEnabled: true,
+		fastOpenActionsModifier: "Shift",
+		fastOpenActionsSlot: "ItemTorso",
+		customActionIcons: [],
+		actions: { nextId: 1, list: [] },
 	};
 }
 
@@ -171,5 +212,17 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	if (typeof d.arousalBarScope === "string" && AROUSAL_SCOPE_IDS.indexOf(d.arousalBarScope as SeidrArousalBarScope) >= 0) {
 		base.arousalBarScope = d.arousalBarScope as SeidrArousalBarScope;
 	}
+	if (typeof d.fastOpenActionsEnabled === "boolean") {
+		base.fastOpenActionsEnabled = d.fastOpenActionsEnabled;
+	}
+	if (
+		typeof d.fastOpenActionsModifier === "string" &&
+		FAST_OPEN_MOD_IDS.indexOf(d.fastOpenActionsModifier as SeidrFastOpenModifier) >= 0
+	) {
+		base.fastOpenActionsModifier = d.fastOpenActionsModifier as SeidrFastOpenModifier;
+	}
+	base.fastOpenActionsSlot = normalizeFastOpenSlot(d.fastOpenActionsSlot);
+	base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
+	base.actions = seidrNormalizeActionsBag(d.actions);
 	return base;
 }

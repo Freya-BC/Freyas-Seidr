@@ -296,10 +296,21 @@ var SEIDR_MISSING_TAG_PREFIX = 'MISSING TEXT IN "ActivityDictionary.csv": ';
  * Echo/FAM ship the same line under Tag = MISSING TEXT… so non-plugin clients
  * substitute it after ActivityDictionaryText fails.
  */
+function seidrStripClubSoundSuffix(name) {
+	if (typeof name !== "string" || !name) return name;
+	if (name.length >= 6 && name.slice(-6) === "-Spank") return name.slice(0, -6);
+	if (name.length >= 5 && name.slice(-5) === "-Slap") return name.slice(0, -5);
+	return name;
+}
+
 function seidrDialogForContent(content) {
 	var match = /^(Chat(?:Other|Self))-[^-]+-(.+)$/.exec(content || "");
 	if (!match) return "";
-	var act = seidrActivityByName(match[2]);
+	if (typeof Seidr.actionDialogForContent === "function") {
+		var custom = Seidr.actionDialogForContent(content);
+		if (custom) return custom;
+	}
+	var act = seidrActivityByName(seidrStripClubSoundSuffix(match[2]));
 	if (!act) return "";
 	if (act.undress && typeof Seidr.undressConsumePending === "function") {
 		var pending = Seidr.undressConsumePending(act.name);

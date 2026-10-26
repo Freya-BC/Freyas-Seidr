@@ -9,6 +9,8 @@ import "./core/sdk";
 import "./activities";
 import "./draw";
 import "./arousalBars";
+import "./actions/index";
+import "./fastOpen";
 import "./net";
 import "./roomManager/index";
 import "./settings/index";
@@ -96,6 +98,12 @@ function installHooks() {
 	Seidr.installDraw();
 	if (typeof Seidr.installArousalBars === "function") {
 		try { Seidr.installArousalBars(); } catch (e) { console.warn("[Seidr] Arousal bars", e); }
+	}
+	if (typeof Seidr.installFastOpen === "function") {
+		try { Seidr.installFastOpen(); } catch (e) { console.warn("[Seidr] Fast Open", e); }
+	}
+	if (typeof Seidr.installActions === "function") {
+		try { Seidr.installActions(); } catch (e) { console.warn("[Seidr] Actions", e); }
 	}
 	Seidr.installNet();
 	if (typeof Seidr.installRoomManager === "function") {
