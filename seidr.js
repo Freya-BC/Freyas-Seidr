@@ -1,4 +1,4 @@
-/* Seidr v1.0.47 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.50 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.47";
+  Seidr.VERSION = "1.0.50";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3994,22 +3994,94 @@
   }
 
   // src/commands/parse.ts
-  var TAG_RE = /^\/(a|action)(?:\s|$)/i;
+  var TAG_RE = /^\/(a|action|strip|stripe)(?:\s|$)/i;
+  function tagFamily(tag) {
+    return tag === "strip" || tag === "stripe" ? "strip" : "action";
+  }
+  function normalizeTag(raw) {
+    const t = String(raw || "").toLowerCase();
+    if (t === "action") return "action";
+    if (t === "strip") return "strip";
+    if (t === "stripe") return "stripe";
+    return "a";
+  }
   function seidrCmdIsCommandLine(msg) {
     return TAG_RE.test(String(msg || "").trim());
   }
-  function seidrParseCmdLine(msg) {
+  function seidrCmdPeekLine(msg) {
     const raw = String(msg || "").trim();
-    const m = raw.match(/^\/(a|action)(?:\s+(.*))?$/i);
-    if (!m) return { ok: false, error: "Not a Seidr command", raw };
-    const tag = m[1].toLowerCase() === "action" ? "action" : "a";
+    const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
+    if (!m) return null;
+    const tag = normalizeTag(m[1]);
+    const family = tagFamily(tag);
     const rest = (m[2] || "").trim();
     if (!rest) {
-      return { ok: false, error: "Usage: /a <member> <action>", raw };
+      return { tag, family, memberRaw: "", memberQuoted: false, secondRaw: "" };
     }
     let memberRaw = "";
     let memberQuoted = false;
-    let actionRaw = "";
+    let secondRaw = "";
+    const q = rest.charAt(0);
+    if (q === '"' || q === "'") {
+      let i = 1;
+      let closed = false;
+      while (i < rest.length) {
+        if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
+          memberRaw += rest.charAt(i + 1);
+          i += 2;
+          continue;
+        }
+        if (rest.charAt(i) === q) {
+          closed = true;
+          i += 1;
+          break;
+        }
+        memberRaw += rest.charAt(i);
+        i += 1;
+      }
+      memberQuoted = true;
+      if (!closed) {
+        return {
+          tag,
+          family,
+          memberRaw,
+          memberQuoted: true,
+          secondRaw: ""
+        };
+      }
+      secondRaw = rest.slice(i).trim();
+    } else {
+      const sp = rest.search(/\s/);
+      if (sp < 0) {
+        memberRaw = rest;
+        secondRaw = "";
+      } else {
+        memberRaw = rest.slice(0, sp);
+        secondRaw = rest.slice(sp).trim();
+      }
+    }
+    return {
+      tag,
+      family,
+      memberRaw,
+      memberQuoted,
+      secondRaw
+    };
+  }
+  function seidrParseCmdLine(msg) {
+    const raw = String(msg || "").trim();
+    const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
+    if (!m) return { ok: false, error: "Not a Seidr command", raw };
+    const tag = normalizeTag(m[1]);
+    const family = tagFamily(tag);
+    const rest = (m[2] || "").trim();
+    const usage = family === "strip" ? "Usage: /" + tag + " <member> <slot>" : "Usage: /a <member> <action>";
+    if (!rest) {
+      return { ok: false, error: usage, raw };
+    }
+    let memberRaw = "";
+    let memberQuoted = false;
+    let secondRaw = "";
     const q = rest.charAt(0);
     if (q === '"' || q === "'") {
       let i = 1;
@@ -4030,39 +4102,49 @@
       }
       if (!closed) return { ok: false, error: "Unclosed quote in member name", raw };
       memberQuoted = true;
-      actionRaw = rest.slice(i).trim();
+      secondRaw = rest.slice(i).trim();
     } else {
       const sp = rest.search(/\s/);
       if (sp < 0) {
         memberRaw = rest;
-        actionRaw = "";
+        secondRaw = "";
       } else {
         memberRaw = rest.slice(0, sp);
-        actionRaw = rest.slice(sp).trim();
+        secondRaw = rest.slice(sp).trim();
       }
     }
     if (!memberRaw) return { ok: false, error: "Missing member", raw };
-    if (!actionRaw) return { ok: false, error: "Missing action \u2014 Usage: /a <member> <action>", raw };
+    if (!secondRaw) {
+      return {
+        ok: false,
+        error: family === "strip" ? "Missing slot \u2014 " + usage : "Missing action \u2014 " + usage,
+        raw
+      };
+    }
     return {
       ok: true,
       tag,
+      family,
       memberRaw,
       memberQuoted,
-      actionRaw,
+      secondRaw,
+      actionRaw: secondRaw,
       raw
     };
   }
   function seidrCmdTokenAtCaret(value, caret) {
     const text = String(value || "");
     const pos = Math.max(0, Math.min(caret || 0, text.length));
-    const before = text.slice(0, pos);
     const trimmedStart = text.match(/^\s*/);
     const startOffset = trimmedStart ? trimmedStart[0].length : 0;
     const body = text.slice(startOffset);
     const bodyCaret = pos - startOffset;
     if (bodyCaret < 0) return { kind: "none" };
-    const tagMatch = body.match(/^\/(a|action)(\s+)?/i);
+    const tagMatch = body.match(/^\/(a|action|strip|stripe)(\s+)?/i);
     if (!tagMatch) return { kind: "none" };
+    const tag = normalizeTag(tagMatch[1]);
+    const family = tagFamily(tag);
+    const secondKind = family === "strip" ? "slot" : "action";
     const tagEnd = tagMatch[0].length;
     if (bodyCaret <= tagEnd && !tagMatch[2]) {
       return { kind: "tag" };
@@ -4110,7 +4192,7 @@
       const ws2 = body.slice(actionStart2).match(/^\s*/);
       const wsLen2 = ws2 ? ws2[0].length : 0;
       return {
-        kind: "action",
+        kind: secondKind,
         prefix: actionPrefix,
         start: startOffset + actionStart2 + wsLen2,
         end: pos
@@ -4130,7 +4212,7 @@
     const ws = body.slice(actionStart).match(/^\s*/);
     const wsLen = ws ? ws[0].length : 0;
     return {
-      kind: "action",
+      kind: secondKind,
       prefix: body.slice(actionStart + wsLen, bodyCaret),
       start: startOffset + actionStart + wsLen,
       end: pos
@@ -4379,6 +4461,140 @@
     });
   }
 
+  // src/commands/stripCatalog.ts
+  function undressActs() {
+    try {
+      if (typeof Seidr.undressActivities === "function") {
+        const list = Seidr.undressActivities();
+        return Array.isArray(list) ? list : [];
+      }
+    } catch (e) {
+    }
+    return [];
+  }
+  function canUndress(acting, acted, cloth) {
+    try {
+      if (typeof Seidr.undressCan === "function") {
+        return !!Seidr.undressCan(acting, acted, cloth);
+      }
+    } catch (e) {
+    }
+    return false;
+  }
+  function wornHint(target, clothGroup) {
+    try {
+      if (typeof Seidr.undressWornName === "function") {
+        const n = Seidr.undressWornName(target, clothGroup);
+        if (n) return String(n);
+      }
+    } catch (e) {
+    }
+    return clothGroup;
+  }
+  function baseGroupFromBundle(act2) {
+    if (act2 && Array.isArray(act2.clothGroups) && act2.clothGroups[0]) {
+      return String(act2.clothGroups[0]);
+    }
+    return String(act2 && act2.clothGroup || "");
+  }
+  function seidrCmdParseBundleToken(token) {
+    const t = String(token || "").trim();
+    const m = t.match(/^all:(.+)$/i);
+    if (!m) return null;
+    return m[1].trim();
+  }
+  function seidrCmdListStripOptions(acting, target, includeBundles) {
+    if (!target) return [];
+    const out = [];
+    const acts = undressActs();
+    for (let i = 0; i < acts.length; i++) {
+      const act2 = acts[i];
+      if (!act2 || !act2.name || !act2.undress) continue;
+      const isBundle = !!act2.bundle;
+      if (isBundle && !includeBundles) continue;
+      if (!isBundle && act2.name.indexOf("Seidr_UndressAll_") === 0) continue;
+      const cloth = isBundle ? act2.clothGroups || [act2.clothGroup] : act2.clothGroup || act2.clothGroups && act2.clothGroups[0];
+      if (!cloth) continue;
+      if (!canUndress(acting, target, cloth)) continue;
+      if (isBundle) {
+        const base = baseGroupFromBundle(act2);
+        if (!base) continue;
+        out.push({
+          insert: "all:" + base,
+          label: String(act2.label || "Undress all " + (act2.family || base)),
+          hint: "bundle \xB7 " + String(act2.zone || ""),
+          activityName: String(act2.name),
+          zone: String(act2.zone || ""),
+          bundle: true,
+          clothGroup: base
+        });
+      } else {
+        const g = String(act2.clothGroup || cloth);
+        const worn = wornHint(target, g);
+        out.push({
+          insert: g,
+          label: worn !== g ? worn + " \xB7 " + g : String(act2.noun || g),
+          hint: g + (act2.zone ? " \xB7 " + act2.zone : ""),
+          activityName: String(act2.name),
+          zone: String(act2.zone || ""),
+          bundle: false,
+          clothGroup: g
+        });
+      }
+    }
+    out.sort(function(a, b) {
+      if (a.bundle !== b.bundle) return a.bundle ? 1 : -1;
+      return a.label.localeCompare(b.label);
+    });
+    return out;
+  }
+  function seidrCmdFilterStripOptions(options, prefix) {
+    const pfx = String(prefix || "").trim().toLowerCase();
+    if (!pfx) return options;
+    return options.filter(function(o) {
+      return o.insert.toLowerCase().indexOf(pfx) >= 0 || o.label.toLowerCase().indexOf(pfx) >= 0 || o.clothGroup.toLowerCase().indexOf(pfx) >= 0 || o.activityName.toLowerCase().indexOf(pfx) >= 0 || o.hint && o.hint.toLowerCase().indexOf(pfx) >= 0;
+    });
+  }
+  function seidrCmdResolveStripSlot(token, acting, target, includeBundles) {
+    const raw = String(token || "").trim();
+    if (!raw) return { ok: false, error: "Missing slot" };
+    const options = seidrCmdListStripOptions(acting, target, includeBundles);
+    if (!options.length) {
+      return { ok: false, error: "Nothing strippable on that person right now" };
+    }
+    const key = raw.toLowerCase();
+    const bundleBase = seidrCmdParseBundleToken(raw);
+    for (let i = 0; i < options.length; i++) {
+      const o = options[i];
+      if (bundleBase) {
+        if (o.bundle && o.clothGroup.toLowerCase() === bundleBase.toLowerCase()) {
+          return { ok: true, option: o };
+        }
+        continue;
+      }
+      if (o.insert.toLowerCase() === key) return { ok: true, option: o };
+      if (o.clothGroup.toLowerCase() === key && !o.bundle) return { ok: true, option: o };
+    }
+    const soft = [];
+    for (let j = 0; j < options.length; j++) {
+      const o = options[j];
+      if (o.bundle && !includeBundles) continue;
+      if (o.label.toLowerCase() === key) soft.push(o);
+      else if (o.label.toLowerCase().indexOf(key) >= 0) soft.push(o);
+    }
+    if (soft.length === 1) return { ok: true, option: soft[0] };
+    if (soft.length > 1) {
+      return {
+        ok: false,
+        error: 'Ambiguous slot "' + raw + '" \u2014 use Tab or the exact group id'
+      };
+    }
+    return {
+      ok: false,
+      error: 'Unknown or unavailable slot "' + raw + '". Tab for strippable layers.'
+    };
+  }
+
   // src/commands/styles.ts
   function seidrCmdCss() {
     return [
@@ -4542,18 +4758,44 @@
     }
     return out;
   }
+  function buildStripSlotItems(prefix, memberRaw, includeBundles) {
+    if (!memberRaw) return [];
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) return [];
+    const options = seidrCmdFilterStripOptions(
+      seidrCmdListStripOptions(Player, mem.character, includeBundles),
+      prefix
+    );
+    return options.map(function(o) {
+      return { insert: o.insert, label: o.label, hint: o.hint };
+    });
+  }
   function openForFocus(focus, value) {
-    if (focus.kind !== "member" && focus.kind !== "action") {
+    if (focus.kind !== "member" && focus.kind !== "action" && focus.kind !== "slot") {
       seidrCmdAcClose();
       return false;
     }
+    const peek = seidrCmdPeekLine(value);
     let items = [];
     if (focus.kind === "member") {
       items = buildMemberItems(focus.prefix);
+    } else if (focus.kind === "action") {
+      if (!peek || peek.family !== "action") {
+        seidrCmdAcClose();
+        return false;
+      }
+      items = buildActionItems(focus.prefix, peek.memberRaw);
     } else {
-      const parsed = seidrParseCmdLine(value);
-      const memberRaw = parsed.ok ? parsed.memberRaw : "";
-      items = buildActionItems(focus.prefix, memberRaw);
+      if (!peek || peek.family !== "strip") {
+        seidrCmdAcClose();
+        return false;
+      }
+      if (!peek.memberRaw) {
+        seidrCmdAcClose();
+        return false;
+      }
+      const includeBundles = peek.tag === "strip";
+      items = buildStripSlotItems(focus.prefix, peek.memberRaw, includeBundles);
     }
     if (!items.length) {
       seidrCmdAcClose();
@@ -4573,10 +4815,34 @@
     const input = getInput();
     if (!input) return false;
     const value = input.value || "";
+    if (!seidrCmdIsCommandLine(value) && !/^\s*\/(a|action|strip|stripe)/i.test(value)) {
+      return false;
+    }
     const caret = input.selectionStart != null ? input.selectionStart : value.length;
-    const focus = seidrCmdTokenAtCaret(value, caret);
-    if (focus.kind === "none" || focus.kind === "tag") return false;
-    return openForFocus(focus, value);
+    let focus = seidrCmdTokenAtCaret(value, caret);
+    if (focus.kind === "tag") {
+      const bare = value.match(/^\s*\/(a|action|strip|stripe)\s*$/i);
+      if (bare) {
+        const start = value.length;
+        focus = {
+          kind: "member",
+          prefix: "",
+          quoted: false,
+          start,
+          end: start
+        };
+      } else {
+        return false;
+      }
+    }
+    if (focus.kind === "none") return false;
+    try {
+      return openForFocus(focus, value);
+    } catch (e) {
+      console.warn("[Seidr Cmd] autocomplete failed", e);
+      seidrCmdAcClose();
+      return false;
+    }
   }
   function seidrCmdAcMove(delta) {
     if (!state.open || !state.items.length) return false;
@@ -4617,13 +4883,19 @@
     }
     const key = ev.key;
     if (key === "Tab") {
+      const value = input.value || "";
+      const onSeidrCmd = state.open || seidrCmdIsCommandLine(value) || /^\s*\/(a|action|strip|stripe)/i.test(value);
+      if (!onSeidrCmd) return false;
+      if (state.open) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        seidrCmdAcAccept();
+        return true;
+      }
+      const opened = seidrCmdAcOnTab();
+      if (!opened) return false;
       ev.preventDefault();
       ev.stopPropagation();
-      if (state.open) {
-        seidrCmdAcAccept();
-      } else {
-        seidrCmdAcOnTab();
-      }
       return true;
     }
     if (!state.open) return false;
@@ -4689,18 +4961,41 @@
   }
 
   // src/commands/run.ts
-  function seidrCmdExecuteLine(msg) {
-    const parsed = seidrParseCmdLine(msg);
-    if (parsed.ok === false) {
-      if (parsed.error !== "Not a Seidr command") seidrCmdWarn(parsed.error);
+  function runItemActivity(target, zone, activityName) {
+    if (!seidrCmdActivityAvailable(target, zone, activityName)) {
+      seidrCmdError(
+        'Activity "' + activityName + '" on ' + zone + " is not available on that person right now."
+      );
       return false;
     }
-    const mem = seidrCmdResolveMember(parsed.memberRaw);
+    const ia = seidrCmdFindItemActivity(target, zone, activityName);
+    if (!ia) {
+      seidrCmdError('Could not resolve activity "' + activityName + '".');
+      return false;
+    }
+    try {
+      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
+      const groupName = ia.Group && (ia.Group.Name || ia.Group) || zone;
+      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone) : { Name: zone };
+      if (typeof ActivityRun !== "function") {
+        seidrCmdError("ActivityRun unavailable");
+        return false;
+      }
+      ActivityRun(Player, target, group, ia, true);
+      return true;
+    } catch (e) {
+      console.warn("[Seidr Cmd] ActivityRun failed", e);
+      seidrCmdError("Failed to run activity.");
+      return false;
+    }
+  }
+  function executeActionCommand(memberRaw, actionRaw) {
+    const mem = seidrCmdResolveMember(memberRaw);
     if (mem.ok === false) {
       seidrCmdWarn(mem.error);
       return true;
     }
-    const act2 = seidrCmdResolveAction(parsed.actionRaw);
+    const act2 = seidrCmdResolveAction(actionRaw);
     if (act2.ok === false) {
       seidrCmdWarn(act2.error);
       return true;
@@ -4714,32 +5009,46 @@
       }
     } catch (e) {
     }
-    if (!seidrCmdActivityAvailable(target, binding.slot, binding.activity)) {
-      seidrCmdError(
-        'Action "' + binding.name + '" (' + binding.activity + " on " + binding.slot + ") is not available on that person right now."
-      );
+    runItemActivity(target, binding.slot, binding.activity);
+    return true;
+  }
+  function executeStripCommand(tag, memberRaw, slotRaw) {
+    const includeBundles = tag === "strip";
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) {
+      seidrCmdWarn(mem.error);
       return true;
     }
-    const ia = seidrCmdFindItemActivity(target, binding.slot, binding.activity);
-    if (!ia) {
-      seidrCmdError('Could not resolve activity "' + binding.activity + '".');
-      return true;
-    }
+    const target = mem.character;
     try {
-      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
-      const groupName = ia.Group && (ia.Group.Name || ia.Group) || binding.slot;
-      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : binding.slot) : { Name: binding.slot };
-      if (typeof ActivityRun !== "function") {
-        seidrCmdError("ActivityRun unavailable");
+      if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
+        seidrCmdError("You cannot act on that person right now.");
         return true;
       }
-      ActivityRun(Player, target, group, ia, true);
     } catch (e) {
-      console.warn("[Seidr Cmd] ActivityRun failed", e);
-      seidrCmdError("Failed to run activity.");
+    }
+    const slot = seidrCmdResolveStripSlot(slotRaw, Player, target, includeBundles);
+    if (slot.ok === false) {
+      seidrCmdWarn(slot.error);
       return true;
     }
+    runItemActivity(target, slot.option.zone, slot.option.activityName);
     return true;
+  }
+  function seidrCmdExecuteLine(msg) {
+    const parsed = seidrParseCmdLine(msg);
+    if (parsed.ok === false) {
+      if (parsed.error !== "Not a Seidr command") seidrCmdWarn(parsed.error);
+      return false;
+    }
+    if (parsed.family === "strip") {
+      return executeStripCommand(
+        parsed.tag === "stripe" ? "stripe" : "strip",
+        parsed.memberRaw,
+        parsed.secondRaw
+      );
+    }
+    return executeActionCommand(parsed.memberRaw, parsed.secondRaw || parsed.actionRaw);
   }
 
   // src/commands/runtime.ts
@@ -4753,33 +5062,51 @@
     } catch (e) {
     }
   }
-  function onCommand(_args) {
+  function onCommand(fallbackTag, _args) {
     const el = document.getElementById("InputChat");
     const msg = el ? String(el.value || "").trim() : "";
     const line = msg || "";
-    const full = seidrCmdIsCommandLine(line) ? line : "/a " + String(_args || "").trim();
+    const full = seidrCmdIsCommandLine(line) ? line : "/" + fallbackTag + " " + String(_args || "").trim();
     seidrCmdAcClose();
-    const handled = seidrCmdExecuteLine(full.startsWith("/") ? full : "/a " + full);
+    const handled = seidrCmdExecuteLine(full.startsWith("/") ? full : "/" + fallbackTag + " " + full);
     if (handled) clearInput();
   }
   function registerCommands() {
     if (typeof CommandCombine !== "function") return;
-    const common = {
-      Description: "Seidr: /a <member> <action> \u2014 run a bound activity",
-      Reference: "a",
-      Clear: false,
-      Action: function(_args) {
-        onCommand(_args);
-      }
-    };
     try {
       CommandCombine([
-        Object.assign({}, common, { Tag: "a" }),
-        Object.assign({}, common, {
+        {
+          Tag: "a",
+          Description: "Seidr: /a <member> <action> \u2014 run a bound activity",
+          Clear: false,
+          Action: function(args) {
+            onCommand("a", args);
+          }
+        },
+        {
           Tag: "action",
-          Reference: "action",
-          Description: "Seidr: /action <member> <action>"
-        })
+          Description: "Seidr: /action <member> <action>",
+          Clear: false,
+          Action: function(args) {
+            onCommand("action", args);
+          }
+        },
+        {
+          Tag: "strip",
+          Description: "Seidr: /strip <member> <slot> \u2014 undress (includes Undress all)",
+          Clear: false,
+          Action: function(args) {
+            onCommand("strip", args);
+          }
+        },
+        {
+          Tag: "stripe",
+          Description: "Seidr: /stripe <member> <slot> \u2014 undress one layer",
+          Clear: false,
+          Action: function(args) {
+            onCommand("stripe", args);
+          }
+        }
       ]);
     } catch (e) {
       console.warn("[Seidr Cmd] CommandCombine failed", e);

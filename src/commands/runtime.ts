@@ -1,4 +1,4 @@
-/** Install /a + /action + Tab autocomplete */
+/** Install /a|/action|/strip|/stripe + Tab autocomplete */
 import { Seidr } from "../seidr";
 import { seidrCmdAcClose, seidrCmdAcHandleKeyDown, seidrCmdAcIsOpen } from "./autocomplete";
 import { seidrCmdIsCommandLine } from "./parse";
@@ -17,35 +17,46 @@ function clearInput() {
 	} catch (e) { /* ignore */ }
 }
 
-function onCommand(_args: string) {
+function onCommand(fallbackTag: string, _args: string) {
 	const el = document.getElementById("InputChat") as HTMLTextAreaElement | null;
 	const msg = el ? String(el.value || "").trim() : "";
 	const line = msg || "";
-	// CommandExecute may pass remainder only — prefer full InputChat if it looks like our command
-	const full = seidrCmdIsCommandLine(line) ? line : ("/a " + String(_args || "").trim());
+	const full = seidrCmdIsCommandLine(line)
+		? line
+		: ("/" + fallbackTag + " " + String(_args || "").trim());
 	seidrCmdAcClose();
-	const handled = seidrCmdExecuteLine(full.startsWith("/") ? full : "/a " + full);
+	const handled = seidrCmdExecuteLine(full.startsWith("/") ? full : "/" + fallbackTag + " " + full);
 	if (handled) clearInput();
 }
 
 function registerCommands() {
 	if (typeof CommandCombine !== "function") return;
-	const common = {
-		Description: "Seidr: /a <member> <action> — run a bound activity",
-		Reference: "a",
-		Clear: false,
-		Action: function (_args: string) {
-			onCommand(_args);
-		},
-	};
 	try {
 		CommandCombine([
-			Object.assign({}, common, { Tag: "a" }),
-			Object.assign({}, common, {
+			{
+				Tag: "a",
+				Description: "Seidr: /a <member> <action> — run a bound activity",
+				Clear: false,
+				Action: function (args: string) { onCommand("a", args); },
+			},
+			{
 				Tag: "action",
-				Reference: "action",
 				Description: "Seidr: /action <member> <action>",
-			}),
+				Clear: false,
+				Action: function (args: string) { onCommand("action", args); },
+			},
+			{
+				Tag: "strip",
+				Description: "Seidr: /strip <member> <slot> — undress (includes Undress all)",
+				Clear: false,
+				Action: function (args: string) { onCommand("strip", args); },
+			},
+			{
+				Tag: "stripe",
+				Description: "Seidr: /stripe <member> <slot> — undress one layer",
+				Clear: false,
+				Action: function (args: string) { onCommand("stripe", args); },
+			},
 		]);
 	} catch (e) {
 		console.warn("[Seidr Cmd] CommandCombine failed", e);
@@ -57,7 +68,6 @@ function onKeyDownCapture(ev: KeyboardEvent) {
 }
 
 function onBlurClose() {
-	// Delay so mousedown on AC item can fire first
 	setTimeout(function () {
 		if (!seidrCmdAcIsOpen()) return;
 		const ae = document.activeElement;
@@ -77,7 +87,6 @@ function hookInput() {
 
 function installInputWatch() {
 	hookInput();
-	// Chat rebuilds InputChat — rebind periodically / on focus
 	document.addEventListener(
 		"focusin",
 		function (ev) {
@@ -88,7 +97,6 @@ function installInputWatch() {
 	);
 }
 
-/** Also intercept ChatRoomSendChat so /a works even if CommandCombine races. */
 function hookSendChat() {
 	if (!Seidr.hookFunction) return;
 	Seidr.hookFunction("ChatRoomSendChat", 8, function (args: unknown[], next: (a?: unknown[]) => unknown) {

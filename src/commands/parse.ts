@@ -1,15 +1,24 @@
-/** Parse `/a` / `/action` with optional quoted member (1B). */
+/** Parse `/a`|/action` and `/strip`|/stripe` with optional quoted member. */
+
+export type SeidrCmdTag = "a" | "action" | "strip" | "stripe";
+export type SeidrCmdFamily = "action" | "strip";
 
 export type SeidrCmdParsed = {
 	ok: true;
-	tag: "a" | "action";
+	tag: SeidrCmdTag;
+	family: SeidrCmdFamily;
 	/** Raw member token as typed (quotes stripped). */
 	memberRaw: string;
 	/** True if member was quoted. */
 	memberQuoted: boolean;
-	/** Remainder of line = action alias (may contain spaces). */
+	/**
+	 * Second argument:
+	 * - action family: call name (may contain spaces)
+	 * - strip family: clothing slot / all:Group token (single token preferred)
+	 */
+	secondRaw: string;
+	/** @deprecated use secondRaw — kept for /a call sites */
 	actionRaw: string;
-	/** Full original message trimmed. */
 	raw: string;
 } | {
 	ok: false;
@@ -21,32 +30,127 @@ export type SeidrCmdTokenFocus =
 	| { kind: "none" }
 	| { kind: "tag" }
 	| { kind: "member"; prefix: string; quoted: boolean; start: number; end: number }
-	| { kind: "action"; prefix: string; start: number; end: number };
+	| { kind: "action"; prefix: string; start: number; end: number }
+	| { kind: "slot"; prefix: string; start: number; end: number };
 
-const TAG_RE = /^\/(a|action)(?:\s|$)/i;
+const TAG_RE = /^\/(a|action|strip|stripe)(?:\s|$)/i;
+
+function tagFamily(tag: SeidrCmdTag): SeidrCmdFamily {
+	return tag === "strip" || tag === "stripe" ? "strip" : "action";
+}
+
+function normalizeTag(raw: string): SeidrCmdTag {
+	const t = String(raw || "").toLowerCase();
+	if (t === "action") return "action";
+	if (t === "strip") return "strip";
+	if (t === "stripe") return "stripe";
+	return "a";
+}
 
 export function seidrCmdIsCommandLine(msg: string): boolean {
 	return TAG_RE.test(String(msg || "").trim());
 }
 
+export function seidrCmdTagFromLine(msg: string): SeidrCmdTag | null {
+	const m = String(msg || "").trim().match(/^\/(a|action|strip|stripe)(?:\s|$)/i);
+	if (!m) return null;
+	return normalizeTag(m[1]);
+}
+
 /**
- * Parse `/a <member> <action>` / `/action …`.
+ * Partial parse for Tab autocomplete — allows missing second token.
+ * Still requires a recognized tag; member may be empty while typing.
+ */
+export function seidrCmdPeekLine(msg: string): {
+	tag: SeidrCmdTag;
+	family: SeidrCmdFamily;
+	memberRaw: string;
+	memberQuoted: boolean;
+	secondRaw: string;
+} | null {
+	const raw = String(msg || "").trim();
+	const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
+	if (!m) return null;
+	const tag = normalizeTag(m[1]);
+	const family = tagFamily(tag);
+	const rest = (m[2] || "").trim();
+	if (!rest) {
+		return { tag: tag, family: family, memberRaw: "", memberQuoted: false, secondRaw: "" };
+	}
+	let memberRaw = "";
+	let memberQuoted = false;
+	let secondRaw = "";
+	const q = rest.charAt(0);
+	if (q === '"' || q === "'") {
+		let i = 1;
+		let closed = false;
+		while (i < rest.length) {
+			if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
+				memberRaw += rest.charAt(i + 1);
+				i += 2;
+				continue;
+			}
+			if (rest.charAt(i) === q) {
+				closed = true;
+				i += 1;
+				break;
+			}
+			memberRaw += rest.charAt(i);
+			i += 1;
+		}
+		memberQuoted = true;
+		if (!closed) {
+			// Still typing inside quotes — treat whole rest as member prefix
+			return {
+				tag: tag,
+				family: family,
+				memberRaw: memberRaw,
+				memberQuoted: true,
+				secondRaw: "",
+			};
+		}
+		secondRaw = rest.slice(i).trim();
+	} else {
+		const sp = rest.search(/\s/);
+		if (sp < 0) {
+			memberRaw = rest;
+			secondRaw = "";
+		} else {
+			memberRaw = rest.slice(0, sp);
+			secondRaw = rest.slice(sp).trim();
+		}
+	}
+	return {
+		tag: tag,
+		family: family,
+		memberRaw: memberRaw,
+		memberQuoted: memberQuoted,
+		secondRaw: secondRaw,
+	};
+}
+
+/**
+ * Parse `/a|/action <member> <action>` or `/strip|/stripe <member> <slot>`.
  * Member: first token, or `"quoted name"` / `'quoted name'`.
- * Action: rest of the line (trimmed); may contain spaces.
+ * Second: rest of the line (trimmed).
  */
 export function seidrParseCmdLine(msg: string): SeidrCmdParsed {
 	const raw = String(msg || "").trim();
-	const m = raw.match(/^\/(a|action)(?:\s+(.*))?$/i);
+	const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
 	if (!m) return { ok: false, error: "Not a Seidr command", raw: raw };
-	const tag = m[1].toLowerCase() === "action" ? "action" : "a";
+	const tag = normalizeTag(m[1]);
+	const family = tagFamily(tag);
 	const rest = (m[2] || "").trim();
+	const usage = family === "strip"
+		? "Usage: /" + tag + " <member> <slot>"
+		: "Usage: /a <member> <action>";
 	if (!rest) {
-		return { ok: false, error: "Usage: /a <member> <action>", raw: raw };
+		return { ok: false, error: usage, raw: raw };
 	}
 
 	let memberRaw = "";
 	let memberQuoted = false;
-	let actionRaw = "";
+	let secondRaw = "";
 	const q = rest.charAt(0);
 	if (q === '"' || q === "'") {
 		let i = 1;
@@ -67,27 +171,37 @@ export function seidrParseCmdLine(msg: string): SeidrCmdParsed {
 		}
 		if (!closed) return { ok: false, error: "Unclosed quote in member name", raw: raw };
 		memberQuoted = true;
-		actionRaw = rest.slice(i).trim();
+		secondRaw = rest.slice(i).trim();
 	} else {
 		const sp = rest.search(/\s/);
 		if (sp < 0) {
 			memberRaw = rest;
-			actionRaw = "";
+			secondRaw = "";
 		} else {
 			memberRaw = rest.slice(0, sp);
-			actionRaw = rest.slice(sp).trim();
+			secondRaw = rest.slice(sp).trim();
 		}
 	}
 
 	if (!memberRaw) return { ok: false, error: "Missing member", raw: raw };
-	if (!actionRaw) return { ok: false, error: "Missing action — Usage: /a <member> <action>", raw: raw };
+	if (!secondRaw) {
+		return {
+			ok: false,
+			error: family === "strip"
+				? "Missing slot — " + usage
+				: "Missing action — " + usage,
+			raw: raw,
+		};
+	}
 
 	return {
 		ok: true,
 		tag: tag,
+		family: family,
 		memberRaw: memberRaw,
 		memberQuoted: memberQuoted,
-		actionRaw: actionRaw,
+		secondRaw: secondRaw,
+		actionRaw: secondRaw,
 		raw: raw,
 	};
 }
@@ -99,21 +213,22 @@ export function seidrParseCmdLine(msg: string): SeidrCmdParsed {
 export function seidrCmdTokenAtCaret(value: string, caret: number): SeidrCmdTokenFocus {
 	const text = String(value || "");
 	const pos = Math.max(0, Math.min(caret || 0, text.length));
-	const before = text.slice(0, pos);
 	const trimmedStart = text.match(/^\s*/);
 	const startOffset = trimmedStart ? trimmedStart[0].length : 0;
 	const body = text.slice(startOffset);
 	const bodyCaret = pos - startOffset;
 	if (bodyCaret < 0) return { kind: "none" };
 
-	const tagMatch = body.match(/^\/(a|action)(\s+)?/i);
+	const tagMatch = body.match(/^\/(a|action|strip|stripe)(\s+)?/i);
 	if (!tagMatch) return { kind: "none" };
+	const tag = normalizeTag(tagMatch[1]);
+	const family = tagFamily(tag);
+	const secondKind = family === "strip" ? "slot" : "action";
 	const tagEnd = tagMatch[0].length;
 	if (bodyCaret <= tagEnd && !tagMatch[2]) {
 		return { kind: "tag" };
 	}
 	if (bodyCaret <= tagEnd) {
-		// In whitespace after tag → start of member
 		return {
 			kind: "member",
 			prefix: "",
@@ -152,13 +267,12 @@ export function seidrCmdTokenAtCaret(value: string, caret: number): SeidrCmdToke
 				end: startOffset + tagEnd + memberEnd,
 			};
 		}
-		// Past member → action
 		const actionStart = tagEnd + memberEnd;
 		const actionPrefix = body.slice(actionStart, bodyCaret).replace(/^\s+/, "");
 		const ws = body.slice(actionStart).match(/^\s*/);
 		const wsLen = ws ? ws[0].length : 0;
 		return {
-			kind: "action",
+			kind: secondKind,
 			prefix: actionPrefix,
 			start: startOffset + actionStart + wsLen,
 			end: pos,
@@ -179,14 +293,14 @@ export function seidrCmdTokenAtCaret(value: string, caret: number): SeidrCmdToke
 	const ws = body.slice(actionStart).match(/^\s*/);
 	const wsLen = ws ? ws[0].length : 0;
 	return {
-		kind: "action",
+		kind: secondKind,
 		prefix: body.slice(actionStart + wsLen, bodyCaret),
 		start: startOffset + actionStart + wsLen,
 		end: pos,
 	};
 }
 
-/** Rebuild input replacing the member or action span with `insert`. */
+/** Rebuild input replacing the member or action/slot span with `insert`. */
 export function seidrCmdReplaceSpan(
 	value: string,
 	start: number,

@@ -1,14 +1,18 @@
 /** Floating Seidr-styled autocomplete over #InputChat */
 import { seidrCmdActivityAvailable } from "./catalog";
 import {
+	seidrCmdIsCommandLine,
+	seidrCmdPeekLine,
 	seidrCmdReplaceSpan,
 	seidrCmdTokenAtCaret,
-	seidrParseCmdLine,
 	type SeidrCmdTokenFocus,
 } from "./parse";
 import { seidrCmdFilterPeople, seidrCmdResolveMember } from "./resolve";
 import { seidrListCmdActions } from "./store";
+import { seidrCmdFilterStripOptions, seidrCmdListStripOptions } from "./stripCatalog";
 import { seidrCmdCss } from "./styles";
+
+declare const Player: any;
 
 export type SeidrCmdAcItem = {
 	/** Inserted into the chat input. */
@@ -21,7 +25,7 @@ export type SeidrCmdAcItem = {
 
 type AcState = {
 	open: boolean;
-	kind: "member" | "action" | null;
+	kind: "member" | "action" | "slot" | null;
 	items: SeidrCmdAcItem[];
 	index: number;
 	spanStart: number;
@@ -177,18 +181,49 @@ function buildActionItems(prefix: string, memberRaw: string): SeidrCmdAcItem[] {
 	return out;
 }
 
+function buildStripSlotItems(
+	prefix: string,
+	memberRaw: string,
+	includeBundles: boolean
+): SeidrCmdAcItem[] {
+	if (!memberRaw) return [];
+	const mem = seidrCmdResolveMember(memberRaw);
+	if (mem.ok === false) return [];
+	const options = seidrCmdFilterStripOptions(
+		seidrCmdListStripOptions(Player, mem.character, includeBundles),
+		prefix
+	);
+	return options.map(function (o) {
+		return { insert: o.insert, label: o.label, hint: o.hint };
+	});
+}
+
 function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
-	if (focus.kind !== "member" && focus.kind !== "action") {
+	if (focus.kind !== "member" && focus.kind !== "action" && focus.kind !== "slot") {
 		seidrCmdAcClose();
 		return false;
 	}
+	const peek = seidrCmdPeekLine(value);
 	let items: SeidrCmdAcItem[] = [];
 	if (focus.kind === "member") {
 		items = buildMemberItems(focus.prefix);
+	} else if (focus.kind === "action") {
+		if (!peek || peek.family !== "action") {
+			seidrCmdAcClose();
+			return false;
+		}
+		items = buildActionItems(focus.prefix, peek.memberRaw);
 	} else {
-		const parsed = seidrParseCmdLine(value);
-		const memberRaw = parsed.ok ? parsed.memberRaw : "";
-		items = buildActionItems(focus.prefix, memberRaw);
+		if (!peek || peek.family !== "strip") {
+			seidrCmdAcClose();
+			return false;
+		}
+		if (!peek.memberRaw) {
+			seidrCmdAcClose();
+			return false;
+		}
+		const includeBundles = peek.tag === "strip";
+		items = buildStripSlotItems(focus.prefix, peek.memberRaw, includeBundles);
 	}
 	if (!items.length) {
 		seidrCmdAcClose();
@@ -210,10 +245,35 @@ export function seidrCmdAcOnTab(): boolean {
 	const input = getInput();
 	if (!input) return false;
 	const value = input.value || "";
+	if (!seidrCmdIsCommandLine(value) && !/^\s*\/(a|action|strip|stripe)/i.test(value)) {
+		return false;
+	}
 	const caret = input.selectionStart != null ? input.selectionStart : value.length;
-	const focus = seidrCmdTokenAtCaret(value, caret);
-	if (focus.kind === "none" || focus.kind === "tag") return false;
-	return openForFocus(focus, value);
+	let focus = seidrCmdTokenAtCaret(value, caret);
+	// `/a` or `/strip` with no trailing space yet — treat as start of member
+	if (focus.kind === "tag") {
+		const bare = value.match(/^\s*\/(a|action|strip|stripe)\s*$/i);
+		if (bare) {
+			const start = value.length;
+			focus = {
+				kind: "member",
+				prefix: "",
+				quoted: false,
+				start: start,
+				end: start,
+			};
+		} else {
+			return false;
+		}
+	}
+	if (focus.kind === "none") return false;
+	try {
+		return openForFocus(focus, value);
+	} catch (e) {
+		console.warn("[Seidr Cmd] autocomplete failed", e);
+		seidrCmdAcClose();
+		return false;
+	}
 }
 
 export function seidrCmdAcMove(delta: number): boolean {
@@ -260,13 +320,23 @@ export function seidrCmdAcHandleKeyDown(ev: KeyboardEvent): boolean {
 	const key = ev.key;
 
 	if (key === "Tab") {
+		const value = input.value || "";
+		const onSeidrCmd =
+			state.open ||
+			seidrCmdIsCommandLine(value) ||
+			/^\s*\/(a|action|strip|stripe)/i.test(value);
+		if (!onSeidrCmd) return false;
+		if (state.open) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			seidrCmdAcAccept();
+			return true;
+		}
+		// Only swallow Tab when Seidr AC actually opens; else Club CommandAutoComplete runs
+		const opened = seidrCmdAcOnTab();
+		if (!opened) return false;
 		ev.preventDefault();
 		ev.stopPropagation();
-		if (state.open) {
-			seidrCmdAcAccept();
-		} else {
-			seidrCmdAcOnTab();
-		}
 		return true;
 	}
 
