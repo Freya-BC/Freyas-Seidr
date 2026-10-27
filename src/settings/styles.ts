@@ -6,7 +6,7 @@ export function seidrSettingsCss(): string {
 		"#seidr-settings-panel {",
 		"  pointer-events: auto; position: fixed; z-index: 120;",
 		"  display: none; flex-direction: column;",
-		"  width: min(92vw, 460px); height: min(85vh, 640px);",
+		"  width: min(92vw, 560px); height: min(88vh, 700px);",
 		"  min-width: 300px; min-height: 240px;",
 		"  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);",
 		"  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",

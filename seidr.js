@@ -1,4 +1,4 @@
-/* Seidr v1.0.69 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.70 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.69";
+  Seidr.VERSION = "1.0.70";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -9320,7 +9320,7 @@
       "#seidr-settings-panel {",
       "  pointer-events: auto; position: fixed; z-index: 120;",
       "  display: none; flex-direction: column;",
-      "  width: min(92vw, 460px); height: min(85vh, 640px);",
+      "  width: min(92vw, 560px); height: min(88vh, 700px);",
       "  min-width: 300px; min-height: 240px;",
       "  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);",
       "  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",
