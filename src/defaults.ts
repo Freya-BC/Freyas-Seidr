@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.54";
+Seidr.VERSION = "1.0.63";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -21,6 +21,8 @@ Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
 Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
 Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
 Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
+/** Hosted static assets (action icons, logo). Sideloaded at runtime — not embedded in the script. */
+Seidr.ASSETS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr/assets";
 /** Room Manager UI — Dev-only until Release is approved. */
 Seidr.SHOW_ROOM_MANAGER = true;
 /** User Actions (Activity Menu) — Dev channel. */
@@ -32,6 +34,11 @@ Seidr.RM_DATA_VERSION = 1;
 Seidr.RM_MAX_COMPRESSED = 180000;
 Seidr.RM_MAP_BUDGET_RATIO = 0.75;
 Seidr.RM_MAP_MAX = 10;
+Seidr.RM_MAP_VERSIONS_REMOTE_MAX = 10;
+Seidr.RM_MAP_LOCAL_MAX = 50;
+Seidr.RM_MAP_VERSIONS_LOCAL_MAX = 30;
+Seidr.RM_MAPS_LOCAL_KEY_PREFIX = "SeidrMapsLocal_";
+Seidr.RM_MAPS_LOCAL_LZ_PREFIX = "SeidrMapsLocal1:";
 Seidr.RM_LZ_PREFIX = "SeidrRm1:";
 /** Clipboard export/import for Actions (LZ Base64). */
 Seidr.ACT_LZ_PREFIX = "SeidrAct1:";

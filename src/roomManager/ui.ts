@@ -19,7 +19,19 @@ import {
 	rmDeleteBackground,
 	rmReorderBackgrounds,
 } from "./backgrounds";
-import { rmListMaps, rmSaveNamedMap, rmLoadNamedMap, rmDeleteNamedMap } from "./maps";
+import {
+	rmDefaultVersionId,
+	rmDeleteMap,
+	rmDeleteVersion,
+	rmLatestVersionId,
+	rmListAllMaps,
+	rmListVersions,
+	rmLoadMapVersion,
+	rmOverwriteDefault,
+	rmSaveNewMap,
+	rmSaveNewVersion,
+} from "./maps";
+import { RM_MAP_DEFAULT_NAME, rmIsDefaultVersionName } from "./model";
 import { rmEnsurePreview } from "./preview";
 
 let msgTimer: ReturnType<typeof setTimeout> | null = null;
@@ -270,6 +282,39 @@ function renderBgGrid() {
 	});
 }
 
+function selectedRmMapId(): string | null {
+	const sel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+	return sel && sel.value ? sel.value : null;
+}
+
+function selectedRmVersionId(): string | null {
+	const sel = $("seidr-rm-ver-sel") as HTMLSelectElement | null;
+	return sel && sel.value ? sel.value : null;
+}
+
+function fillVersionSelect(mapId: string | null, preferId?: string | null) {
+	const verSel = $("seidr-rm-ver-sel") as HTMLSelectElement | null;
+	if (!verSel) return;
+	if (!mapId) {
+		fillSelect(verSel, []);
+		return;
+	}
+	const vers = rmListVersions(mapId);
+	const prev = preferId || verSel.value || rmLatestVersionId(mapId);
+	verSel.innerHTML = "";
+	vers.forEach(function (v) {
+		const opt = document.createElement("option");
+		opt.value = v.id;
+		opt.textContent = v.name;
+		verSel.appendChild(opt);
+	});
+	if (prev && vers.some(function (v) { return v.id === prev; })) {
+		verSel.value = prev;
+	} else if (vers.length) {
+		verSel.value = vers[0].id;
+	}
+}
+
 function renderMaps() {
 	const wrap = $("seidr-rm-maps-wrap");
 	const sel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
@@ -277,12 +322,21 @@ function renderMaps() {
 	const show = rmMapModeActive();
 	wrap.classList.toggle("seidr-rm-hidden", !show);
 	if (!show || !sel) return;
-	const maps = rmListMaps();
-	const names = maps.map(function (m) { return m.name; }).sort();
-	const byName: Record<string, string> = {};
-	maps.forEach(function (m) { byName[m.name] = m.id; });
-	(sel as any)._rmMapIds = byName;
-	fillSelect(sel, names);
+	const maps = rmListAllMaps();
+	const prevId = sel.value;
+	sel.innerHTML = "";
+	maps.forEach(function (m) {
+		const opt = document.createElement("option");
+		opt.value = m.id;
+		opt.textContent = m.name + (m.location === "local" ? " (Local)" : "");
+		sel.appendChild(opt);
+	});
+	if (prevId && maps.some(function (m) { return m.id === prevId; })) {
+		sel.value = prevId;
+	} else if (maps.length) {
+		sel.value = maps[0].id;
+	}
+	fillVersionSelect(sel.value || null);
 }
 
 export function rmBuildPanelBody() {
@@ -318,11 +372,16 @@ export function rmBuildPanelBody() {
 		'<section class="seidr-rm-sec" id="seidr-rm-maps-wrap">',
 		"<h3>4. Maps</h3>",
 		'<div class="seidr-rm-row">',
-		'<select id="seidr-rm-map-sel"></select>',
+		'<select id="seidr-rm-map-sel" title="Map"></select>',
+		'<select id="seidr-rm-ver-sel" title="Version"></select>',
+		"</div>",
+		'<div class="seidr-rm-row" style="margin-top:6px;">',
 		'<button type="button" data-rm="map-save-as">Save as…</button>',
-		'<button type="button" data-rm="map-overwrite">Overwrite</button>',
+		'<button type="button" data-rm="map-save-ver">Save new Version</button>',
+		'<button type="button" data-rm="map-overwrite">Overwrite Default</button>',
 		'<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
-		'<button type="button" class="seidr-rm-icon-act" data-rm="map-delete" title="Delete">×</button>',
+		'<button type="button" data-rm="map-delete-ver">Delete version</button>',
+		'<button type="button" data-rm="map-delete">Delete map</button>',
 		"</div></section>",
 	].join("");
 
@@ -418,43 +477,97 @@ export function rmBuildPanelBody() {
 		} else if (act === "map-save-as") {
 			const name = promptName("Save map as:");
 			if (!name) return;
-			const maps = rmListMaps();
+			const maps = rmListAllMaps();
 			const existing = maps.find(function (m) { return m.name === name; });
-			if (existing && !confirmAct("Overwrite “" + name + "”?")) return;
-			const r = rmSaveNamedMap(name, existing && existing.id);
-			setMsg(r.ok ? "Map saved" : (r.error || "Failed"));
+			if (existing) {
+				if (!confirmAct("Map “" + name + "” exists — overwrite Default?")) return;
+				const r = rmOverwriteDefault(existing.id);
+				setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
+				rmRefreshUi();
+				const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+				if (mapSel) mapSel.value = existing.id;
+				fillVersionSelect(existing.id, r.version && r.version.id);
+				return;
+			}
+			const r = rmSaveNewMap(name);
+			setMsg(r.ok
+				? (r.fellBackLocal ? "Map saved (Local — remote full). Default created." : "Map saved (Default)")
+				: (r.error || "Failed"));
 			rmRefreshUi();
+			if (r.map) {
+				const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+				if (mapSel) mapSel.value = r.map.id;
+				fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
+			}
+		} else if (act === "map-save-ver") {
+			const mapId = selectedRmMapId();
+			if (!mapId) { setMsg("Select a map"); return; }
+			const verName = promptName("Local version name (not Default):");
+			if (!verName) return;
+			if (verName === RM_MAP_DEFAULT_NAME) {
+				setMsg("Use Overwrite Default to update Default");
+				return;
+			}
+			const r = rmSaveNewVersion(mapId, verName);
+			setMsg(r.ok ? "Local version saved" : (r.error || "Failed"));
+			rmRefreshUi();
+			fillVersionSelect(mapId, r.version && r.version.id);
 		} else if (act === "map-overwrite") {
-			const sel = $("seidr-rm-map-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a map"); return; }
-			if (!confirmAct("Overwrite map “" + sel.value + "” with the current room map?")) return;
-			const ids = (sel as any)._rmMapIds as Record<string, string> | undefined;
-			const id = ids && ids[sel.value];
-			const r = rmSaveNamedMap(sel.value, id);
-			setMsg(r.ok ? "Overwritten" : (r.error || "Failed"));
+			const mapId = selectedRmMapId();
+			if (!mapId) { setMsg("Select a map"); return; }
+			if (!confirmAct("Overwrite Default with the current room map?")) return;
+			const r = rmOverwriteDefault(mapId);
+			setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
 			rmRefreshUi();
+			fillVersionSelect(mapId, r.version && r.version.id);
 		} else if (act === "map-load") {
 			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
-			const sel = $("seidr-rm-map-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a map"); return; }
-			if (!confirmAct("Load map “" + sel.value + "” into this room?")) return;
-			const ids = (sel as any)._rmMapIds as Record<string, string> | undefined;
-			const id = ids && ids[sel.value];
-			if (!id) { setMsg("Not found"); return; }
-			const r = rmLoadNamedMap(id);
-			setMsg(r.ok ? "Map loaded" : (r.error || "Failed"));
+			const mapId = selectedRmMapId();
+			const verId = selectedRmVersionId();
+			if (!mapId || !verId) { setMsg("Select a map and version"); return; }
+			const maps = rmListAllMaps();
+			const map = maps.find(function (m) { return m.id === mapId; });
+			const ver = map && map.versions.find(function (v) { return v.id === verId; });
+			if (!confirmAct(
+				"Load “" + (map ? map.name : "") + "” / “" + (ver ? ver.name : "") + "” into this room?",
+			)) return;
+			const r = rmLoadMapVersion(mapId, verId);
+			setMsg(r.ok ? "Map version loaded" : (r.error || "Failed"));
+		} else if (act === "map-delete-ver") {
+			const mapId = selectedRmMapId();
+			const verId = selectedRmVersionId();
+			if (!mapId || !verId) { setMsg("Select a map and version"); return; }
+			const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
+			const ver = map && map.versions.find(function (v) { return v.id === verId; });
+			const isDef = ver && rmIsDefaultVersionName(ver.name);
+			const only = map && map.versions.length <= 1;
+			if (isDef && !only) {
+				setMsg("Cannot delete Default while other versions exist — use Delete map");
+				return;
+			}
+			if (!confirmAct(only || isDef
+				? "Delete entire map “" + (map ? map.name : "") + "”?"
+				: "Delete this local version?")) return;
+			const r = rmDeleteVersion(mapId, verId);
+			setMsg(r.ok ? (only || isDef ? "Map deleted" : "Version deleted") : (r.error || "Failed"));
+			rmRefreshUi();
 		} else if (act === "map-delete") {
-			const sel = $("seidr-rm-map-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a map"); return; }
-			if (!confirmAct("Delete map “" + sel.value + "”?")) return;
-			const ids = (sel as any)._rmMapIds as Record<string, string> | undefined;
-			const id = ids && ids[sel.value];
-			if (!id) { setMsg("Not found"); return; }
-			const r = rmDeleteNamedMap(id);
+			const mapId = selectedRmMapId();
+			if (!mapId) { setMsg("Select a map"); return; }
+			const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
+			if (!confirmAct("Delete map “" + (map ? map.name : "") + "” and all versions?")) return;
+			const r = rmDeleteMap(mapId);
 			setMsg(r.ok ? "Map deleted" : (r.error || "Failed"));
 			rmRefreshUi();
 		}
 	});
+
+	const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+	if (mapSel) {
+		mapSel.addEventListener("change", function () {
+			fillVersionSelect(mapSel.value || null);
+		});
+	}
 
 	const filter = $("seidr-rm-bg-filter") as HTMLInputElement | null;
 	if (filter) {

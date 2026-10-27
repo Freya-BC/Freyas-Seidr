@@ -20,8 +20,18 @@ import { seidrRestraintSlots } from "../actions/model";
 import { seidrApplyDrawOffsets } from "./drawOffsets";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
 import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
+import { seidrBuildAnimationsTab, seidrRefreshAnimationsTab } from "../animations/ui";
+import {
+	SEIDR_CMD_ENABLE_LABELS,
+	seidrNormalizeCmdEnabled,
+	type SeidrCmdEnableKey,
+} from "../commands/model";
 import { seidrBuildCommandsTab, seidrRefreshCommandsTab } from "../commands/ui";
+import { seidrGetCommandsBag, seidrSaveCommandsBag } from "../commands/store";
 import { rmFormatBytes, rmUsageBreakdown } from "../roomManager/storage";
+import { rmIsShown } from "../roomManager/model";
+import { seidrBuildMapsTab, seidrRefreshMapsTab } from "../roomManager/mapsUi";
+import { rmLocalMapsStats } from "../roomManager/maps";
 
 function $(id: string): HTMLElement | null {
 	return document.getElementById(id);
@@ -31,16 +41,30 @@ function $(id: string): HTMLElement | null {
 let drawDraft: SeidrDrawOffsets | null = null;
 let drawDirty = false;
 
+function drawNumInput(id: string, min: string, max: string): string {
+	return [
+		'<span class="seidr-num-wrap">',
+		'<input type="number" class="seidr-settings-num" id="' + id + '" min="' + min +
+		'" max="' + max + '" step="1" />',
+		'<span class="seidr-num-spin" aria-hidden="true">',
+		'<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="1" tabindex="-1" title="Increase">▲</button>',
+		'<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="-1" tabindex="-1" title="Decrease">▼</button>',
+		"</span>",
+		"</span>",
+	].join("");
+}
+
 function poseRow(id: string, label: string): string {
 	const xMin = id === "pull" ? "0" : String(SEIDR_DRAW_OFFSET_MIN);
+	const max = String(SEIDR_DRAW_OFFSET_MAX);
 	return [
 		'<div class="seidr-settings-draw-row" data-pose="' + id + '">',
 		'<span class="seidr-settings-draw-label">' + label + "</span>",
 		'<label class="seidr-settings-draw-field">X',
-		'<input type="number" id="seidr-set-draw-' + id + '-x" min="' + xMin + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+		drawNumInput("seidr-set-draw-" + id + "-x", xMin, max),
 		"</label>",
 		'<label class="seidr-settings-draw-field">Y',
-		'<input type="number" id="seidr-set-draw-' + id + '-y" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+		drawNumInput("seidr-set-draw-" + id + "-y", String(SEIDR_DRAW_OFFSET_MIN), max),
 		"</label>",
 		'<button type="button" data-draw-reset="' + id + '">Reset</button>',
 		"</div>",
@@ -124,6 +148,20 @@ function seidrBuildGeneralHtml(): string {
 		"</div>",
 		'<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
 		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Commands</summary>",
+		'<p class="seidr-settings-hint">Enable or disable Seidr chat commands. Off = not registered / ignored.</p>',
+		'<div id="seidr-set-cmd-enable">' +
+		SEIDR_CMD_ENABLE_LABELS.map(function (row) {
+			return (
+				'<div class="seidr-settings-row">' +
+				'<label><input type="checkbox" data-seidr-cmd-en="' + row.key + '" /> ' +
+				row.label + "</label></div>"
+			);
+		}).join("") +
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-set-cmd-en-msg"></p>',
+		"</details>",
 		'<details class="seidr-settings-sec" open>',
 		"<summary>Storage</summary>",
 		'<p class="seidr-settings-hint" id="seidr-set-storage-total">—</p>',
@@ -169,13 +207,20 @@ export function seidrRefreshStorageUi() {
 			storageRow("Access", b.access),
 			storageRow("Backgrounds", b.backgrounds),
 			storageRow("Actions", b.actions),
+			storageRow("Commands", b.commands),
+			storageRow("Animations", b.animations),
 			storageRow("Settings", b.settings),
 			storageRow("UI", b.ui),
 		].join("");
 	}
 	if (mapsHint) {
+		let localBit = "";
+		try {
+			const loc = rmLocalMapsStats();
+			localBit = " · Local " + loc.label;
+		} catch (e) { /* ignore */ }
 		mapsHint.textContent = "Maps budget (75%): " + rmFormatBytes(b.maps) +
-			" / " + rmFormatBytes(b.mapBudget);
+			" / " + rmFormatBytes(b.mapBudget) + localBit;
 	}
 }
 
@@ -185,6 +230,8 @@ export function seidrBuildSettingsBody() {
 	if (!body) return;
 	const showActions = Seidr.SHOW_ACTIONS !== false;
 	const showCommands = Seidr.SHOW_COMMANDS !== false;
+	const showAnimations = Seidr.SHOW_COMMANDS !== false;
+	const showMaps = rmIsShown();
 	if (tabs) {
 		tabs.innerHTML = [
 			'<button type="button" class="seidr-settings-tab seidr-settings-tab-on" data-seidr-tab="general">General</button>',
@@ -193,6 +240,12 @@ export function seidrBuildSettingsBody() {
 				: "",
 			showCommands
 				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>'
+				: "",
+			showAnimations
+				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="animations">Animations</button>'
+				: "",
+			showMaps
+				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>'
 				: "",
 		].join("");
 	}
@@ -206,6 +259,12 @@ export function seidrBuildSettingsBody() {
 		showCommands
 			? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>'
 			: "",
+		showAnimations
+			? '<div class="seidr-settings-pane" id="seidr-settings-pane-animations" data-seidr-pane="animations"></div>'
+			: "",
+		showMaps
+			? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>'
+			: "",
 	].join("");
 	if (showActions) {
 		const actPane = $("seidr-settings-pane-actions");
@@ -214,6 +273,14 @@ export function seidrBuildSettingsBody() {
 	if (showCommands) {
 		const cmdPane = $("seidr-settings-pane-commands");
 		if (cmdPane) seidrBuildCommandsTab(cmdPane);
+	}
+	if (showAnimations) {
+		const animPane = $("seidr-settings-pane-animations");
+		if (animPane) seidrBuildAnimationsTab(animPane);
+	}
+	if (showMaps) {
+		const mapsPane = $("seidr-settings-pane-maps");
+		if (mapsPane) seidrBuildMapsTab(mapsPane);
 	}
 	const tabRoot = tabs || body;
 	tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function (btn) {
@@ -225,6 +292,9 @@ export function seidrBuildSettingsBody() {
 			body.querySelectorAll(".seidr-settings-pane").forEach(function (p) {
 				p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
 			});
+			if (tab === "maps") {
+				try { seidrRefreshMapsTab(); } catch (e) { /* ignore */ }
+			}
 		});
 	});
 }
@@ -303,8 +373,19 @@ export function seidrRefreshSettingsUi() {
 	if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
 	seidrBeginDrawDraft();
 	seidrRefreshStorageUi();
+	try {
+		const enMap = seidrGetCommandsBag().enabled;
+		document.querySelectorAll("[data-seidr-cmd-en]").forEach(function (el) {
+			const key = (el as HTMLElement).getAttribute("data-seidr-cmd-en") as SeidrCmdEnableKey | null;
+			if (!key) return;
+			(el as HTMLInputElement).checked = enMap[key] !== false;
+		});
+	} catch (e) { /* ignore */ }
 	if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
-	if (Seidr.SHOW_COMMANDS !== false) seidrRefreshCommandsTab();
+	if (Seidr.SHOW_COMMANDS !== false) {
+		seidrRefreshCommandsTab();
+		seidrRefreshAnimationsTab();
+	}
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
@@ -340,6 +421,28 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (fo) fo.addEventListener("change", persist);
 	if (fos) fos.addEventListener("change", persist);
 	if (fom) fom.addEventListener("change", persist);
+
+	function persistCmdEnable() {
+		const bag = seidrGetCommandsBag();
+		const raw: Record<string, boolean> = {};
+		document.querySelectorAll("[data-seidr-cmd-en]").forEach(function (el) {
+			const key = (el as HTMLElement).getAttribute("data-seidr-cmd-en");
+			if (!key) return;
+			raw[key] = !!(el as HTMLInputElement).checked;
+		});
+		bag.enabled = seidrNormalizeCmdEnabled(raw);
+		const saved = seidrSaveCommandsBag(bag);
+		const msg = $("seidr-set-cmd-en-msg");
+		if (msg) msg.textContent = saved.ok ? "Saved — reload chat commands applied" : (saved.error || "Save failed");
+		try {
+			if (typeof Seidr.registerCommands === "function") Seidr.registerCommands();
+		} catch (e) { /* ignore */ }
+		if (onChange) onChange();
+	}
+	document.querySelectorAll("[data-seidr-cmd-en]").forEach(function (el) {
+		el.addEventListener("change", persistCmdEnable);
+	});
+
 	if (openRm) {
 		openRm.addEventListener("click", function () {
 			const s = seidrGetSettings();
@@ -381,6 +484,29 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			y.addEventListener("input", onDrawLive);
 			y.addEventListener("change", onDrawCommit);
 		}
+	});
+
+	document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function (btn) {
+		btn.addEventListener("click", function (ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			const wrap = (btn as HTMLElement).closest(".seidr-num-wrap");
+			const input = wrap ? wrap.querySelector("input[type=\"number\"]") as HTMLInputElement | null : null;
+			if (!input) return;
+			const dir = parseInt((btn as HTMLElement).getAttribute("data-seidr-num-dir") || "0", 10);
+			if (!dir) return;
+			const step = parseFloat(input.step) || 1;
+			const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
+			const max = input.max !== "" ? parseFloat(input.max) : Infinity;
+			let n = parseFloat(input.value);
+			if (!Number.isFinite(n)) n = 0;
+			n = Math.round(n + dir * step);
+			if (n < min) n = min;
+			if (n > max) n = max;
+			input.value = String(n);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+			input.dispatchEvent(new Event("change", { bubbles: true }));
+		});
 	});
 
 	document.querySelectorAll("[data-draw-reset]").forEach(function (btn) {

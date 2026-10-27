@@ -434,7 +434,12 @@ function seidrInstallLateActivityUiHooks() {
 	Seidr.tryHook("ElementButton.CreateForActivity", "ElementButton.CreateForActivity", 5, function (args, next) {
 		var activity = args[1];
 		var actName = activity && activity.Activity && activity.Activity.Name;
-		if (typeof actName === "string" && actName.indexOf(Seidr.PREFIX) === 0) {
+		// User actions (Seidr_Act_*) get icons from actions/runtime — do not overwrite with hold/undress defaults.
+		if (
+			typeof actName === "string" &&
+			actName.indexOf(Seidr.PREFIX) === 0 &&
+			actName.indexOf("Seidr_Act_") !== 0
+		) {
 			args[4] = Object.assign({}, args[4] || {}, { image: seidrButtonImage(actName) });
 		}
 		return next(args);

@@ -1,4 +1,4 @@
-/* Seidr v1.0.54 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.63 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.54";
+  Seidr.VERSION = "1.0.63";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -23,6 +23,7 @@
   Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
   Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
   Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
+  Seidr.ASSETS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr/assets";
   Seidr.SHOW_ROOM_MANAGER = true;
   Seidr.SHOW_ACTIONS = true;
   Seidr.SHOW_COMMANDS = true;
@@ -31,6 +32,11 @@
   Seidr.RM_MAX_COMPRESSED = 18e4;
   Seidr.RM_MAP_BUDGET_RATIO = 0.75;
   Seidr.RM_MAP_MAX = 10;
+  Seidr.RM_MAP_VERSIONS_REMOTE_MAX = 10;
+  Seidr.RM_MAP_LOCAL_MAX = 50;
+  Seidr.RM_MAP_VERSIONS_LOCAL_MAX = 30;
+  Seidr.RM_MAPS_LOCAL_KEY_PREFIX = "SeidrMapsLocal_";
+  Seidr.RM_MAPS_LOCAL_LZ_PREFIX = "SeidrMapsLocal1:";
   Seidr.RM_LZ_PREFIX = "SeidrRm1:";
   Seidr.ACT_LZ_PREFIX = "SeidrAct1:";
 
@@ -1399,7 +1405,7 @@
     Seidr.tryHook("ElementButton.CreateForActivity", "ElementButton.CreateForActivity", 5, function(args, next) {
       var activity = args[1];
       var actName = activity && activity.Activity && activity.Activity.Name;
-      if (typeof actName === "string" && actName.indexOf(Seidr.PREFIX) === 0) {
+      if (typeof actName === "string" && actName.indexOf(Seidr.PREFIX) === 0 && actName.indexOf("Seidr_Act_") !== 0) {
         args[4] = Object.assign({}, args[4] || {}, { image: seidrButtonImage(actName) });
       }
       return next(args);
@@ -1944,16 +1950,38 @@
   }
   var SEIDR_ACTION_POSES = [
     { id: "BaseLower", label: "Standing (legs)" },
-    { id: "BaseUpper", label: "Hands relaxed" },
     { id: "LegsClosed", label: "Legs closed" },
     { id: "Kneel", label: "Kneel" },
     { id: "KneelingSpread", label: "Kneeling spread" },
+    { id: "BaseUpper", label: "Hands relaxed" },
     { id: "Yoked", label: "Yoked" },
-    { id: "OverTheHead", label: "Over the head" },
+    { id: "OverTheHead", label: "Hands up" },
     { id: "BackBoxTie", label: "Back box tie" },
-    { id: "BackElbowTouch", label: "Back elbow touch" },
-    { id: "AllFours", label: "All fours" }
+    { id: "BackElbowTouch", label: "Hands armbinder" },
+    { id: "AllFours", label: "On all fours" }
   ];
+  function seidrPoseAvailable(C, poseId) {
+    if (!poseId) return false;
+    if (!C) return true;
+    try {
+      if (typeof PoseCanChangeUnaided === "function") {
+        return !!PoseCanChangeUnaided(C, poseId);
+      }
+    } catch (e) {
+    }
+    return true;
+  }
+  function seidrPosesForCharacter(C) {
+    return SEIDR_ACTION_POSES.filter(function(p) {
+      return seidrPoseAvailable(C, p.id);
+    });
+  }
+  function seidrPoseLabel(poseId) {
+    for (let i = 0; i < SEIDR_ACTION_POSES.length; i++) {
+      if (SEIDR_ACTION_POSES[i].id === poseId) return SEIDR_ACTION_POSES[i].label;
+    }
+    return poseId;
+  }
   var SEIDR_ACTION_SOUNDS = [
     "SpankSkin",
     "SmackCrop",
@@ -2331,6 +2359,174 @@
     };
   }
 
+  // src/animations/model.ts
+  var SEIDR_ANIMATIONS_MAX = 50;
+  var SEIDR_ANIM_STEPS_MAX = 20;
+  var SEIDR_ANIM_WAIT_TOTAL_MAX = 60;
+  var SEIDR_ANIM_NAME_MAX = 40;
+  var SEIDR_ANIM_FACE_MAP = {
+    Eyebrows: ["Raised", "Lowered", "OneRaised", "Harsh", "Angry", "Soft"],
+    Eyes: [
+      "Closed",
+      "Dazed",
+      "Shy",
+      "Sad",
+      "Horny",
+      "Lewd",
+      "VeryLewd",
+      "Heart",
+      "HeartPink",
+      "LewdHeart",
+      "LewdHeartPink",
+      "Dizzy",
+      "Daydream",
+      "ShylyHappy",
+      "Angry",
+      "Surprised",
+      "Scared"
+    ],
+    Mouth: [
+      "Frown",
+      "Sad",
+      "Pained",
+      "Angry",
+      "HalfOpen",
+      "Open",
+      "Ahegao",
+      "Moan",
+      "TonguePinch",
+      "LipBite",
+      "Happy",
+      "Devious",
+      "Laughing",
+      "Grin",
+      "Smirk",
+      "Pout"
+    ],
+    Blush: ["Low", "Medium", "High", "VeryHigh", "Extreme", "ShortBreath"],
+    Fluids: [
+      "DroolLow",
+      "DroolMedium",
+      "DroolHigh",
+      "DroolSides",
+      "DroolMessy",
+      "TearsHigh",
+      "TearsMedium",
+      "TearsLow",
+      "DroolTearsLow",
+      "DroolTearsMedium",
+      "DroolTearsHigh"
+    ]
+  };
+  var SEIDR_ANIM_FACE_DURATIONS = ["keep", "5", "15", "30"];
+  var POSE_IDS = SEIDR_ACTION_POSES.map(function(p) {
+    return p.id;
+  });
+  var FACE_FEATURES = ["Eyebrows", "Eyes", "Mouth", "Blush", "Fluids"];
+  function clampWait(raw) {
+    let n = typeof raw === "number" ? raw : parseFloat(String(raw));
+    if (!Number.isFinite(n) || n < 0) n = 0.5;
+    if (n > SEIDR_ANIM_WAIT_TOTAL_MAX) n = SEIDR_ANIM_WAIT_TOTAL_MAX;
+    return Math.round(n * 100) / 100;
+  }
+  function seidrAnimWaitTotal(steps) {
+    let sum = 0;
+    for (let i = 0; i < steps.length; i++) sum += Number(steps[i].wait) || 0;
+    return Math.round(sum * 100) / 100;
+  }
+  function seidrDefaultAnimPoseStep() {
+    return { kind: "pose", pose: "Kneel", wait: 0.5 };
+  }
+  function seidrDefaultAnimFaceStep() {
+    return { kind: "face", feature: "Eyes", expression: "Closed", duration: "keep", wait: 0.5 };
+  }
+  function seidrDefaultAnimation(id) {
+    return { id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()] };
+  }
+  function seidrDefaultAnimationsBag() {
+    return { nextId: 1, list: [] };
+  }
+  function sanitizePoseStep(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    if (d.kind !== "pose") return null;
+    const pose = POSE_IDS.indexOf(String(d.pose || "")) >= 0 ? String(d.pose) : "Kneel";
+    return { kind: "pose", pose, wait: clampWait(d.wait) };
+  }
+  function sanitizeFaceStep(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    if (d.kind !== "face") return null;
+    let feature = String(d.feature || "Eyes");
+    if (FACE_FEATURES.indexOf(feature) < 0) feature = "Eyes";
+    const allowed = SEIDR_ANIM_FACE_MAP[feature] || [];
+    let expression = String(d.expression == null ? "" : d.expression);
+    if (expression && allowed.indexOf(expression) < 0) expression = allowed[0] || "";
+    let duration = String(d.duration || "keep");
+    if (SEIDR_ANIM_FACE_DURATIONS.indexOf(duration) < 0) duration = "keep";
+    return {
+      kind: "face",
+      feature,
+      expression,
+      duration,
+      wait: clampWait(d.wait)
+    };
+  }
+  function seidrNormalizeAnimStep(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const kind = raw.kind;
+    if (kind === "pose") return sanitizePoseStep(raw);
+    if (kind === "face") return sanitizeFaceStep(raw);
+    return null;
+  }
+  function seidrNormalizeAnimation(raw, fallbackId) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : fallbackId && fallbackId > 0 ? fallbackId : 0;
+    if (!id) return null;
+    let name = String(d.name || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_ANIM_NAME_MAX);
+    if (!name) name = "Animation " + id;
+    const steps = [];
+    if (Array.isArray(d.steps)) {
+      for (let i = 0; i < d.steps.length && steps.length < SEIDR_ANIM_STEPS_MAX; i++) {
+        const st = seidrNormalizeAnimStep(d.steps[i]);
+        if (st) steps.push(st);
+      }
+    }
+    let total = seidrAnimWaitTotal(steps);
+    if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
+      let over = total - SEIDR_ANIM_WAIT_TOTAL_MAX;
+      for (let j = steps.length - 1; j >= 0 && over > 0; j--) {
+        const w = steps[j].wait;
+        const cut = Math.min(w, over);
+        steps[j].wait = Math.round((w - cut) * 100) / 100;
+        over -= cut;
+      }
+    }
+    return { id, name, steps };
+  }
+  function seidrNormalizeAnimationsBag(raw) {
+    const base = seidrDefaultAnimationsBag();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    const list = [];
+    const seen = {};
+    if (Array.isArray(d.list)) {
+      for (let i = 0; i < d.list.length && list.length < SEIDR_ANIMATIONS_MAX; i++) {
+        const a = seidrNormalizeAnimation(d.list[i]);
+        if (!a || seen[a.id]) continue;
+        seen[a.id] = true;
+        list.push(a);
+        if (a.id >= base.nextId) base.nextId = a.id + 1;
+      }
+    }
+    if (typeof d.nextId === "number" && d.nextId > base.nextId) {
+      base.nextId = Math.floor(d.nextId);
+    }
+    base.list = list;
+    return base;
+  }
+
   // src/commands/model.ts
   var SEIDR_CMD_PEOPLE_MAX = 50;
   var SEIDR_CMD_ACTIONS_MAX = 50;
@@ -2338,8 +2534,69 @@
   var SEIDR_CMD_NAME_MAX = 48;
   var SEIDR_CMD_WARN_MS = 8e3;
   var SEIDR_CMD_ERROR_MS = 3e4;
+  var SEIDR_CMD_ENABLE_KEYS = [
+    "a",
+    "action",
+    "strip",
+    "stripe",
+    "poses",
+    "p",
+    "animation",
+    "ani",
+    "seidr",
+    "roommanager"
+  ];
+  var SEIDR_CMD_ENABLE_LABELS = [
+    { key: "a", label: "/a" },
+    { key: "action", label: "/action" },
+    { key: "strip", label: "/strip" },
+    { key: "stripe", label: "/stripe" },
+    { key: "poses", label: "/poses" },
+    { key: "p", label: "/p" },
+    { key: "animation", label: "/animation" },
+    { key: "ani", label: "/ani" },
+    { key: "seidr", label: "/seidr" },
+    { key: "roommanager", label: "/roommanager" }
+  ];
+  function seidrDefaultCmdEnabled() {
+    const out = {};
+    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+      out[SEIDR_CMD_ENABLE_KEYS[i]] = true;
+    }
+    return out;
+  }
+  function seidrNormalizeCmdEnabled(raw) {
+    const base = seidrDefaultCmdEnabled();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+      const k = SEIDR_CMD_ENABLE_KEYS[i];
+      if (typeof d[k] === "boolean") base[k] = d[k];
+    }
+    return base;
+  }
+  function seidrCmdEnableKeyForTag(tag) {
+    const t = String(tag || "").toLowerCase();
+    if (t === "a") return "a";
+    if (t === "action") return "action";
+    if (t === "strip") return "strip";
+    if (t === "stripe") return "stripe";
+    if (t === "poses") return "poses";
+    if (t === "p") return "p";
+    if (t === "animation") return "animation";
+    if (t === "ani") return "ani";
+    if (t === "seidr") return "seidr";
+    if (t === "roommanager") return "roommanager";
+    return null;
+  }
   function seidrDefaultCommandsBag() {
-    return { nextPersonId: 1, nextActionId: 1, people: [], actions: [] };
+    return {
+      nextPersonId: 1,
+      nextActionId: 1,
+      people: [],
+      actions: [],
+      enabled: seidrDefaultCmdEnabled()
+    };
   }
   function cleanAlias(raw) {
     return String(raw || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_CMD_ALIAS_MAX);
@@ -2407,6 +2664,7 @@
     }
     base.people = people;
     base.actions = actions;
+    base.enabled = seidrNormalizeCmdEnabled(d.enabled);
     return base;
   }
   function seidrDefaultCmdPerson(id) {
@@ -2541,7 +2799,8 @@
       fastOpenActionsSlot: "ItemTorso",
       customActionIcons: [],
       actions: { nextId: 1, list: [] },
-      commands: { nextPersonId: 1, nextActionId: 1, people: [], actions: [] }
+      commands: seidrNormalizeCommandsBag(null),
+      animations: seidrNormalizeAnimationsBag(null)
     };
   }
   function seidrNormalizeSettings(raw) {
@@ -2570,10 +2829,21 @@
     base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
     base.actions = seidrNormalizeActionsBag(d.actions);
     base.commands = seidrNormalizeCommandsBag(d.commands);
+    base.animations = seidrNormalizeAnimationsBag(d.animations);
     return base;
   }
 
   // src/roomManager/model.ts
+  var RM_MAP_DEFAULT_NAME = "Default";
+  function rmIsDefaultVersionName(name) {
+    return String(name || "") === RM_MAP_DEFAULT_NAME;
+  }
+  function rmCanonicalVersionName(raw, fallback) {
+    const s = String(raw == null ? "" : raw).trim().slice(0, 48);
+    if (!s) return fallback || RM_MAP_DEFAULT_NAME;
+    if (s === "Original" || s === "Initial") return RM_MAP_DEFAULT_NAME;
+    return s;
+  }
   function rmEmptyStore() {
     return {
       version: Seidr.RM_DATA_VERSION || 1,
@@ -2584,6 +2854,61 @@
       ui: {},
       settings: seidrDefaultSettings()
     };
+  }
+  function rmNewId(prefix) {
+    return prefix + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  }
+  function clampName(raw, fallback, max) {
+    const s = String(raw == null ? "" : raw).trim().slice(0, max);
+    return s || fallback;
+  }
+  function rmNormalizeMapVersion(raw, fallbackName) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    if (typeof d.data !== "string" || !d.data.length) return null;
+    return {
+      id: typeof d.id === "string" && d.id ? d.id : rmNewId("mv"),
+      name: rmCanonicalVersionName(d.name, fallbackName || "Version"),
+      data: d.data,
+      savedAt: typeof d.savedAt === "number" && Number.isFinite(d.savedAt) ? d.savedAt : Date.now()
+    };
+  }
+  function rmNormalizeMapSeries(raw, forceLocation) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "string" && d.id ? d.id : rmNewId("m");
+    const name = clampName(d.name, "Untitled", 48);
+    let location = forceLocation || (d.location === "local" ? "local" : "remote");
+    let versions = [];
+    if (Array.isArray(d.versions) && d.versions.length) {
+      for (let i = 0; i < d.versions.length; i++) {
+        const v = rmNormalizeMapVersion(d.versions[i], "v" + (i + 1));
+        if (v) versions.push(v);
+      }
+    } else if (typeof d.data === "string" && d.data.length) {
+      versions.push({
+        id: rmNewId("mv"),
+        name: RM_MAP_DEFAULT_NAME,
+        data: d.data,
+        savedAt: typeof d.savedAt === "number" && Number.isFinite(d.savedAt) ? d.savedAt : Date.now()
+      });
+    }
+    if (!versions.length) return null;
+    return { id, name, location, versions };
+  }
+  function rmSerializeRemoteMaps(maps) {
+    return maps.map(function(m) {
+      const def = m.versions.find(function(v) {
+        return rmIsDefaultVersionName(v.name);
+      }) || m.versions[0];
+      const versions = def ? [{
+        id: def.id,
+        name: RM_MAP_DEFAULT_NAME,
+        data: def.data,
+        savedAt: def.savedAt
+      }] : [];
+      return { id: m.id, name: m.name, versions };
+    });
   }
   function rmNormalizeStore(data) {
     const base = rmEmptyStore();
@@ -2596,13 +2921,20 @@
     else if (d.background && typeof d.background === "object") {
       base.backgrounds = [];
     }
-    base.maps = Array.isArray(d.maps) ? d.maps : [];
+    const maps = [];
+    if (Array.isArray(d.maps)) {
+      for (let i = 0; i < d.maps.length; i++) {
+        const series = rmNormalizeMapSeries(d.maps[i], "remote");
+        if (series) {
+          series.location = "remote";
+          maps.push(series);
+        }
+      }
+    }
+    base.maps = maps;
     base.ui = d.ui && typeof d.ui === "object" ? d.ui : {};
     base.settings = seidrNormalizeSettings(d.settings);
     return base;
-  }
-  function rmNewId(prefix) {
-    return prefix + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
   }
   function rmIsShown() {
     return !!Seidr.SHOW_ROOM_MANAGER;
@@ -2745,10 +3077,12 @@
     const s = store || rmGetStore();
     const settings = s.settings || {};
     const actions = settings.actions;
+    const commands = settings.commands;
+    const animations = settings.animations;
     const settingsRest = {};
     try {
       Object.keys(settings).forEach(function(k) {
-        if (k === "actions") return;
+        if (k === "actions" || k === "commands" || k === "animations") return;
         settingsRest[k] = settings[k];
       });
     } catch (e) {
@@ -2761,6 +3095,12 @@
       access: rmSliceBytes({ access: s.access || {} }),
       backgrounds: rmSliceBytes({ backgrounds: s.backgrounds || [] }),
       actions: rmSliceBytes({ actions: actions != null ? actions : { nextId: 1, list: [] } }),
+      commands: rmSliceBytes({
+        commands: commands != null ? commands : { nextPersonId: 1, nextActionId: 1, people: [], actions: [] }
+      }),
+      animations: rmSliceBytes({
+        animations: animations != null ? animations : { nextId: 1, list: [] }
+      }),
       settings: rmSliceBytes({ settings: settingsRest }),
       ui: rmSliceBytes({ ui: s.ui || {} }),
       mapBudget: rmMapBudgetBytes()
@@ -3119,105 +3459,48 @@
     return seidrActionConditionsOk(action, source, target);
   }
 
-  // src/actions/iconPngs.ts
-  var SEIDR_ICON_PNG_ROPE = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_CUFF = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_COLLAR = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_LEASH = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_CHAIN = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_BLINDFOLD = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAwFBMVEUeESvKl1YAAAAsJTEYDCgiFS0SEhLXoluMaEjniI14WEK0h1JLNTXXfoVbQjmTV2Y2MTqmfE9mSj2EVlOvaHKadEvagIdCKzZRLEeETlz0kZS+kFV0SFJZM0pvUj7Acnu+cHqhX2oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALrnJCAAAAQHRSTlP/////////////////////////////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYn98QAABAtJREFUeNrtm317oyAMwPFIxCqz7+t1617u+3/JC9RatYDMonSb+eOeu6cc+RlCgEDYn8jCHhQgDS/+AIyPJqwfIKVmyGAUYUidp04AUo/AbgQbf0X3b1iJ/uGmMQB2EVoAZvVhRSHYAFZ8dPUaoUVwBUhXX/98HAKAgCsDAOkf1t+dBDXASPqxj+ACQO43yvejxQa1H7CL/8NE9q89MW0BrIBNLMibABPMf5sJKoDJ9dcm0ACIEQAqE2gAzmLI2QRML0EQQz+rARhGAYAagGOUITg7QUQA2i5cABiL54UDATAyAEYHiD4EARwwMoCyYmQANgPMAI8EAL8eYPaBeQhmgMcHwEESCACHpw179o5eAKhze3KTZx3JW7LNbn7fSK7+L94VB+jYjDIrkkQ0pPUPlyTF9gCOzEu/BRCgLBKRDBaR7A8w3AL0+dkd2ivJYSgA6S/u15+IDIZaAPYB9BNBbvGDHh9AeA+in0SaCdwANABJKFnDgCFAyEUwArMJ7BbQcRSLYPrJD02h2Qpwjr0yCScF6sjsAXBeRFBKiRsRkIBTlxw6a5QJ4LyIlBRu+TYggJDKoXi1RNkBEN52JAf18bgPaABxkgrgtPu3W15zgiYLfCxI3sgCRUAfVLGI05+4fKHej/WMMAHsFk9Pi78EsA4LkKEGUL1vnQCfi+cLwOsYANS72wIfFYAYD8DPAmKkIbAAwK0PFHF8AHfPNcB6hFmgAJYuANjRPHlR05DiQMhAVKo4oKfhy8kJcNhuj0sdhXkeMhRL3eXb8ng8OUMxXkOxLIOuBZmoViTwWIxQPTRA7rXrfU18ds2FfpXBOuclx45IkfpMg5wjnRu89qWey3HDEtC3HIo1LW+qY/nauxiC6ajYtyc89PS6Z+rgpVB50bcfYThkV+yciMqs6HeAEO9DdsXqWs1P/5nAbYCBJyN7KGjp77OB7D2YWM+GtkHo6NcEa1vbDeDQwyljZgLqs+tVtNEyH2RtDuB3PGeQG7ospCHvQG3L25gkktKqHzwyJNSrXAvR7jI3PzdRyYws6bTNHE9DwCtTSvGbUiTXpMd6g2C7taO2PC+Sa4IkcyZIPFO1OklU5YjeJXdmnsgI9FmlbpuXHN0pIu9ccStN1pN9a7Xtu2D9QrLaP/f3lbbf+sYEf/71PcZOVuO4N/ePBgBjqxrmhDjfmMwA3/rmFGNbAH9uKP41FpjjQPQ4EM0HRlaMDzoE8Z/1QlyANNLJhF8ft0Pcx+1xxqD5vD/OGPBWicf0BmhWWEQxAW+X+UztBd0yn6kH4TIAjVIvPq3+1W2x24RuYCx2IwIG0+tvFjymE3mireDxAUo+q6JXCLENN0+qvqLXCiFi2a9GiFv4PF7pd/q9it+nk//X4EWU5H8A4gAAAABJRU5ErkJggg==";
-  var SEIDR_ICON_PNG_GAG = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_FLOGGER = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_PADDLE = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_CANDLE = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_BREAST = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_VULVA = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_PHALLUS = "data:image/png;base64,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";
-  var SEIDR_ICON_PNG_PLUG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAMAAAD04JH5AAAAwFBMVEUgES8BAALKmVMeEC0YCyzUolZRODiLZ0ayh092VkI4IzKje0xkRz1DLDWZc0ogDy5cQTq9kFJrTUCBXkJxUT4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABVLyE6AAAAQHRSTlP///////////////////////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAZKcOoAAABDNJREFUeNrtm213qzAIgKkQjVrruu3//9Zrqr2d5sVAXroP48vO6brxHCCEkACXNwv8ATg+I0IEwIdAujz/CVIUAEFJwTOAwuqNLSgEAFXEC0ARjsxghr0RfgBgUCMWCgXw6C8sZANU1Y8vAqgS/o6IOgJAddkDsFIaQ+ZTJwDHAZhNv/lfPwHKBFrUWrQBsEgC9kYBWEsQq5niBVB4yWEoG5UHCJhUDoD5UgEwsiDmBUAuADsPYawFsKrdzwH+F5ERu+pDxHBMCxxNsWgepradYGWoCLCpn3rdGLmPn0DVAWjoGtWsolTTGwQsvQx/6r/+V78y6IGAfY7ZW4Dzx9Tv1BuCZiJIAuDg2/qNGBvUiQFqXfobzQ4CIQCCdulvVE/M1HUKgJ4AdBpgdQKLQOoC7dFvm6CIC6htfKKFuyEToFdegoFqWODmBVBtFYDRawD1SRVc4I1BfhTK9gIalRQApS7YZelQDFwjATApBgKrYCoRhMjJA1hhFaA/E3bEq2CFq8DvgykSAKUxsH6R4H5qgDDBCiDJAxjaDu/s0jQSwP41dSo9D0cfzVyl2mwRqEcOwBJVsQ1gTkPfxxXYLh9WKslo+uq6r8NavHVd1/OCIM4Fs6sgUYtYIbDIyPIBFtiMrhV2Qwxtx12dguS9FvDEgOLHgPhwStMS8d3BEePy0TdQpaOZkUMqmighD0i6C0eAliq06QLFufog4DfPkjokozj+X7k9qUek046FqQB0BOhqAwyHNHCrDdAmHYwzAFhVmaRVmAJgVcZTEgAmpgFeIsiSB3RqeyYN4LgIFoCR6qXi2dUpvAuiMMECX3ZR0lLFzYi0ajIEgcwCsysEZEEgdgF9uspCfhDIAVxdGkEmEJdkkKMmTwHwdKvFx3NiXgx6+mSmKkJGSYYSAAT3Gniug633gTHX6Sg+F4R6RFg+EcV1yUoeza7Z2/X5TsfpzWo8f4MVMMBmAoy9NZLkAQoYYIuC+CcxAheQs0O325QxPqUwAHDVjsO1CYtuzbX+Y61j7iAk6HUTIbelY1eiWU2tVjH6l2bJLXI5sgDC0X9AuG8EGW9OfRuAf1vIbIGz6BeVqCyAkaU/7gaRAzBrHkD/bgvkB+DFQFyFygJoeUEIlD0PcEwQWaLzAKBrIhFU8xGXi5nbMbW3xnFTYTWtdfTNSQTAbsqDaPjoRv3sjVuy7IX61q/bYaH3A+vjPfOGziXT8PgGFr68RgpI9qOZmbYp8JQyQ7cc8j5qxXe86kWo9LAZCjxszg2A9d70WyMOcJEEQb4QYAw4zNmfuzNHPGa+8T0pBO0Rj0tN7z8bJL9rzCc86AYFh71eE0/wnmEzuPAJMH3ohFzjfjUmLPAw6hY/8Jht4ug49Vl15HMr8JKGXjFJu6XeNfaLdSYtg5PXprI0sv04E9fX9p9tteTf7PmvBPgHMugpJUEOjtcAAAAASUVORK5CYII=";
-  var SEIDR_ICON_PNG_SPANK = "data:image/png;base64,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";
-  var SEIDR_CONCEPT_ICONS = [
-    { id: "rope", label: "Rope", url: SEIDR_ICON_PNG_ROPE },
-    { id: "cuff", label: "Cuff", url: SEIDR_ICON_PNG_CUFF },
-    { id: "collar", label: "Collar", url: SEIDR_ICON_PNG_COLLAR },
-    { id: "leash", label: "Leash", url: SEIDR_ICON_PNG_LEASH },
-    { id: "chain", label: "Chain", url: SEIDR_ICON_PNG_CHAIN },
-    { id: "blindfold", label: "Blindfold", url: SEIDR_ICON_PNG_BLINDFOLD },
-    { id: "gag", label: "Gag", url: SEIDR_ICON_PNG_GAG },
-    { id: "flogger", label: "Flogger", url: SEIDR_ICON_PNG_FLOGGER },
-    { id: "paddle", label: "Paddle", url: SEIDR_ICON_PNG_PADDLE },
-    { id: "candle", label: "Candle", url: SEIDR_ICON_PNG_CANDLE },
-    { id: "breast", label: "Breast", url: SEIDR_ICON_PNG_BREAST },
-    { id: "vulva", label: "Vulva", url: SEIDR_ICON_PNG_VULVA },
-    { id: "phallus", label: "Phallus", url: SEIDR_ICON_PNG_PHALLUS },
-    { id: "plug", label: "Plug", url: SEIDR_ICON_PNG_PLUG },
-    { id: "spank", label: "Spank", url: SEIDR_ICON_PNG_SPANK }
-  ];
-
   // src/actions/icons.ts
   function svgDataUri(inner) {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="#241c30"/>' + inner + "</svg>";
     return "data:image/svg+xml," + encodeURIComponent(svg);
   }
-  var SEIDR_BUILTIN_ICONS = [
-    {
-      id: "mark",
-      label: "Mark",
-      url: svgDataUri(
-        '<text x="32" y="42" text-anchor="middle" font-size="28" font-family="sans-serif" font-weight="700" fill="#e0b15a">A</text>'
-      )
-    },
-    {
-      id: "hand",
-      label: "Hand",
-      url: svgDataUri(
-        '<path d="M22 36 V18 a4 4 0 0 1 8 0 v10 M30 28 V14 a4 4 0 0 1 8 0 v16 M38 30 V16 a4 4 0 0 1 8 0 v20 M46 34 V24 a4 4 0 0 1 6 3 v15 a12 12 0 0 1-12 12 H28 a10 10 0 0 1-10-10 V36 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="3" stroke-linejoin="round"/>'
-      )
-    },
-    {
-      id: "kiss",
-      label: "Kiss",
-      url: svgDataUri(
-        '<path d="M20 28 Q26 18 32 28 Q38 18 44 28 Q38 42 32 48 Q26 42 20 28z" fill="#c06080" stroke="#e0b15a" stroke-width="2"/>'
-      )
-    },
-    {
-      id: "heart",
-      label: "Heart",
-      url: svgDataUri(
-        '<path d="M32 50 L14 32 a12 12 0 0 1 18-16 a12 12 0 0 1 18 16z" fill="#c06080"/>'
-      )
-    },
-    {
-      id: "pull",
-      label: "Pull",
-      url: svgDataUri(
-        '<path d="M12 32 H44 M36 22 L48 32 L36 42" fill="none" stroke="#e0b15a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>'
-      )
-    },
-    {
-      id: "spark",
-      label: "Spark",
-      url: svgDataUri(
-        '<path d="M32 10 L36 26 L52 28 L38 38 L42 54 L32 44 L22 54 L26 38 L12 28 L28 26z" fill="#e0b15a"/>'
-      )
-    },
-    {
-      id: "cuddle",
-      label: "Cuddle",
-      url: svgDataUri(
-        '<circle cx="24" cy="28" r="10" fill="none" stroke="#e0b15a" stroke-width="3"/><circle cx="40" cy="28" r="10" fill="none" stroke="#c09050" stroke-width="3"/>'
-      )
-    },
-    {
-      id: "star",
-      label: "Star",
-      url: svgDataUri(
-        '<text x="32" y="44" text-anchor="middle" font-size="32" fill="#e0b15a">\u2605</text>'
-      )
-    },
-    // Concept-art tiles (embedded PNG) — match the preview sheet exactly
-    ...SEIDR_CONCEPT_ICONS
+  function assetsBase() {
+    const base = typeof Seidr.ASSETS_BASE_URL === "string" && Seidr.ASSETS_BASE_URL ? Seidr.ASSETS_BASE_URL : "https://freya-bc.github.io/Freyas-Seidr/assets";
+    return base.replace(/\/$/, "");
+  }
+  function seidrConceptIconUrl(id) {
+    return assetsBase() + "/action-icons/" + encodeURIComponent(id) + ".png";
+  }
+  var CONCEPT_ICON_META = [
+    { id: "rope", label: "Rope" },
+    { id: "cuff", label: "Cuff" },
+    { id: "collar", label: "Collar" },
+    { id: "leash", label: "Leash" },
+    { id: "chain", label: "Chain" },
+    { id: "blindfold", label: "Blindfold" },
+    { id: "gag", label: "Gag" },
+    { id: "flogger", label: "Flogger" },
+    { id: "paddle", label: "Paddle" },
+    { id: "candle", label: "Candle" },
+    { id: "breast", label: "Breast" },
+    { id: "vulva", label: "Vulva" },
+    { id: "phallus", label: "Phallus" },
+    { id: "plug", label: "Plug" },
+    { id: "spank", label: "Spank" }
   ];
+  function conceptIcons() {
+    return CONCEPT_ICON_META.map(function(m) {
+      return { id: m.id, label: m.label, url: seidrConceptIconUrl(m.id) };
+    });
+  }
+  var MARK_FALLBACK = {
+    id: "mark",
+    label: "Mark",
+    url: svgDataUri(
+      '<text x="32" y="42" text-anchor="middle" font-size="28" font-family="sans-serif" font-weight="700" fill="#e0b15a">A</text>'
+    )
+  };
+  var SEIDR_BUILTIN_ICONS = conceptIcons();
   var SEIDR_ACTIVITY_ICON_IDS = [
     "Bite",
     "BrothersHandshake",
@@ -3276,10 +3559,14 @@
     return "./Icons/Activity/" + id + ".png";
   }
   function seidrBuiltinIconById(id) {
+    if (id === "mark") return MARK_FALLBACK;
     for (let i = 0; i < SEIDR_BUILTIN_ICONS.length; i++) {
       if (SEIDR_BUILTIN_ICONS[i].id === id) return SEIDR_BUILTIN_ICONS[i];
     }
     return null;
+  }
+  function seidrFallbackIconUrl() {
+    return MARK_FALLBACK.url;
   }
   function seidrCustomIconsFromSettings() {
     try {
@@ -3298,20 +3585,20 @@
     const ref = seidrNormalizeActionIcon(icon);
     if (ref.source === "seidr") {
       const b = seidrBuiltinIconById(ref.id);
-      return b ? b.url : SEIDR_BUILTIN_ICONS[0].url;
+      return b ? b.url : seidrFallbackIconUrl();
     }
     if (ref.source === "activity") {
       if (SEIDR_ACTIVITY_ICON_IDS.indexOf(ref.id) >= 0) return seidrActivityIconUrl(ref.id);
-      return SEIDR_BUILTIN_ICONS[0].url;
+      return seidrFallbackIconUrl();
     }
     if (ref.source === "custom") {
       const customs = customList || seidrCustomIconsFromSettings();
       for (let i = 0; i < customs.length; i++) {
         if (customs[i].id === ref.id) return customs[i].url;
       }
-      return SEIDR_BUILTIN_ICONS[0].url;
+      return seidrFallbackIconUrl();
     }
-    return SEIDR_BUILTIN_ICONS[0].url;
+    return seidrFallbackIconUrl();
   }
   function seidrIconLabel(icon, customList) {
     const ref = seidrNormalizeActionIcon(icon) || seidrDefaultActionIcon();
@@ -3889,6 +4176,102 @@
   Seidr.installActions = seidrInstallActions;
   Seidr.syncUserActions = seidrSyncUserActions;
 
+  // src/animations/store.ts
+  function seidrGetAnimationsBag() {
+    const s = seidrGetSettings();
+    return seidrNormalizeAnimationsBag(s.animations);
+  }
+  function seidrSaveAnimationsBag(bag) {
+    const normalized = seidrNormalizeAnimationsBag(bag);
+    return seidrSaveSettings({ animations: normalized });
+  }
+  function seidrListAnimations() {
+    return seidrGetAnimationsBag().list.slice();
+  }
+  function seidrFindAnimationById(id) {
+    const list = seidrListAnimations();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+  function seidrFindAnimationByName(name) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key) return null;
+    const list = seidrListAnimations();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].name.toLowerCase() === key) return list[i];
+    }
+    return null;
+  }
+  function seidrFilterAnimationsByPrefix(prefix) {
+    const pfx = String(prefix || "").trim().toLowerCase();
+    const list = seidrListAnimations();
+    if (!pfx) return list;
+    return list.filter(function(a) {
+      return a.name.toLowerCase().indexOf(pfx) >= 0;
+    });
+  }
+  function seidrUpsertAnimation(anim) {
+    const norm2 = seidrNormalizeAnimation(anim);
+    if (!norm2) return { ok: false, error: "Invalid animation" };
+    if (!norm2.name.trim()) return { ok: false, error: "Name required" };
+    if (norm2.steps.length > SEIDR_ANIM_STEPS_MAX) {
+      return { ok: false, error: "Max " + SEIDR_ANIM_STEPS_MAX + " steps" };
+    }
+    const total = seidrAnimWaitTotal(norm2.steps);
+    if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
+      return { ok: false, error: "Total wait exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s" };
+    }
+    const bag = seidrGetAnimationsBag();
+    const nameKey = norm2.name.toLowerCase();
+    for (let i = 0; i < bag.list.length; i++) {
+      if (bag.list[i].id !== norm2.id && bag.list[i].name.toLowerCase() === nameKey) {
+        return { ok: false, error: "Name already used" };
+      }
+    }
+    let found = false;
+    for (let j = 0; j < bag.list.length; j++) {
+      if (bag.list[j].id === norm2.id) {
+        bag.list[j] = norm2;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      if (bag.list.length >= SEIDR_ANIMATIONS_MAX) {
+        return { ok: false, error: "Animation limit reached (" + SEIDR_ANIMATIONS_MAX + ")" };
+      }
+      if (norm2.id < 1) {
+        norm2.id = bag.nextId;
+        bag.nextId = norm2.id + 1;
+      } else if (norm2.id >= bag.nextId) {
+        bag.nextId = norm2.id + 1;
+      }
+      bag.list.push(norm2);
+    }
+    const saved = seidrSaveAnimationsBag(bag);
+    if (!saved.ok) return { ok: false, error: saved.error || "Save failed" };
+    return { ok: true, animation: norm2 };
+  }
+  function seidrDeleteAnimation(id) {
+    const bag = seidrGetAnimationsBag();
+    bag.list = bag.list.filter(function(a) {
+      return a.id !== id;
+    });
+    return seidrSaveAnimationsBag(bag);
+  }
+  function seidrAddAnimation() {
+    const bag = seidrGetAnimationsBag();
+    if (bag.list.length >= SEIDR_ANIMATIONS_MAX) return null;
+    const a = seidrDefaultAnimation(bag.nextId);
+    bag.nextId = a.id + 1;
+    bag.list.push(a);
+    const saved = seidrSaveAnimationsBag(bag);
+    if (!saved.ok) return null;
+    return a;
+  }
+
   // src/commands/catalog.ts
   function activityLabel(name, group) {
     try {
@@ -4030,19 +4413,36 @@
   }
 
   // src/commands/parse.ts
-  var TAG_ALT = "action|stripe|strip|a";
+  var TAG_ALT = "roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p";
   var TAG_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s|$)", "i");
   var TAG_LINE_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s+(.*))?$", "i");
   var TAG_TOKEN_RE = new RegExp("^/(" + TAG_ALT + ")(\\s+)?", "i");
   function tagFamily(tag) {
-    return tag === "strip" || tag === "stripe" ? "strip" : "action";
+    if (tag === "strip" || tag === "stripe") return "strip";
+    if (tag === "poses" || tag === "p") return "poses";
+    if (tag === "animation" || tag === "ani") return "animation";
+    if (tag === "seidr" || tag === "roommanager") return "meta";
+    return "action";
   }
   function normalizeTag(raw) {
     const t = String(raw || "").toLowerCase();
     if (t === "action") return "action";
     if (t === "strip") return "strip";
     if (t === "stripe") return "stripe";
+    if (t === "poses") return "poses";
+    if (t === "p") return "p";
+    if (t === "animation") return "animation";
+    if (t === "ani") return "ani";
+    if (t === "seidr") return "seidr";
+    if (t === "roommanager") return "roommanager";
     return "a";
+  }
+  function secondKindForFamily(family) {
+    if (family === "action") return "action";
+    if (family === "strip") return "slot";
+    if (family === "poses") return "pose";
+    if (family === "animation") return "animation";
+    return null;
   }
   function seidrCmdIsCommandLine(msg) {
     return TAG_RE.test(String(msg || "").trim());
@@ -4055,15 +4455,9 @@
   function seidrCmdStartsWithTag(msg) {
     return new RegExp("^\\s*/(" + TAG_ALT + ")", "i").test(String(msg || ""));
   }
-  function seidrCmdPeekLine(msg) {
-    const raw = String(msg || "").trim();
-    const m = raw.match(TAG_LINE_RE);
-    if (!m) return null;
-    const tag = normalizeTag(m[1]);
-    const family = tagFamily(tag);
-    const rest = (m[2] || "").trim();
+  function parseMemberAndRest(rest) {
     if (!rest) {
-      return { tag, family, memberRaw: "", memberQuoted: false, secondRaw: "" };
+      return { memberRaw: "", memberQuoted: false, secondRaw: "", ok: true };
     }
     let memberRaw = "";
     let memberQuoted = false;
@@ -4086,16 +4480,10 @@
         memberRaw += rest.charAt(i);
         i += 1;
       }
-      memberQuoted = true;
       if (!closed) {
-        return {
-          tag,
-          family,
-          memberRaw,
-          memberQuoted: true,
-          secondRaw: ""
-        };
+        return { memberRaw, memberQuoted: true, secondRaw: "", ok: false, error: "Unclosed quote in member name" };
       }
+      memberQuoted = true;
       secondRaw = rest.slice(i).trim();
     } else {
       const sp = rest.search(/\s/);
@@ -4107,12 +4495,64 @@
         secondRaw = rest.slice(sp).trim();
       }
     }
+    return { memberRaw, memberQuoted, secondRaw, ok: true };
+  }
+  function seidrCmdPeekLine(msg) {
+    const raw = String(msg || "").trim();
+    const m = raw.match(TAG_LINE_RE);
+    if (!m) return null;
+    const tag = normalizeTag(m[1]);
+    const family = tagFamily(tag);
+    const rest = (m[2] || "").trim();
+    if (family === "meta") {
+      return { tag, family, memberRaw: "", memberQuoted: false, secondRaw: "" };
+    }
+    if (family === "animation") {
+      return { tag, family, memberRaw: "", memberQuoted: false, secondRaw: rest };
+    }
+    if (!rest) {
+      return { tag, family, memberRaw: "", memberQuoted: false, secondRaw: "" };
+    }
+    const q = rest.charAt(0);
+    if (q === '"' || q === "'") {
+      let memberRaw = "";
+      let i = 1;
+      let closed = false;
+      while (i < rest.length) {
+        if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
+          memberRaw += rest.charAt(i + 1);
+          i += 2;
+          continue;
+        }
+        if (rest.charAt(i) === q) {
+          closed = true;
+          i += 1;
+          break;
+        }
+        memberRaw += rest.charAt(i);
+        i += 1;
+      }
+      if (!closed) {
+        return { tag, family, memberRaw, memberQuoted: true, secondRaw: "" };
+      }
+      return {
+        tag,
+        family,
+        memberRaw,
+        memberQuoted: true,
+        secondRaw: rest.slice(i).trim()
+      };
+    }
+    const sp = rest.search(/\s/);
+    if (sp < 0) {
+      return { tag, family, memberRaw: rest, memberQuoted: false, secondRaw: "" };
+    }
     return {
       tag,
       family,
-      memberRaw,
-      memberQuoted,
-      secondRaw
+      memberRaw: rest.slice(0, sp),
+      memberQuoted: false,
+      secondRaw: rest.slice(sp).trim()
     };
   }
   function seidrParseCmdLine(msg) {
@@ -4122,49 +4562,42 @@
     const tag = normalizeTag(m[1]);
     const family = tagFamily(tag);
     const rest = (m[2] || "").trim();
-    const usage = family === "strip" ? "Usage: /" + tag + " <member> <slot>" : "Usage: /a <member> <action>";
-    if (!rest) {
-      return { ok: false, error: usage, raw };
+    if (family === "meta") {
+      return {
+        ok: true,
+        tag,
+        family,
+        memberRaw: "",
+        memberQuoted: false,
+        secondRaw: "",
+        actionRaw: "",
+        raw
+      };
     }
-    let memberRaw = "";
-    let memberQuoted = false;
-    let secondRaw = "";
-    const q = rest.charAt(0);
-    if (q === '"' || q === "'") {
-      let i = 1;
-      let closed = false;
-      while (i < rest.length) {
-        if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
-          memberRaw += rest.charAt(i + 1);
-          i += 2;
-          continue;
-        }
-        if (rest.charAt(i) === q) {
-          closed = true;
-          i += 1;
-          break;
-        }
-        memberRaw += rest.charAt(i);
-        i += 1;
+    if (family === "animation") {
+      if (!rest) {
+        return { ok: false, error: "Usage: /" + tag + " <animation name>", raw };
       }
-      if (!closed) return { ok: false, error: "Unclosed quote in member name", raw };
-      memberQuoted = true;
-      secondRaw = rest.slice(i).trim();
-    } else {
-      const sp = rest.search(/\s/);
-      if (sp < 0) {
-        memberRaw = rest;
-        secondRaw = "";
-      } else {
-        memberRaw = rest.slice(0, sp);
-        secondRaw = rest.slice(sp).trim();
-      }
+      return {
+        ok: true,
+        tag,
+        family,
+        memberRaw: "",
+        memberQuoted: false,
+        secondRaw: rest,
+        actionRaw: rest,
+        raw
+      };
     }
-    if (!memberRaw) return { ok: false, error: "Missing member", raw };
-    if (!secondRaw) {
+    const usage = family === "strip" ? "Usage: /" + tag + " <member> <slot>" : family === "poses" ? "Usage: /" + tag + " <member> <pose>" : "Usage: /a <member> <action>";
+    if (!rest) return { ok: false, error: usage, raw };
+    const parts = parseMemberAndRest(rest);
+    if (!parts.ok) return { ok: false, error: parts.error || "Parse error", raw };
+    if (!parts.memberRaw) return { ok: false, error: "Missing member", raw };
+    if (!parts.secondRaw) {
       return {
         ok: false,
-        error: family === "strip" ? "Missing slot \u2014 " + usage : "Missing action \u2014 " + usage,
+        error: family === "strip" ? "Missing slot \u2014 " + usage : family === "poses" ? "Missing pose \u2014 " + usage : "Missing action \u2014 " + usage,
         raw
       };
     }
@@ -4172,10 +4605,10 @@
       ok: true,
       tag,
       family,
-      memberRaw,
-      memberQuoted,
-      secondRaw,
-      actionRaw: secondRaw,
+      memberRaw: parts.memberRaw,
+      memberQuoted: parts.memberQuoted,
+      secondRaw: parts.secondRaw,
+      actionRaw: parts.secondRaw,
       raw
     };
   }
@@ -4191,11 +4624,22 @@
     if (!tagMatch) return { kind: "none" };
     const tag = normalizeTag(tagMatch[1]);
     const family = tagFamily(tag);
-    const secondKind = family === "strip" ? "slot" : "action";
+    const secondKind = secondKindForFamily(family);
     const tagEnd = tagMatch[0].length;
-    if (bodyCaret <= tagEnd && !tagMatch[2]) {
-      return { kind: "tag" };
+    if (family === "meta") return { kind: "tag" };
+    if (family === "animation") {
+      if (bodyCaret <= tagEnd && !tagMatch[2]) return { kind: "tag" };
+      const actionStart2 = tagEnd;
+      const ws2 = body.slice(actionStart2).match(/^\s*/);
+      const wsLen2 = ws2 ? ws2[0].length : 0;
+      return {
+        kind: "animation",
+        prefix: body.slice(actionStart2 + wsLen2, bodyCaret),
+        start: startOffset + actionStart2 + wsLen2,
+        end: pos
+      };
     }
+    if (bodyCaret <= tagEnd && !tagMatch[2]) return { kind: "tag" };
     if (bodyCaret <= tagEnd) {
       return {
         kind: "member",
@@ -4234,6 +4678,7 @@
           end: startOffset + tagEnd + memberEnd
         };
       }
+      if (!secondKind) return { kind: "none" };
       const actionStart2 = tagEnd + memberEnd;
       const actionPrefix = body.slice(actionStart2, bodyCaret).replace(/^\s+/, "");
       const ws2 = body.slice(actionStart2).match(/^\s*/);
@@ -4255,6 +4700,7 @@
         end: startOffset + tagEnd + (sp < 0 ? rest.length : sp)
       };
     }
+    if (!secondKind) return { kind: "none" };
     const actionStart = tagEnd + sp;
     const ws = body.slice(actionStart).match(/^\s*/);
     const wsLen = ws ? ws[0].length : 0;
@@ -4515,6 +4961,81 @@
     });
   }
 
+  // src/animations/play.ts
+  var playing = false;
+  function applyPose2(C, pose) {
+    if (!C || !pose) return;
+    try {
+      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
+      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
+    } catch (e) {
+    }
+    try {
+      if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
+      else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
+        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
+      }
+    } catch (e2) {
+    }
+  }
+  function applyFace(C, step) {
+    if (!C || typeof CharacterSetFacialExpression !== "function") return;
+    const group = String(step.feature || "Eyes");
+    const expr = step.expression ? String(step.expression) : null;
+    let timer = null;
+    if (step.duration && step.duration !== "keep") timer = Number(step.duration) || null;
+    try {
+      CharacterSetFacialExpression(C, group, expr, timer);
+    } catch (e) {
+    }
+  }
+  function applyStep(step, C) {
+    if (!step || !C) return;
+    if (step.kind === "pose") applyPose2(C, step.pose);
+    else if (step.kind === "face") applyFace(C, step);
+  }
+  function waitMs(sec) {
+    const n = Number(sec) || 0;
+    if (n <= 0) return null;
+    return new Promise(function(resolve) {
+      setTimeout(resolve, Math.round(n * 1e3));
+    });
+  }
+  function seidrPlayAnimation(ref) {
+    let anim = null;
+    if (typeof ref === "number") anim = seidrFindAnimationById(ref);
+    else anim = seidrFindAnimationByName(String(ref));
+    if (!anim || !anim.steps.length) {
+      return Promise.resolve({ ok: false, error: "Unknown or empty animation" });
+    }
+    if (typeof Player === "undefined" || !Player) {
+      return Promise.resolve({ ok: false, error: "Not logged in" });
+    }
+    if (playing) {
+      return Promise.resolve({ ok: false, error: "An animation is already playing" });
+    }
+    playing = true;
+    const steps = anim.steps.slice();
+    let i = 0;
+    function next() {
+      while (i < steps.length) {
+        const st = steps[i++];
+        if (!st) continue;
+        applyStep(st, Player);
+        const delay = waitMs(st.wait);
+        if (delay) {
+          return delay.then(next).catch(function() {
+            playing = false;
+            return { ok: false, error: "Animation interrupted" };
+          });
+        }
+      }
+      playing = false;
+      return Promise.resolve({ ok: true });
+    }
+    return next();
+  }
+
   // src/commands/stripCatalog.ts
   function undressActs() {
     try {
@@ -4649,6 +5170,222 @@
     };
   }
 
+  // src/commands/warn.ts
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function seidrCmdLocal(text, timeoutMs) {
+    if (typeof ChatRoomSendLocal !== "function") return;
+    const ms = typeof timeoutMs === "number" ? timeoutMs : SEIDR_CMD_WARN_MS;
+    const html = '<span style="color:#d4a017;">[Seidr]</span> <span style="color:#f0e6d4;">' + escapeHtml(text) + "</span>";
+    try {
+      ChatRoomSendLocal(html, ms);
+    } catch (e) {
+      console.warn("[Seidr Cmd]", text);
+    }
+  }
+  function seidrCmdWarn(text) {
+    seidrCmdLocal(text, SEIDR_CMD_WARN_MS);
+  }
+  function seidrCmdError(text) {
+    seidrCmdLocal(text, SEIDR_CMD_ERROR_MS);
+  }
+
+  // src/commands/run.ts
+  function seidrCmdIsEnabled(tag) {
+    const key = seidrCmdEnableKeyForTag(tag);
+    if (!key) return false;
+    const bag = seidrGetCommandsBag();
+    return bag.enabled[key] !== false;
+  }
+  function runItemActivity(target, zone, activityName) {
+    if (!seidrCmdActivityAvailable(target, zone, activityName)) {
+      seidrCmdError(
+        'Activity "' + activityName + '" on ' + zone + " is not available on that person right now."
+      );
+      return false;
+    }
+    const ia = seidrCmdFindItemActivity(target, zone, activityName);
+    if (!ia) {
+      seidrCmdError('Could not resolve activity "' + activityName + '".');
+      return false;
+    }
+    try {
+      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
+      const groupName = ia.Group && (ia.Group.Name || ia.Group) || zone;
+      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone) : { Name: zone };
+      if (typeof ActivityRun !== "function") {
+        seidrCmdError("ActivityRun unavailable");
+        return false;
+      }
+      ActivityRun(Player, target, group, ia, true);
+      return true;
+    } catch (e) {
+      console.warn("[Seidr Cmd] ActivityRun failed", e);
+      seidrCmdError("Failed to run activity.");
+      return false;
+    }
+  }
+  function canPoseTarget2(actor, acted) {
+    if (!actor || !acted) return false;
+    if (actor === acted || actor.IsPlayer && actor.IsPlayer() && acted.IsPlayer && acted.IsPlayer()) return true;
+    try {
+      if (typeof ServerChatRoomGetAllowItem === "function") {
+        return !!ServerChatRoomGetAllowItem(actor, acted);
+      }
+    } catch (e) {
+    }
+    return !!acted.AllowItem;
+  }
+  function applyPose3(C, pose) {
+    if (!C || !pose) return;
+    try {
+      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
+      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
+    } catch (e) {
+    }
+    try {
+      if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
+      else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
+        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
+      }
+    } catch (e2) {
+    }
+  }
+  function executeActionCommand(memberRaw, actionRaw) {
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) {
+      seidrCmdWarn(mem.error);
+      return true;
+    }
+    const act2 = seidrCmdResolveAction(actionRaw);
+    if (act2.ok === false) {
+      seidrCmdWarn(act2.error);
+      return true;
+    }
+    const target = mem.character;
+    const binding = act2.action;
+    try {
+      if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
+        seidrCmdError("You cannot act on that person right now.");
+        return true;
+      }
+    } catch (e) {
+    }
+    runItemActivity(target, binding.slot, binding.activity);
+    return true;
+  }
+  function executeStripCommand(tag, memberRaw, slotRaw) {
+    const includeBundles = tag === "strip";
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) {
+      seidrCmdWarn(mem.error);
+      return true;
+    }
+    const target = mem.character;
+    try {
+      if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
+        seidrCmdError("You cannot act on that person right now.");
+        return true;
+      }
+    } catch (e) {
+    }
+    const slot = seidrCmdResolveStripSlot(slotRaw, Player, target, includeBundles);
+    if (slot.ok === false) {
+      seidrCmdWarn(slot.error);
+      return true;
+    }
+    runItemActivity(target, slot.option.zone, slot.option.activityName);
+    return true;
+  }
+  function executePosesCommand(memberRaw, poseRaw) {
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) {
+      seidrCmdWarn(mem.error);
+      return true;
+    }
+    const target = mem.character;
+    const pose = String(poseRaw || "").trim();
+    if (!pose) {
+      seidrCmdWarn("Missing pose");
+      return true;
+    }
+    const self = target === Player || typeof target.MemberNumber === "number" && target.MemberNumber === Player.MemberNumber;
+    if (!self && !canPoseTarget2(Player, target)) {
+      seidrCmdError("You cannot change that person's pose right now.");
+      return true;
+    }
+    if (!seidrPoseAvailable(target, pose)) {
+      seidrCmdWarn('Pose "' + (seidrPoseLabel(pose) || pose) + '" is not available on that person.');
+      return true;
+    }
+    applyPose3(target, pose);
+    return true;
+  }
+  function executeAnimationCommand(nameRaw) {
+    const name = String(nameRaw || "").trim();
+    if (!name) {
+      seidrCmdWarn("Usage: /animation <name>");
+      return true;
+    }
+    if (!seidrFindAnimationByName(name)) {
+      seidrCmdWarn('Unknown animation "' + name + '". Define it under Settings \u2192 Animations.');
+      return true;
+    }
+    seidrPlayAnimation(name).then(function(r) {
+      if (!r.ok && r.error) seidrCmdWarn(r.error);
+    });
+    return true;
+  }
+  function executeMetaCommand(tag) {
+    if (tag === "seidr") {
+      if (typeof Seidr.openSettings === "function") Seidr.openSettings();
+      else seidrCmdWarn("Settings unavailable");
+      return true;
+    }
+    try {
+      const s = seidrGetSettings();
+      if (Seidr.SHOW_ROOM_MANAGER === false || s.roomManagerEnabled === false) {
+        seidrCmdWarn("Activate Room Manager in Settings \u2192 General first.");
+        return true;
+      }
+      if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
+      else seidrCmdWarn("Room Manager unavailable");
+    } catch (e) {
+      seidrCmdWarn("Room Manager unavailable");
+    }
+    return true;
+  }
+  function seidrCmdExecuteLine(msg) {
+    const parsed = seidrParseCmdLine(msg);
+    if (parsed.ok === false) {
+      if (parsed.error !== "Not a Seidr command") seidrCmdWarn(parsed.error);
+      return false;
+    }
+    if (!seidrCmdIsEnabled(parsed.tag)) {
+      const key = seidrCmdEnableKeyForTag(parsed.tag);
+      seidrCmdWarn("/" + parsed.tag + " is disabled in Settings \u2192 General \u2192 Commands" + (key ? " (" + key + ")" : ""));
+      return true;
+    }
+    if (parsed.family === "meta") {
+      return executeMetaCommand(parsed.tag === "roommanager" ? "roommanager" : "seidr");
+    }
+    if (parsed.family === "animation") {
+      return executeAnimationCommand(parsed.secondRaw);
+    }
+    if (parsed.family === "poses") {
+      return executePosesCommand(parsed.memberRaw, parsed.secondRaw);
+    }
+    if (parsed.family === "strip") {
+      return executeStripCommand(
+        parsed.tag === "stripe" ? "stripe" : "strip",
+        parsed.memberRaw,
+        parsed.secondRaw
+      );
+    }
+    return executeActionCommand(parsed.memberRaw, parsed.secondRaw || parsed.actionRaw);
+  }
+
   // src/commands/styles.ts
   function seidrCmdCss() {
     return [
@@ -4776,8 +5513,8 @@
     positionOverInput(root3, input);
     root3.innerHTML = state.items.map(function(it, i) {
       const on2 = i === state.index ? " seidr-cmd-ac-on" : "";
-      const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml(it.hint) + "</span>" : "";
-      return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml(it.label) + "</span>" + hint + "</button>";
+      const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml2(it.hint) + "</span>" : "";
+      return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml2(it.label) + "</span>" + hint + "</button>";
     }).join("");
     root3.querySelectorAll("[data-i]").forEach(function(btn2) {
       btn2.addEventListener("mousedown", function(ev) {
@@ -4793,7 +5530,7 @@
       on.scrollIntoView({ block: "nearest" });
     }
   }
-  function escapeHtml(s) {
+  function escapeHtml2(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function buildMemberItems(prefix) {
@@ -4838,44 +5575,81 @@
       return { insert: o.insert, label: o.label, hint: o.hint };
     });
   }
+  function buildPoseItems(prefix, memberRaw) {
+    if (!memberRaw) return [];
+    const mem = seidrCmdResolveMember(memberRaw);
+    if (mem.ok === false) return [];
+    const pfx = String(prefix || "").trim().toLowerCase();
+    const list = seidrPosesForCharacter(mem.character);
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (pfx && p.id.toLowerCase().indexOf(pfx) < 0 && p.label.toLowerCase().indexOf(pfx) < 0) {
+        continue;
+      }
+      out.push({ insert: p.id, label: p.label, hint: p.id });
+    }
+    return out;
+  }
+  function buildAnimationItems(prefix) {
+    return seidrFilterAnimationsByPrefix(prefix).map(function(a) {
+      return {
+        insert: a.name,
+        label: a.name,
+        hint: a.steps.length + " step" + (a.steps.length === 1 ? "" : "s")
+      };
+    });
+  }
   function openForFocus(focus, value) {
-    if (focus.kind !== "member" && focus.kind !== "action" && focus.kind !== "slot") {
+    const kind = focus.kind;
+    if (kind !== "member" && kind !== "action" && kind !== "slot" && kind !== "pose" && kind !== "animation") {
       seidrCmdAcClose();
       return false;
     }
     const peek = seidrCmdPeekLine(value);
+    if (peek && !seidrCmdIsEnabled(peek.tag)) {
+      seidrCmdAcClose();
+      return false;
+    }
     let items = [];
-    if (focus.kind === "member") {
+    if (kind === "member") {
       items = buildMemberItems(focus.prefix);
-    } else if (focus.kind === "action") {
+    } else if (kind === "action") {
       if (!peek || peek.family !== "action") {
         seidrCmdAcClose();
         return false;
       }
       items = buildActionItems(focus.prefix, peek.memberRaw);
+    } else if (kind === "slot") {
+      if (!peek || peek.family !== "strip" || !peek.memberRaw) {
+        seidrCmdAcClose();
+        return false;
+      }
+      items = buildStripSlotItems(focus.prefix, peek.memberRaw, peek.tag === "strip");
+    } else if (kind === "pose") {
+      if (!peek || peek.family !== "poses" || !peek.memberRaw) {
+        seidrCmdAcClose();
+        return false;
+      }
+      items = buildPoseItems(focus.prefix, peek.memberRaw);
     } else {
-      if (!peek || peek.family !== "strip") {
+      if (!peek || peek.family !== "animation") {
         seidrCmdAcClose();
         return false;
       }
-      if (!peek.memberRaw) {
-        seidrCmdAcClose();
-        return false;
-      }
-      const includeBundles = peek.tag === "strip";
-      items = buildStripSlotItems(focus.prefix, peek.memberRaw, includeBundles);
+      items = buildAnimationItems(focus.prefix);
     }
     if (!items.length) {
       seidrCmdAcClose();
       return false;
     }
     state.open = true;
-    state.kind = focus.kind;
+    state.kind = kind;
     state.items = items;
     state.index = 0;
     state.spanStart = focus.start;
     state.spanEnd = focus.end;
-    state.quoted = focus.kind === "member" ? focus.quoted : false;
+    state.quoted = kind === "member" ? focus.quoted : false;
     render();
     return true;
   }
@@ -4889,9 +5663,14 @@
     const caret = input.selectionStart != null ? input.selectionStart : value.length;
     let focus = seidrCmdTokenAtCaret(value, caret);
     if (focus.kind === "tag") {
-      const bare = value.match(/^\s*\/(action|stripe|strip|a)\s*$/i);
+      const bare = value.match(
+        /^\s*\/(roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
+      );
       if (!bare) return false;
-      const spaced = "/" + bare[1].toLowerCase() + " ";
+      const tag = bare[1].toLowerCase();
+      if (!seidrCmdIsEnabled(tag)) return false;
+      if (tag === "seidr" || tag === "roommanager") return false;
+      const spaced = "/" + tag + " ";
       input.value = spaced;
       try {
         input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -4901,13 +5680,22 @@
         input.setSelectionRange(spaced.length, spaced.length);
       }
       value = spaced;
-      focus = {
-        kind: "member",
-        prefix: "",
-        quoted: false,
-        start: spaced.length,
-        end: spaced.length
-      };
+      if (tag === "animation" || tag === "ani") {
+        focus = {
+          kind: "animation",
+          prefix: "",
+          start: spaced.length,
+          end: spaced.length
+        };
+      } else {
+        focus = {
+          kind: "member",
+          prefix: "",
+          quoted: false,
+          start: spaced.length,
+          end: spaced.length
+        };
+      }
     }
     if (focus.kind === "none") return false;
     try {
@@ -4942,9 +5730,13 @@
       const head = "/" + tag + " " + insert + " ";
       nextValue = head + second;
       nextCaret = head.length;
+    } else if (state.kind === "animation") {
+      const peek = seidrCmdPeekLine(value);
+      const tag = peek && peek.tag || seidrCmdTagFromLine(value) || "animation";
+      nextValue = "/" + tag + " " + insert;
+      nextCaret = nextValue.length;
     } else {
-      const trailing = false;
-      const next = seidrCmdReplaceSpan(value, state.spanStart, state.spanEnd, insert, trailing);
+      const next = seidrCmdReplaceSpan(value, state.spanStart, state.spanEnd, insert, false);
       nextValue = next.value;
       nextCaret = next.caret;
     }
@@ -5024,118 +5816,6 @@
     return false;
   }
 
-  // src/commands/warn.ts
-  function escapeHtml2(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function seidrCmdLocal(text, timeoutMs) {
-    if (typeof ChatRoomSendLocal !== "function") return;
-    const ms = typeof timeoutMs === "number" ? timeoutMs : SEIDR_CMD_WARN_MS;
-    const html = '<span style="color:#d4a017;">[Seidr]</span> <span style="color:#f0e6d4;">' + escapeHtml2(text) + "</span>";
-    try {
-      ChatRoomSendLocal(html, ms);
-    } catch (e) {
-      console.warn("[Seidr Cmd]", text);
-    }
-  }
-  function seidrCmdWarn(text) {
-    seidrCmdLocal(text, SEIDR_CMD_WARN_MS);
-  }
-  function seidrCmdError(text) {
-    seidrCmdLocal(text, SEIDR_CMD_ERROR_MS);
-  }
-
-  // src/commands/run.ts
-  function runItemActivity(target, zone, activityName) {
-    if (!seidrCmdActivityAvailable(target, zone, activityName)) {
-      seidrCmdError(
-        'Activity "' + activityName + '" on ' + zone + " is not available on that person right now."
-      );
-      return false;
-    }
-    const ia = seidrCmdFindItemActivity(target, zone, activityName);
-    if (!ia) {
-      seidrCmdError('Could not resolve activity "' + activityName + '".');
-      return false;
-    }
-    try {
-      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
-      const groupName = ia.Group && (ia.Group.Name || ia.Group) || zone;
-      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone) : { Name: zone };
-      if (typeof ActivityRun !== "function") {
-        seidrCmdError("ActivityRun unavailable");
-        return false;
-      }
-      ActivityRun(Player, target, group, ia, true);
-      return true;
-    } catch (e) {
-      console.warn("[Seidr Cmd] ActivityRun failed", e);
-      seidrCmdError("Failed to run activity.");
-      return false;
-    }
-  }
-  function executeActionCommand(memberRaw, actionRaw) {
-    const mem = seidrCmdResolveMember(memberRaw);
-    if (mem.ok === false) {
-      seidrCmdWarn(mem.error);
-      return true;
-    }
-    const act2 = seidrCmdResolveAction(actionRaw);
-    if (act2.ok === false) {
-      seidrCmdWarn(act2.error);
-      return true;
-    }
-    const target = mem.character;
-    const binding = act2.action;
-    try {
-      if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
-        seidrCmdError("You cannot act on that person right now.");
-        return true;
-      }
-    } catch (e) {
-    }
-    runItemActivity(target, binding.slot, binding.activity);
-    return true;
-  }
-  function executeStripCommand(tag, memberRaw, slotRaw) {
-    const includeBundles = tag === "strip";
-    const mem = seidrCmdResolveMember(memberRaw);
-    if (mem.ok === false) {
-      seidrCmdWarn(mem.error);
-      return true;
-    }
-    const target = mem.character;
-    try {
-      if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
-        seidrCmdError("You cannot act on that person right now.");
-        return true;
-      }
-    } catch (e) {
-    }
-    const slot = seidrCmdResolveStripSlot(slotRaw, Player, target, includeBundles);
-    if (slot.ok === false) {
-      seidrCmdWarn(slot.error);
-      return true;
-    }
-    runItemActivity(target, slot.option.zone, slot.option.activityName);
-    return true;
-  }
-  function seidrCmdExecuteLine(msg) {
-    const parsed = seidrParseCmdLine(msg);
-    if (parsed.ok === false) {
-      if (parsed.error !== "Not a Seidr command") seidrCmdWarn(parsed.error);
-      return false;
-    }
-    if (parsed.family === "strip") {
-      return executeStripCommand(
-        parsed.tag === "stripe" ? "stripe" : "strip",
-        parsed.memberRaw,
-        parsed.secondRaw
-      );
-    }
-    return executeActionCommand(parsed.memberRaw, parsed.secondRaw || parsed.actionRaw);
-  }
-
   // src/commands/runtime.ts
   function clearInput() {
     try {
@@ -5148,6 +5828,11 @@
     }
   }
   function onCommand(fallbackTag, _args) {
+    if (!seidrCmdIsEnabled(fallbackTag)) {
+      seidrCmdExecuteLine("/" + fallbackTag);
+      clearInput();
+      return;
+    }
     const el = document.getElementById("InputChat");
     const msg = el ? String(el.value || "").trim() : "";
     const line = msg || "";
@@ -5156,43 +5841,118 @@
     const handled = seidrCmdExecuteLine(full.startsWith("/") ? full : "/" + fallbackTag + " " + full);
     if (handled) clearInput();
   }
-  function registerCommands() {
+  function onMetaCommand(tag) {
+    seidrCmdAcClose();
+    seidrCmdExecuteLine("/" + tag);
+    clearInput();
+  }
+  function seidrRegisterCommands() {
     if (typeof CommandCombine !== "function") return;
-    try {
-      CommandCombine([
-        {
-          Tag: "a",
-          Description: "Seidr: /a <member> <action> \u2014 run a bound activity",
-          Clear: false,
-          Action: function(args) {
-            onCommand("a", args);
-          }
-        },
-        {
-          Tag: "action",
-          Description: "Seidr: /action <member> <action>",
-          Clear: false,
-          Action: function(args) {
-            onCommand("action", args);
-          }
-        },
-        {
-          Tag: "strip",
-          Description: "Seidr: /strip <member> <slot> \u2014 undress (includes Undress all)",
-          Clear: false,
-          Action: function(args) {
-            onCommand("strip", args);
-          }
-        },
-        {
-          Tag: "stripe",
-          Description: "Seidr: /stripe <member> <slot> \u2014 undress one layer",
-          Clear: false,
-          Action: function(args) {
-            onCommand("stripe", args);
-          }
+    const en = seidrGetCommandsBag().enabled;
+    const defs = [];
+    if (en.a !== false) {
+      defs.push({
+        Tag: "a",
+        Description: "Seidr: /a <member> <action> \u2014 run a bound activity",
+        Clear: false,
+        Action: function(args) {
+          onCommand("a", args);
         }
-      ]);
+      });
+    }
+    if (en.action !== false) {
+      defs.push({
+        Tag: "action",
+        Description: "Seidr: /action <member> <action>",
+        Clear: false,
+        Action: function(args) {
+          onCommand("action", args);
+        }
+      });
+    }
+    if (en.strip !== false) {
+      defs.push({
+        Tag: "strip",
+        Description: "Seidr: /strip <member> <slot> \u2014 undress (includes Undress all)",
+        Clear: false,
+        Action: function(args) {
+          onCommand("strip", args);
+        }
+      });
+    }
+    if (en.stripe !== false) {
+      defs.push({
+        Tag: "stripe",
+        Description: "Seidr: /stripe <member> <slot> \u2014 undress one layer",
+        Clear: false,
+        Action: function(args) {
+          onCommand("stripe", args);
+        }
+      });
+    }
+    if (en.poses !== false) {
+      defs.push({
+        Tag: "poses",
+        Description: "Seidr: /poses <member> <pose> \u2014 set Club pose",
+        Clear: false,
+        Action: function(args) {
+          onCommand("poses", args);
+        }
+      });
+    }
+    if (en.p !== false) {
+      defs.push({
+        Tag: "p",
+        Description: "Seidr: /p <member> <pose> \u2014 short for /poses",
+        Clear: false,
+        Action: function(args) {
+          onCommand("p", args);
+        }
+      });
+    }
+    if (en.animation !== false) {
+      defs.push({
+        Tag: "animation",
+        Description: "Seidr: /animation <name> \u2014 play your animation",
+        Clear: false,
+        Action: function(args) {
+          onCommand("animation", args);
+        }
+      });
+    }
+    if (en.ani !== false) {
+      defs.push({
+        Tag: "ani",
+        Description: "Seidr: /ani <name> \u2014 short for /animation",
+        Clear: false,
+        Action: function(args) {
+          onCommand("ani", args);
+        }
+      });
+    }
+    if (en.seidr !== false) {
+      defs.push({
+        Tag: "seidr",
+        Description: "Seidr: open Settings",
+        Clear: false,
+        Action: function() {
+          onMetaCommand("seidr");
+        }
+      });
+    }
+    if (en.roommanager !== false) {
+      defs.push({
+        Tag: "roommanager",
+        Description: "Seidr: open Room Manager",
+        Clear: false,
+        Action: function() {
+          onMetaCommand("roommanager");
+        }
+      });
+    }
+    if (!defs.length) return;
+    try {
+      CommandCombine(defs);
     } catch (e) {
       console.warn("[Seidr Cmd] CommandCombine failed", e);
     }
@@ -5247,14 +6007,18 @@
   }
   function seidrInstallCommands() {
     if (Seidr.SHOW_COMMANDS === false) return;
-    if (Seidr._hookState && Seidr._hookState.commands) return;
+    if (Seidr._hookState && Seidr._hookState.commands) {
+      seidrRegisterCommands();
+      return;
+    }
     if (!Seidr._hookState) Seidr._hookState = {};
     Seidr._hookState.commands = true;
-    registerCommands();
+    seidrRegisterCommands();
     installInputWatch();
     hookSendChat();
   }
   Seidr.installCommands = seidrInstallCommands;
+  Seidr.registerCommands = seidrRegisterCommands;
 
   // src/commands/ui.ts
   var editPersonId = null;
@@ -5631,6 +6395,10 @@
     if (!pane) return;
     seidrBuildCommandsTab(pane);
   }
+
+  // src/animations/index.ts
+  Seidr.installAnimations = function() {
+  };
 
   // src/fastOpen.ts
   var clickShift = false;
@@ -6425,6 +7193,256 @@
   }
 
   // src/roomManager/maps.ts
+  var NAME_MAX = 48;
+  function remoteMax() {
+    return typeof Seidr.RM_MAP_MAX === "number" ? Seidr.RM_MAP_MAX : 10;
+  }
+  function localMax() {
+    return typeof Seidr.RM_MAP_LOCAL_MAX === "number" ? Seidr.RM_MAP_LOCAL_MAX : 50;
+  }
+  function localVerMax() {
+    return typeof Seidr.RM_MAP_VERSIONS_LOCAL_MAX === "number" ? Seidr.RM_MAP_VERSIONS_LOCAL_MAX : 30;
+  }
+  function clampName2(raw, fallback) {
+    const s = String(raw == null ? "" : raw).trim().slice(0, NAME_MAX);
+    return s || fallback;
+  }
+  function lz2() {
+    try {
+      if (typeof LZString !== "undefined" && LZString) return LZString;
+    } catch (e) {
+    }
+    return null;
+  }
+  function localKey() {
+    try {
+      const mn = Player && Player.MemberNumber;
+      if (mn == null) return null;
+      const prefix = Seidr.RM_MAPS_LOCAL_KEY_PREFIX || "SeidrMapsLocal_";
+      return prefix + String(mn);
+    } catch (e) {
+      return null;
+    }
+  }
+  var _localCache = null;
+  var _peeledRemote = false;
+  function packLocal(maps) {
+    const payload = {
+      v: 1,
+      maps: maps.map(function(m) {
+        return {
+          id: m.id,
+          name: m.name,
+          versions: m.versions.map(function(v) {
+            return { id: v.id, name: v.name, data: v.data, savedAt: v.savedAt };
+          })
+        };
+      })
+    };
+    const json = JSON.stringify(payload);
+    const L = lz2();
+    const prefix = Seidr.RM_MAPS_LOCAL_LZ_PREFIX || "SeidrMapsLocal1:";
+    if (L && typeof L.compressToUTF16 === "function") {
+      return prefix + L.compressToUTF16(json);
+    }
+    return json;
+  }
+  function unpackLocal(raw) {
+    const prefix = Seidr.RM_MAPS_LOCAL_LZ_PREFIX || "SeidrMapsLocal1:";
+    let data = null;
+    try {
+      if (raw.startsWith(prefix)) {
+        const L = lz2();
+        if (!L || typeof L.decompressFromUTF16 !== "function") return [];
+        const plain = L.decompressFromUTF16(raw.slice(prefix.length));
+        data = plain ? JSON.parse(plain) : null;
+      } else {
+        data = JSON.parse(raw);
+      }
+    } catch (e) {
+      console.warn("[Seidr RM] local maps unpack", e);
+      return [];
+    }
+    if (!data || typeof data !== "object") return [];
+    const d = data;
+    if (!Array.isArray(d.maps)) return [];
+    const out = [];
+    for (let i = 0; i < d.maps.length; i++) {
+      const s = rmNormalizeMapSeries(d.maps[i], "local");
+      if (s) {
+        s.location = "local";
+        out.push(s);
+      }
+    }
+    return out;
+  }
+  function rmLoadLocalMaps() {
+    if (_localCache) return _localCache;
+    const key = localKey();
+    if (!key) {
+      _localCache = [];
+      return _localCache;
+    }
+    try {
+      const raw = localStorage.getItem(key);
+      _localCache = raw ? unpackLocal(raw) : [];
+    } catch (e) {
+      console.warn("[Seidr RM] local maps read", e);
+      _localCache = [];
+    }
+    return _localCache;
+  }
+  function saveLocalMaps(maps) {
+    const key = localKey();
+    if (!key) return { ok: false, error: "Not logged in" };
+    try {
+      localStorage.setItem(key, packLocal(maps));
+      _localCache = maps.map(function(m) {
+        return {
+          id: m.id,
+          name: m.name,
+          location: "local",
+          versions: m.versions.slice()
+        };
+      });
+      return { ok: true };
+    } catch (e) {
+      console.warn("[Seidr RM] local maps write", e);
+      return { ok: false, error: "localStorage save failed" };
+    }
+  }
+  function rawRemoteMaps() {
+    return (rmGetStore().maps || []).map(function(m) {
+      return {
+        id: m.id,
+        name: m.name,
+        location: "remote",
+        versions: (m.versions || []).slice()
+      };
+    });
+  }
+  function pickDefault(versions) {
+    const found = versions.find(function(v) {
+      return rmIsDefaultVersionName(v.name);
+    });
+    if (found) return found;
+    if (!versions.length) return null;
+    return {
+      id: versions[0].id,
+      name: RM_MAP_DEFAULT_NAME,
+      data: versions[0].data,
+      savedAt: versions[0].savedAt
+    };
+  }
+  function extrasOnly(versions) {
+    return versions.filter(function(v) {
+      return !rmIsDefaultVersionName(v.name);
+    });
+  }
+  function peelRemoteExtrasToLocal() {
+    if (_peeledRemote) return;
+    _peeledRemote = true;
+    const remote = rawRemoteMaps();
+    let dirtyRemote = false;
+    let local = rmLoadLocalMaps().slice();
+    let dirtyLocal = false;
+    const nextRemote = [];
+    for (let i = 0; i < remote.length; i++) {
+      const m = remote[i];
+      const def = pickDefault(m.versions);
+      const extras = extrasOnly(m.versions);
+      if (!def) continue;
+      if (extras.length || !rmIsDefaultVersionName(m.versions[0] && m.versions[0].name) || m.versions.length !== 1) {
+        if (extras.length || m.versions.length > 1 || !rmIsDefaultVersionName((m.versions[0] || def).name)) {
+          dirtyRemote = true;
+        }
+      }
+      if (extras.length) {
+        const li = local.findIndex(function(x) {
+          return x.id === m.id;
+        });
+        if (li >= 0) {
+          const merged = extrasOnly(local[li].versions).concat(extras);
+          local[li] = {
+            id: m.id,
+            name: m.name,
+            location: "local",
+            versions: merged
+          };
+        } else {
+          local.push({
+            id: m.id,
+            name: m.name,
+            location: "local",
+            versions: extras
+          });
+        }
+        dirtyLocal = true;
+      }
+      nextRemote.push({
+        id: m.id,
+        name: m.name,
+        location: "remote",
+        versions: [{
+          id: def.id,
+          name: RM_MAP_DEFAULT_NAME,
+          data: def.data,
+          savedAt: def.savedAt
+        }]
+      });
+      if (m.versions.length !== 1 || !rmIsDefaultVersionName(m.versions[0].name)) {
+        dirtyRemote = true;
+      }
+    }
+    if (dirtyLocal) saveLocalMaps(local);
+    if (dirtyRemote) {
+      const store = rmGetStore();
+      store.maps = nextRemote;
+      rmSaveStore();
+    }
+  }
+  function persistRemoteDefaults(maps) {
+    const cleaned = maps.map(function(m) {
+      const def = pickDefault(m.versions);
+      return {
+        id: m.id,
+        name: m.name,
+        location: "remote",
+        versions: def ? [{ id: def.id, name: RM_MAP_DEFAULT_NAME, data: def.data, savedAt: def.savedAt }] : []
+      };
+    }).filter(function(m) {
+      return m.versions.length > 0;
+    });
+    const can = rmCanSaveMaps(rmSerializeRemoteMaps(cleaned));
+    if (!can.ok) return { ok: false, error: can.error };
+    const store = rmGetStore();
+    store.maps = cleaned;
+    return rmSaveStore();
+  }
+  function preferRemote(location) {
+    if (location === "local" || location === "remote") return location;
+    const remote = rawRemoteMaps();
+    if (remote.length >= remoteMax()) return "local";
+    const can = rmCanSaveMaps(rmSerializeRemoteMaps(remote));
+    return can.ok ? "remote" : "local";
+  }
+  function makeDefaultVersion(data) {
+    return {
+      id: rmNewId("mv"),
+      name: RM_MAP_DEFAULT_NAME,
+      data,
+      savedAt: Date.now()
+    };
+  }
+  function makeLocalVersion(name, data) {
+    const n = clampName2(rmCanonicalVersionName(name, "Version"), "Version");
+    return {
+      id: rmNewId("mv"),
+      name: n,
+      data,
+      savedAt: Date.now()
+    };
+  }
   function pushMapRoomSync(backup) {
     try {
       if (backup && typeof ChatRoomMapViewEditBackup !== "undefined" && ChatRoomMapViewEditBackup) {
@@ -6482,55 +7500,554 @@
     pushMapRoomSync(backup);
     return { ok: true };
   }
-  function rmListMaps() {
-    return (rmGetStore().maps || []).slice();
+  function sortByName(a, b) {
+    return a.name.localeCompare(b.name, void 0, { sensitivity: "base" });
   }
-  function rmSaveNamedMap(name, overwriteId) {
+  function sortVersions(versions) {
+    return versions.slice().sort(function(a, b) {
+      if (rmIsDefaultVersionName(a.name) && !rmIsDefaultVersionName(b.name)) return -1;
+      if (!rmIsDefaultVersionName(a.name) && rmIsDefaultVersionName(b.name)) return 1;
+      return (b.savedAt || 0) - (a.savedAt || 0);
+    });
+  }
+  function rmListAllMaps() {
+    peelRemoteExtrasToLocal();
+    const remote = rawRemoteMaps();
+    const local = rmLoadLocalMaps();
+    const byId = {};
+    remote.forEach(function(m) {
+      const def = pickDefault(m.versions);
+      if (!def) return;
+      byId[m.id] = {
+        id: m.id,
+        name: m.name,
+        location: "remote",
+        versions: [{
+          id: def.id,
+          name: RM_MAP_DEFAULT_NAME,
+          data: def.data,
+          savedAt: def.savedAt
+        }]
+      };
+    });
+    local.forEach(function(m) {
+      const existing = byId[m.id];
+      if (existing && existing.location === "remote") {
+        const extras = extrasOnly(m.versions);
+        existing.versions = sortVersions(existing.versions.concat(extras));
+        return;
+      }
+      let vers = m.versions.slice();
+      if (!pickDefault(vers) && vers.length) {
+        vers[0] = {
+          id: vers[0].id,
+          name: RM_MAP_DEFAULT_NAME,
+          data: vers[0].data,
+          savedAt: vers[0].savedAt
+        };
+      }
+      byId[m.id] = {
+        id: m.id,
+        name: m.name,
+        location: "local",
+        versions: sortVersions(vers)
+      };
+    });
+    return Object.keys(byId).map(function(k) {
+      return byId[k];
+    }).sort(sortByName);
+  }
+  function rmGetMap(id) {
+    return rmListAllMaps().find(function(m) {
+      return m.id === id;
+    }) || null;
+  }
+  function rmListVersions(mapId) {
+    const m = rmGetMap(mapId);
+    return m ? sortVersions(m.versions) : [];
+  }
+  function rmDefaultVersionId(mapId) {
+    const m = rmGetMap(mapId);
+    if (!m) return null;
+    const def = pickDefault(m.versions);
+    return def ? def.id : null;
+  }
+  function rmLatestVersionId(mapId) {
+    return rmDefaultVersionId(mapId) || rmListVersions(mapId)[0] && rmListVersions(mapId)[0].id || null;
+  }
+  function upsertLocalEntry(mapId, name, versions) {
+    const local = rmLoadLocalMaps().slice();
+    const idx = local.findIndex(function(m) {
+      return m.id === mapId;
+    });
+    const entry = {
+      id: mapId,
+      name,
+      location: "local",
+      versions
+    };
+    if (idx >= 0) local[idx] = entry;
+    else local.unshift(entry);
+    return saveLocalMaps(local);
+  }
+  function removeLocalEntry(mapId) {
+    const local = rmLoadLocalMaps().filter(function(m) {
+      return m.id !== mapId;
+    });
+    return saveLocalMaps(local);
+  }
+  function countLocalMapSlots() {
+    const remoteIds = {};
+    rawRemoteMaps().forEach(function(m) {
+      remoteIds[m.id] = true;
+    });
+    let n = 0;
+    rmLoadLocalMaps().forEach(function(m) {
+      if (!remoteIds[m.id]) n++;
+    });
+    return n;
+  }
+  function rmSaveNewMap(name, _versionName, location) {
     const data = rmExportCurrentMap();
     if (!data) return { ok: false, error: "No map to save (map room required)" };
-    const store = rmGetStore();
-    const entry = {
-      id: overwriteId || rmNewId("m"),
-      name: String(name || "Untitled").trim().slice(0, 48) || "Untitled",
+    const loc = preferRemote(location);
+    const fellBackLocal = !location && loc === "local";
+    const def = makeDefaultVersion(data);
+    const series = {
+      id: rmNewId("m"),
+      name: clampName2(name, "Untitled"),
+      location: loc,
+      versions: [def]
+    };
+    if (loc === "remote") {
+      const remote = rawRemoteMaps().map(function(m) {
+        const d = pickDefault(m.versions);
+        return {
+          id: m.id,
+          name: m.name,
+          location: "remote",
+          versions: d ? [d] : []
+        };
+      }).filter(function(m) {
+        return m.versions.length > 0;
+      });
+      if (remote.length >= remoteMax()) {
+        return { ok: false, error: "Remote map limit (" + remoteMax() + ")" };
+      }
+      remote.unshift({
+        id: series.id,
+        name: series.name,
+        location: "remote",
+        versions: [def]
+      });
+      const saved = persistRemoteDefaults(remote);
+      if (!saved.ok) {
+        series.location = "local";
+        if (countLocalMapSlots() >= localMax()) {
+          return { ok: false, error: saved.error || "Remote save failed; local full" };
+        }
+        const local2 = rmLoadLocalMaps().slice();
+        local2.unshift(series);
+        const ls2 = saveLocalMaps(local2);
+        if (!ls2.ok) return { ok: false, error: ls2.error || saved.error };
+        return { ok: true, map: series, fellBackLocal: true };
+      }
+      return { ok: true, map: series, fellBackLocal };
+    }
+    if (countLocalMapSlots() >= localMax()) {
+      return { ok: false, error: "Local map limit (" + localMax() + ")" };
+    }
+    const local = rmLoadLocalMaps().slice();
+    local.unshift(series);
+    const ls = saveLocalMaps(local);
+    if (!ls.ok) return { ok: false, error: ls.error };
+    return { ok: true, map: series, fellBackLocal };
+  }
+  function rmSaveNewVersion(mapId, versionName) {
+    const data = rmExportCurrentMap();
+    if (!data) return { ok: false, error: "No map to save (map room required)" };
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const canon = rmCanonicalVersionName(versionName, "Version");
+    if (rmIsDefaultVersionName(canon)) {
+      return { ok: false, error: "Use Overwrite Default to update Default" };
+    }
+    const extras = extrasOnly(map.versions);
+    if (extras.length >= localVerMax()) {
+      return { ok: false, error: "Local version limit (" + localVerMax() + ")" };
+    }
+    const version = makeLocalVersion(canon, data);
+    const nextExtras = [version].concat(extras);
+    if (map.location === "remote") {
+      const ls2 = upsertLocalEntry(mapId, map.name, nextExtras);
+      if (!ls2.ok) return { ok: false, error: ls2.error };
+      return { ok: true, version };
+    }
+    const def = pickDefault(map.versions);
+    const all = (def ? [def] : []).concat(nextExtras);
+    const ls = upsertLocalEntry(mapId, map.name, all);
+    if (!ls.ok) return { ok: false, error: ls.error };
+    return { ok: true, version };
+  }
+  function rmOverwriteDefault(mapId) {
+    const data = rmExportCurrentMap();
+    if (!data) return { ok: false, error: "No map to save (map room required)" };
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const prev = pickDefault(map.versions);
+    const nextDef = {
+      id: prev ? prev.id : rmNewId("mv"),
+      name: RM_MAP_DEFAULT_NAME,
       data,
       savedAt: Date.now()
     };
-    let maps = store.maps.slice();
-    if (overwriteId) {
-      const idx = maps.findIndex(function(m) {
-        return m.id === overwriteId;
+    if (map.location === "remote") {
+      const remote = rawRemoteMaps().map(function(m) {
+        if (m.id !== mapId) {
+          const d = pickDefault(m.versions);
+          return {
+            id: m.id,
+            name: m.name,
+            location: "remote",
+            versions: d ? [{ id: d.id, name: RM_MAP_DEFAULT_NAME, data: d.data, savedAt: d.savedAt }] : []
+          };
+        }
+        return {
+          id: mapId,
+          name: map.name,
+          location: "remote",
+          versions: [nextDef]
+        };
+      }).filter(function(m) {
+        return m.versions.length > 0;
       });
-      if (idx < 0) return { ok: false, error: "Map not found" };
-      maps[idx] = entry;
-    } else {
-      maps.unshift(entry);
-      const max = Seidr.RM_MAP_MAX || 10;
-      while (maps.length > max) maps.pop();
+      const saved = persistRemoteDefaults(remote);
+      if (!saved.ok) return { ok: false, error: saved.error };
+      return { ok: true, version: nextDef };
     }
-    const can = rmCanSaveMaps(maps);
-    if (!can.ok) return { ok: false, error: can.error };
-    store.maps = maps;
-    const saved = rmSaveStore();
-    if (!saved.ok) return { ok: false, error: saved.error };
-    return { ok: true, entry };
+    const extras = extrasOnly(map.versions);
+    const ls = upsertLocalEntry(mapId, map.name, [nextDef].concat(extras));
+    if (!ls.ok) return { ok: false, error: ls.error };
+    return { ok: true, version: nextDef };
   }
-  function rmLoadNamedMap(id) {
-    const entry = rmGetStore().maps.find(function(m) {
-      return m.id === id;
+  function rmLoadMapVersion(mapId, versionId) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const ver = map.versions.find(function(v) {
+      return v.id === versionId;
     });
-    if (!entry) return { ok: false, error: "Map not found" };
-    return rmImportMapString(entry.data);
+    if (!ver) return { ok: false, error: "Version not found" };
+    return rmImportMapString(ver.data);
   }
-  function rmDeleteNamedMap(id) {
-    const store = rmGetStore();
-    const next = (store.maps || []).filter(function(m) {
-      return m.id !== id;
+  function rmRenameMap(mapId, name) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const nextName = clampName2(name, map.name);
+    if (map.location === "remote") {
+      const remote = rawRemoteMaps().map(function(m) {
+        const d = pickDefault(m.versions);
+        return {
+          id: m.id,
+          name: m.id === mapId ? nextName : m.name,
+          location: "remote",
+          versions: d ? [{ id: d.id, name: RM_MAP_DEFAULT_NAME, data: d.data, savedAt: d.savedAt }] : []
+        };
+      }).filter(function(m) {
+        return m.versions.length > 0;
+      });
+      const saved = persistRemoteDefaults(remote);
+      if (!saved.ok) return { ok: false, error: saved.error };
+      const local = rmLoadLocalMaps();
+      const li = local.findIndex(function(m) {
+        return m.id === mapId;
+      });
+      if (li >= 0) {
+        local[li] = { id: mapId, name: nextName, location: "local", versions: local[li].versions };
+        saveLocalMaps(local);
+      }
+      return { ok: true };
+    }
+    const ls = upsertLocalEntry(mapId, nextName, map.versions);
+    return ls;
+  }
+  function rmRenameVersion(mapId, versionId, name) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const ver = map.versions.find(function(v) {
+      return v.id === versionId;
     });
-    if (next.length === (store.maps || []).length) return { ok: false, error: "Map not found" };
-    store.maps = next;
-    const saved = rmSaveStore();
-    if (!saved.ok) return { ok: false, error: saved.error };
+    if (!ver) return { ok: false, error: "Version not found" };
+    if (rmIsDefaultVersionName(ver.name)) {
+      return { ok: false, error: "Default cannot be renamed" };
+    }
+    const canon = rmCanonicalVersionName(name, ver.name);
+    if (rmIsDefaultVersionName(canon)) {
+      return { ok: false, error: "Cannot rename to Default" };
+    }
+    const next = {
+      id: ver.id,
+      name: clampName2(canon, ver.name),
+      data: ver.data,
+      savedAt: ver.savedAt
+    };
+    if (map.location === "remote") {
+      const extras = extrasOnly(map.versions).map(function(v) {
+        return v.id === versionId ? next : v;
+      });
+      return upsertLocalEntry(mapId, map.name, extras);
+    }
+    const all = map.versions.map(function(v) {
+      return v.id === versionId ? next : v;
+    });
+    return upsertLocalEntry(mapId, map.name, all);
+  }
+  function rmDeleteMap(mapId) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    removeLocalEntry(mapId);
+    if (map.location === "remote") {
+      const remote = rawRemoteMaps().filter(function(m) {
+        return m.id !== mapId;
+      }).map(function(m) {
+        const d = pickDefault(m.versions);
+        return {
+          id: m.id,
+          name: m.name,
+          location: "remote",
+          versions: d ? [{ id: d.id, name: RM_MAP_DEFAULT_NAME, data: d.data, savedAt: d.savedAt }] : []
+        };
+      }).filter(function(m) {
+        return m.versions.length > 0;
+      });
+      return persistRemoteDefaults(remote);
+    }
     return { ok: true };
+  }
+  function rmDeleteVersion(mapId, versionId) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    const ver = map.versions.find(function(v) {
+      return v.id === versionId;
+    });
+    if (!ver) return { ok: false, error: "Version not found" };
+    if (rmIsDefaultVersionName(ver.name)) {
+      if (map.versions.length <= 1) return rmDeleteMap(mapId);
+      return { ok: false, error: "Cannot delete Default while other versions exist \u2014 delete the map instead" };
+    }
+    if (map.location === "remote") {
+      const extras = extrasOnly(map.versions).filter(function(v) {
+        return v.id !== versionId;
+      });
+      if (!extras.length) return removeLocalEntry(mapId);
+      return upsertLocalEntry(mapId, map.name, extras);
+    }
+    const all = map.versions.filter(function(v) {
+      return v.id !== versionId;
+    });
+    if (!all.length) return rmDeleteMap(mapId);
+    return upsertLocalEntry(mapId, map.name, all);
+  }
+  function rmSetMapLocation(mapId, location) {
+    const map = rmGetMap(mapId);
+    if (!map) return { ok: false, error: "Map not found" };
+    if (map.location === location) return { ok: true };
+    const def = pickDefault(map.versions);
+    if (!def) return { ok: false, error: "Map has no Default version" };
+    const extras = extrasOnly(map.versions);
+    if (location === "remote") {
+      const remote2 = rawRemoteMaps().map(function(m) {
+        const d = pickDefault(m.versions);
+        return {
+          id: m.id,
+          name: m.name,
+          location: "remote",
+          versions: d ? [{ id: d.id, name: RM_MAP_DEFAULT_NAME, data: d.data, savedAt: d.savedAt }] : []
+        };
+      }).filter(function(m) {
+        return m.versions.length > 0;
+      });
+      if (remote2.length >= remoteMax()) {
+        return { ok: false, error: "Remote map limit (" + remoteMax() + ")" };
+      }
+      remote2.push({
+        id: map.id,
+        name: map.name,
+        location: "remote",
+        versions: [{ id: def.id, name: RM_MAP_DEFAULT_NAME, data: def.data, savedAt: def.savedAt }]
+      });
+      const can = rmCanSaveMaps(rmSerializeRemoteMaps(remote2));
+      if (!can.ok) return { ok: false, error: can.error };
+      const saved = persistRemoteDefaults(remote2);
+      if (!saved.ok) return { ok: false, error: saved.error };
+      if (extras.length) {
+        return upsertLocalEntry(mapId, map.name, extras);
+      }
+      return removeLocalEntry(mapId);
+    }
+    if (countLocalMapSlots() >= localMax() && !rmLoadLocalMaps().some(function(m) {
+      return m.id === mapId;
+    })) {
+    }
+    const fullyLocal = !rawRemoteMaps().some(function(m) {
+      return m.id === mapId;
+    });
+    if (fullyLocal === false) {
+      if (countLocalMapSlots() >= localMax()) {
+        return { ok: false, error: "Local map limit (" + localMax() + ")" };
+      }
+    }
+    const all = [def].concat(extras);
+    const ls = upsertLocalEntry(mapId, map.name, all);
+    if (!ls.ok) return { ok: false, error: ls.error };
+    const remote = rawRemoteMaps().filter(function(m) {
+      return m.id !== mapId;
+    }).map(function(m) {
+      const d = pickDefault(m.versions);
+      return {
+        id: m.id,
+        name: m.name,
+        location: "remote",
+        versions: d ? [{ id: d.id, name: RM_MAP_DEFAULT_NAME, data: d.data, savedAt: d.savedAt }] : []
+      };
+    }).filter(function(m) {
+      return m.versions.length > 0;
+    });
+    return persistRemoteDefaults(remote);
+  }
+  function rmExportMapsJson() {
+    const maps = rmListAllMaps();
+    const payload = {
+      v: 1,
+      kind: "SeidrMaps",
+      maps: maps.map(function(m) {
+        return {
+          name: m.name,
+          versions: m.versions.map(function(v) {
+            return { name: v.name, data: v.data, savedAt: v.savedAt };
+          })
+        };
+      })
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+  function rmParseMapsImport(raw) {
+    const text = String(raw || "").trim();
+    if (!text) return { ok: false, error: "Paste or choose a maps export first" };
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return { ok: false, error: "Invalid JSON" };
+    }
+    if (!data || typeof data !== "object") return { ok: false, error: "Invalid export data" };
+    const d = data;
+    if (d.kind !== "SeidrMaps" || d.v !== 1) {
+      return { ok: false, error: "Unsupported export format (need SeidrMaps v1)" };
+    }
+    if (!Array.isArray(d.maps)) return { ok: false, error: "Export has no maps list" };
+    const out = [];
+    for (let i = 0; i < d.maps.length; i++) {
+      const row = d.maps[i];
+      const name = clampName2(row.name, "Imported " + (i + 1));
+      const versions = [];
+      if (Array.isArray(row.versions)) {
+        for (let j = 0; j < row.versions.length; j++) {
+          const v = rmNormalizeMapVersion(row.versions[j], j === 0 ? RM_MAP_DEFAULT_NAME : "v" + (j + 1));
+          if (v) versions.push({ name: v.name, data: v.data, savedAt: v.savedAt });
+        }
+      } else if (typeof row.data === "string" && row.data.length) {
+        versions.push({
+          name: RM_MAP_DEFAULT_NAME,
+          data: row.data,
+          savedAt: typeof row.savedAt === "number" ? row.savedAt : Date.now()
+        });
+      }
+      if (versions.length && !versions.some(function(v) {
+        return rmIsDefaultVersionName(v.name);
+      })) {
+        versions[0] = {
+          name: RM_MAP_DEFAULT_NAME,
+          data: versions[0].data,
+          savedAt: versions[0].savedAt
+        };
+      }
+      if (versions.length) out.push({ name, versions });
+    }
+    if (!out.length) return { ok: false, error: "No valid maps in export" };
+    return { ok: true, maps: out };
+  }
+  function rmImportSelectedMaps(candidates) {
+    if (!candidates || !candidates.length) {
+      return { ok: false, error: "Select at least one map", imported: 0 };
+    }
+    let local = rmLoadLocalMaps().slice();
+    let imported = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      if (countLocalMapSlots() + imported >= localMax()) {
+        return {
+          ok: imported > 0,
+          error: imported > 0 ? "Imported " + imported + "; local limit reached" : "Local map limit (" + localMax() + ")",
+          imported
+        };
+      }
+      const c = candidates[i];
+      const vers = [];
+      let hasDefault = false;
+      const verCap = localVerMax() + 1;
+      for (let j = 0; j < c.versions.length && vers.length < verCap; j++) {
+        const v = c.versions[j];
+        let vname = rmCanonicalVersionName(v.name, j === 0 ? RM_MAP_DEFAULT_NAME : "v" + (j + 1));
+        if (rmIsDefaultVersionName(vname)) {
+          if (hasDefault) vname = "Import " + (j + 1);
+          else hasDefault = true;
+        }
+        vers.push({
+          id: rmNewId("mv"),
+          name: clampName2(vname, "v" + (j + 1)),
+          data: v.data,
+          savedAt: typeof v.savedAt === "number" ? v.savedAt : Date.now()
+        });
+      }
+      if (!vers.length) continue;
+      if (!hasDefault) {
+        vers[0] = {
+          id: vers[0].id,
+          name: RM_MAP_DEFAULT_NAME,
+          data: vers[0].data,
+          savedAt: vers[0].savedAt
+        };
+      }
+      local.unshift({
+        id: rmNewId("m"),
+        name: clampName2(c.name, "Imported"),
+        location: "local",
+        versions: vers
+      });
+      imported++;
+    }
+    const ls = saveLocalMaps(local);
+    if (!ls.ok) return { ok: false, error: ls.error, imported: 0 };
+    return { ok: true, imported };
+  }
+  function rmLocalMapsBytesEstimate() {
+    try {
+      return rmSliceBytes({ maps: rmLoadLocalMaps() });
+    } catch (e) {
+      return 0;
+    }
+  }
+  function rmLocalMapsStats() {
+    peelRemoteExtrasToLocal();
+    const maps = rmLoadLocalMaps();
+    let versions = 0;
+    for (let i = 0; i < maps.length; i++) versions += maps[i].versions.length;
+    const bytes = rmLocalMapsBytesEstimate();
+    return {
+      maps: maps.length,
+      versions,
+      bytes,
+      label: maps.length + " local entries \xB7 " + versions + " versions \xB7 " + rmFormatBytes(bytes)
+    };
   }
 
   // src/roomManager/preview.ts
@@ -6795,7 +8312,7 @@
       return !q || (b.name || "").toLowerCase().indexOf(q) >= 0;
     });
     grid.innerHTML = "";
-    const canLoad = rmCanApplyToRoom();
+    const canLoad2 = rmCanApplyToRoom();
     list.forEach(function(b) {
       const card = document.createElement("div");
       card.className = "seidr-rm-card";
@@ -6817,8 +8334,8 @@
         if (src) img.src = src;
       });
       const loadBtn = card.querySelector('[data-act="load"]');
-      loadBtn.disabled = !canLoad;
-      if (!canLoad) loadBtn.title = "Join a chat room or open room settings to Load";
+      loadBtn.disabled = !canLoad2;
+      if (!canLoad2) loadBtn.title = "Join a chat room or open room settings to Load";
       loadBtn.addEventListener("click", function() {
         if (!rmCanApplyToRoom()) {
           setMsg2("Open ChatRoom or ChatAdmin to Load");
@@ -6839,6 +8356,38 @@
       grid.appendChild(card);
     });
   }
+  function selectedRmMapId() {
+    const sel = $("seidr-rm-map-sel");
+    return sel && sel.value ? sel.value : null;
+  }
+  function selectedRmVersionId() {
+    const sel = $("seidr-rm-ver-sel");
+    return sel && sel.value ? sel.value : null;
+  }
+  function fillVersionSelect(mapId, preferId) {
+    const verSel = $("seidr-rm-ver-sel");
+    if (!verSel) return;
+    if (!mapId) {
+      fillSelect(verSel, []);
+      return;
+    }
+    const vers = rmListVersions(mapId);
+    const prev = preferId || verSel.value || rmLatestVersionId(mapId);
+    verSel.innerHTML = "";
+    vers.forEach(function(v) {
+      const opt = document.createElement("option");
+      opt.value = v.id;
+      opt.textContent = v.name;
+      verSel.appendChild(opt);
+    });
+    if (prev && vers.some(function(v) {
+      return v.id === prev;
+    })) {
+      verSel.value = prev;
+    } else if (vers.length) {
+      verSel.value = vers[0].id;
+    }
+  }
   function renderMaps() {
     const wrap = $("seidr-rm-maps-wrap");
     const sel = $("seidr-rm-map-sel");
@@ -6846,16 +8395,23 @@
     const show = rmMapModeActive();
     wrap.classList.toggle("seidr-rm-hidden", !show);
     if (!show || !sel) return;
-    const maps = rmListMaps();
-    const names = maps.map(function(m) {
-      return m.name;
-    }).sort();
-    const byName = {};
+    const maps = rmListAllMaps();
+    const prevId = sel.value;
+    sel.innerHTML = "";
     maps.forEach(function(m) {
-      byName[m.name] = m.id;
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.name + (m.location === "local" ? " (Local)" : "");
+      sel.appendChild(opt);
     });
-    sel._rmMapIds = byName;
-    fillSelect(sel, names);
+    if (prevId && maps.some(function(m) {
+      return m.id === prevId;
+    })) {
+      sel.value = prevId;
+    } else if (maps.length) {
+      sel.value = maps[0].id;
+    }
+    fillVersionSelect(sel.value || null);
   }
   function rmBuildPanelBody() {
     const body = $("seidr-rm-body");
@@ -6890,11 +8446,16 @@
       '<section class="seidr-rm-sec" id="seidr-rm-maps-wrap">',
       "<h3>4. Maps</h3>",
       '<div class="seidr-rm-row">',
-      '<select id="seidr-rm-map-sel"></select>',
+      '<select id="seidr-rm-map-sel" title="Map"></select>',
+      '<select id="seidr-rm-ver-sel" title="Version"></select>',
+      "</div>",
+      '<div class="seidr-rm-row" style="margin-top:6px;">',
       '<button type="button" data-rm="map-save-as">Save as\u2026</button>',
-      '<button type="button" data-rm="map-overwrite">Overwrite</button>',
+      '<button type="button" data-rm="map-save-ver">Save new Version</button>',
+      '<button type="button" data-rm="map-overwrite">Overwrite Default</button>',
       '<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
-      '<button type="button" class="seidr-rm-icon-act" data-rm="map-delete" title="Delete">\xD7</button>',
+      '<button type="button" data-rm="map-delete-ver">Delete version</button>',
+      '<button type="button" data-rm="map-delete">Delete map</button>',
       "</div></section>"
     ].join("");
     body.addEventListener("click", function(ev) {
@@ -7031,63 +8592,122 @@
       } else if (act2 === "map-save-as") {
         const name = promptName("Save map as:");
         if (!name) return;
-        const maps = rmListMaps();
+        const maps = rmListAllMaps();
         const existing = maps.find(function(m) {
           return m.name === name;
         });
-        if (existing && !confirmAct("Overwrite \u201C" + name + "\u201D?")) return;
-        const r = rmSaveNamedMap(name, existing && existing.id);
-        setMsg2(r.ok ? "Map saved" : r.error || "Failed");
+        if (existing) {
+          if (!confirmAct("Map \u201C" + name + "\u201D exists \u2014 overwrite Default?")) return;
+          const r2 = rmOverwriteDefault(existing.id);
+          setMsg2(r2.ok ? "Default overwritten" : r2.error || "Failed");
+          rmRefreshUi();
+          const mapSel2 = $("seidr-rm-map-sel");
+          if (mapSel2) mapSel2.value = existing.id;
+          fillVersionSelect(existing.id, r2.version && r2.version.id);
+          return;
+        }
+        const r = rmSaveNewMap(name);
+        setMsg2(r.ok ? r.fellBackLocal ? "Map saved (Local \u2014 remote full). Default created." : "Map saved (Default)" : r.error || "Failed");
         rmRefreshUi();
-      } else if (act2 === "map-overwrite") {
-        const sel = $("seidr-rm-map-sel");
-        if (!sel || !sel.value) {
+        if (r.map) {
+          const mapSel2 = $("seidr-rm-map-sel");
+          if (mapSel2) mapSel2.value = r.map.id;
+          fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
+        }
+      } else if (act2 === "map-save-ver") {
+        const mapId = selectedRmMapId();
+        if (!mapId) {
           setMsg2("Select a map");
           return;
         }
-        if (!confirmAct("Overwrite map \u201C" + sel.value + "\u201D with the current room map?")) return;
-        const ids = sel._rmMapIds;
-        const id = ids && ids[sel.value];
-        const r = rmSaveNamedMap(sel.value, id);
-        setMsg2(r.ok ? "Overwritten" : r.error || "Failed");
+        const verName = promptName("Local version name (not Default):");
+        if (!verName) return;
+        if (verName === RM_MAP_DEFAULT_NAME) {
+          setMsg2("Use Overwrite Default to update Default");
+          return;
+        }
+        const r = rmSaveNewVersion(mapId, verName);
+        setMsg2(r.ok ? "Local version saved" : r.error || "Failed");
         rmRefreshUi();
+        fillVersionSelect(mapId, r.version && r.version.id);
+      } else if (act2 === "map-overwrite") {
+        const mapId = selectedRmMapId();
+        if (!mapId) {
+          setMsg2("Select a map");
+          return;
+        }
+        if (!confirmAct("Overwrite Default with the current room map?")) return;
+        const r = rmOverwriteDefault(mapId);
+        setMsg2(r.ok ? "Default overwritten" : r.error || "Failed");
+        rmRefreshUi();
+        fillVersionSelect(mapId, r.version && r.version.id);
       } else if (act2 === "map-load") {
         if (!rmCanApplyToRoom()) {
           setMsg2("Open ChatRoom or ChatAdmin to Load");
           return;
         }
-        const sel = $("seidr-rm-map-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select a map");
+        const mapId = selectedRmMapId();
+        const verId = selectedRmVersionId();
+        if (!mapId || !verId) {
+          setMsg2("Select a map and version");
           return;
         }
-        if (!confirmAct("Load map \u201C" + sel.value + "\u201D into this room?")) return;
-        const ids = sel._rmMapIds;
-        const id = ids && ids[sel.value];
-        if (!id) {
-          setMsg2("Not found");
+        const maps = rmListAllMaps();
+        const map = maps.find(function(m) {
+          return m.id === mapId;
+        });
+        const ver = map && map.versions.find(function(v) {
+          return v.id === verId;
+        });
+        if (!confirmAct(
+          "Load \u201C" + (map ? map.name : "") + "\u201D / \u201C" + (ver ? ver.name : "") + "\u201D into this room?"
+        )) return;
+        const r = rmLoadMapVersion(mapId, verId);
+        setMsg2(r.ok ? "Map version loaded" : r.error || "Failed");
+      } else if (act2 === "map-delete-ver") {
+        const mapId = selectedRmMapId();
+        const verId = selectedRmVersionId();
+        if (!mapId || !verId) {
+          setMsg2("Select a map and version");
           return;
         }
-        const r = rmLoadNamedMap(id);
-        setMsg2(r.ok ? "Map loaded" : r.error || "Failed");
+        const map = rmListAllMaps().find(function(m) {
+          return m.id === mapId;
+        });
+        const ver = map && map.versions.find(function(v) {
+          return v.id === verId;
+        });
+        const isDef = ver && rmIsDefaultVersionName(ver.name);
+        const only = map && map.versions.length <= 1;
+        if (isDef && !only) {
+          setMsg2("Cannot delete Default while other versions exist \u2014 use Delete map");
+          return;
+        }
+        if (!confirmAct(only || isDef ? "Delete entire map \u201C" + (map ? map.name : "") + "\u201D?" : "Delete this local version?")) return;
+        const r = rmDeleteVersion(mapId, verId);
+        setMsg2(r.ok ? only || isDef ? "Map deleted" : "Version deleted" : r.error || "Failed");
+        rmRefreshUi();
       } else if (act2 === "map-delete") {
-        const sel = $("seidr-rm-map-sel");
-        if (!sel || !sel.value) {
+        const mapId = selectedRmMapId();
+        if (!mapId) {
           setMsg2("Select a map");
           return;
         }
-        if (!confirmAct("Delete map \u201C" + sel.value + "\u201D?")) return;
-        const ids = sel._rmMapIds;
-        const id = ids && ids[sel.value];
-        if (!id) {
-          setMsg2("Not found");
-          return;
-        }
-        const r = rmDeleteNamedMap(id);
+        const map = rmListAllMaps().find(function(m) {
+          return m.id === mapId;
+        });
+        if (!confirmAct("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?")) return;
+        const r = rmDeleteMap(mapId);
         setMsg2(r.ok ? "Map deleted" : r.error || "Failed");
         rmRefreshUi();
       }
     });
+    const mapSel = $("seidr-rm-map-sel");
+    if (mapSel) {
+      mapSel.addEventListener("change", function() {
+        fillVersionSelect(mapSel.value || null);
+      });
+    }
     const filter = $("seidr-rm-bg-filter");
     if (filter) {
       filter.addEventListener("input", function() {
@@ -7781,26 +9401,88 @@
       "  display: flex; align-items: center; gap: 4px; font-size: 11px; color: #a898b0;",
       "  flex: 0 0 auto; cursor: default;",
       "}",
-      '.seidr-settings-draw-field input[type="number"] {',
-      "  width: 72px;",
+      '.seidr-settings-draw-field input[type="number"],',
+      ".seidr-settings-draw-field input.seidr-settings-num {",
+      "  width: 56px;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 4px; padding: 4px 6px;",
+      "  font: inherit; box-sizing: border-box;",
       "}",
-      ".seidr-settings-draw-row button {",
+      ".seidr-settings-draw-field .seidr-num-wrap {",
+      "  display: inline-flex; align-items: stretch; vertical-align: middle;",
+      "}",
+      '.seidr-settings-draw-field .seidr-num-wrap input[type="number"],',
+      ".seidr-settings-draw-field .seidr-num-wrap input.seidr-settings-num {",
+      "  border-top-right-radius: 0; border-bottom-right-radius: 0;",
+      "  -moz-appearance: textfield;",
+      "}",
+      ".seidr-settings-draw-field .seidr-num-wrap input::-webkit-outer-spin-button,",
+      ".seidr-settings-draw-field .seidr-num-wrap input::-webkit-inner-spin-button {",
+      "  -webkit-appearance: none; margin: 0;",
+      "}",
+      ".seidr-settings-draw-field .seidr-num-wrap:focus-within input {",
+      "  border-color: #d4a017;",
+      "}",
+      ".seidr-settings-draw-row > button[data-draw-reset] {",
       "  background: rgba(60,48,80,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
       "}",
-      ".seidr-settings-draw-row button:hover { border-color: #d4a017; }",
+      ".seidr-settings-draw-row > button[data-draw-reset]:hover { border-color: #d4a017; }",
       ".seidr-settings-draw-actions { margin-top: 10px; }",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
       "}",
-      '.seidr-settings-field-row input[type="text"] {',
+      '.seidr-settings-field-row input[type="text"],',
+      '.seidr-settings-field-row input[type="number"],',
+      ".seidr-settings-field-row input.seidr-settings-num {",
       "  flex: 1; min-width: 0;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "  font: inherit; box-sizing: border-box;",
+      "}",
+      '.seidr-settings-field-row input[type="number"]:focus,',
+      ".seidr-settings-field-row input.seidr-settings-num:focus,",
+      '.seidr-settings-field-row input[type="text"]:focus {',
+      "  outline: none; border-color: #d4a017;",
+      "}",
+      ".seidr-settings-field-row .seidr-num-wrap {",
+      "  flex: 1; min-width: 0; display: flex; align-items: stretch;",
+      "}",
+      ".seidr-settings-field-row .seidr-num-wrap input.seidr-settings-num {",
+      "  flex: 1; min-width: 0; width: auto;",
+      "  border-top-right-radius: 0; border-bottom-right-radius: 0;",
+      "  -moz-appearance: textfield;",
+      "}",
+      ".seidr-settings-field-row .seidr-num-wrap input.seidr-settings-num::-webkit-outer-spin-button,",
+      ".seidr-settings-field-row .seidr-num-wrap input.seidr-settings-num::-webkit-inner-spin-button {",
+      "  -webkit-appearance: none; margin: 0;",
+      "}",
+      ".seidr-num-spin {",
+      "  display: flex; flex-direction: column; flex: 0 0 22px; width: 22px;",
+      "}",
+      ".seidr-num-spin-btn {",
+      "  flex: 1; min-height: 0; padding: 0; margin: 0; cursor: pointer;",
+      "  background: rgba(60,48,80,0.9); color: #c8b8a0;",
+      "  border: 1px solid rgba(255,255,255,0.14);",
+      "  font: inherit; font-size: 8px; line-height: 1;",
+      "  box-sizing: border-box;",
+      "}",
+      ".seidr-num-spin-btn:first-child {",
+      "  border-radius: 0 4px 0 0; border-left: none; border-bottom: none;",
+      "}",
+      ".seidr-num-spin-btn:last-child {",
+      "  border-radius: 0 0 4px 0; border-left: none;",
+      "}",
+      ".seidr-num-spin-btn:hover {",
+      "  color: #d4a017; border-color: #d4a017; background: rgba(80,64,100,0.95);",
+      "}",
+      ".seidr-num-wrap:focus-within .seidr-num-spin-btn {",
+      "  border-color: #d4a017;",
+      "}",
+      ".seidr-num-wrap:focus-within input.seidr-settings-num {",
+      "  border-color: #d4a017;",
       "}",
       ".seidr-act-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }",
       ".seidr-act-list-item {",
@@ -8006,7 +9688,27 @@
       "  display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px;",
       "}",
       ".seidr-act-icon-custom-row img { width: 28px; height: 28px; object-fit: contain; }",
-      ".seidr-act-icon-custom-row span { flex: 1; }"
+      ".seidr-act-icon-custom-row span { flex: 1; }",
+      ".seidr-map-loc-btns { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }",
+      ".seidr-map-loc-btn.seidr-map-loc-on {",
+      "  border-color: #d4a017; color: #d4a017; background: rgba(60,48,80,0.9);",
+      "}",
+      ".seidr-maps-hr {",
+      "  border: none; border-top: 1px solid rgba(255,255,255,0.1);",
+      "  margin: 14px 0 10px;",
+      "}",
+      ".seidr-maps-file-row {",
+      "  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;",
+      "  margin-top: 8px;",
+      "}",
+      ".seidr-maps-file-name {",
+      "  font-size: 12px; color: #a898b0; min-width: 0;",
+      "  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+      "}",
+      ".seidr-act-btn:disabled {",
+      "  opacity: 0.45; cursor: not-allowed;",
+      "}",
+      ".seidr-act-btn:disabled:hover { border-color: rgba(255,255,255,0.14); color: #f0e6d4; }"
     ].join("\n");
   }
   function seidrInjectSettingsStyles() {
@@ -8020,7 +9722,7 @@
   }
 
   // src/actions/io.ts
-  function lz2() {
+  function lz3() {
     try {
       if (typeof LZString !== "undefined" && LZString) return LZString;
     } catch (e) {
@@ -8037,7 +9739,7 @@
       actions: seidrListActions()
     };
     const json = JSON.stringify(payload);
-    const L = lz2();
+    const L = lz3();
     const prefix = actPrefix();
     if (!L || typeof L.compressToBase64 !== "function") {
       throw new Error("LZString unavailable");
@@ -8051,7 +9753,7 @@
     if (text.indexOf(prefix) !== 0) {
       return { ok: false, error: "Not a Seidr Actions export (missing " + prefix + ")" };
     }
-    const L = lz2();
+    const L = lz3();
     if (!L || typeof L.decompressFromBase64 !== "function") {
       return { ok: false, error: "LZString unavailable" };
     }
@@ -9171,6 +10873,21 @@
     bindList(container);
     bindEditor(container);
     bindIoPanel(container);
+    if (editId == null) {
+      const list = seidrListActions();
+      if (list.length) {
+        editId = list[0].id;
+        draft = seidrDefaultAction(list[0].id);
+        Object.assign(draft, JSON.parse(JSON.stringify(list[0])));
+        if (!draft.items) draft.items = [];
+        if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+        arousalPickerOpen = false;
+        renderList(container);
+        renderEditor(container);
+        bindList(container);
+        bindEditor(container);
+      }
+    }
     container.querySelector("#seidr-act-add")?.addEventListener("click", function() {
       const created = seidrAddAction();
       if (!created) {
@@ -9199,29 +10916,862 @@
     seidrBuildActionsTab(pane);
   }
 
+  // src/animations/ui.ts
+  var editId2 = null;
+  var draft2 = null;
+  function escapeHtml5(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function opts3(list, selected) {
+    return list.map(function(o) {
+      return '<option value="' + escapeHtml5(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml5(o.label) + "</option>";
+    }).join("");
+  }
+  function stringOpts2(list, selected) {
+    return list.map(function(o) {
+      return '<option value="' + escapeHtml5(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml5(o || "(clear)") + "</option>";
+    }).join("");
+  }
+  function setMsg4(root3, text) {
+    const el = root3.querySelector("#seidr-anim-msg");
+    if (el) el.textContent = text || "";
+  }
+  function updateCap(root3) {
+    const el = root3.querySelector("#seidr-anim-cap");
+    if (!el) return;
+    el.textContent = seidrListAnimations().length + "/" + SEIDR_ANIMATIONS_MAX + " Animations";
+  }
+  function renderList2(root3) {
+    const list = seidrListAnimations();
+    const box = root3.querySelector("#seidr-anim-list");
+    if (!box) return;
+    updateCap(root3);
+    if (!list.length) {
+      box.innerHTML = '<p class="seidr-settings-hint">No animations yet. Add one, then play with /animation name.</p>';
+      return;
+    }
+    const optsHtml = list.map(function(a) {
+      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml5(a.name) + " (" + a.steps.length + ")</option>";
+    }).join("");
+    box.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Animation</span>',
+      '<select id="seidr-anim-pick">' + optsHtml + "</select>",
+      "</div>"
+    ].join("");
+  }
+  function faceSummaryLabel(step) {
+    const expr = step.expression ? step.expression : "Clear";
+    return step.feature + " \xB7 " + expr;
+  }
+  function waitStepperHtml(wait2) {
+    return [
+      '<div class="seidr-num-wrap">',
+      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml5(String(wait2)) + '" />',
+      '<div class="seidr-num-spin" aria-hidden="true">',
+      '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="1" tabindex="-1" title="Increase">\u25B2</button>',
+      '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="-1" tabindex="-1" title="Decrease">\u25BC</button>',
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+  function stepCardHtml(step, index) {
+    const waitInput = waitStepperHtml(step.wait);
+    if (step.kind === "pose") {
+      const poseName = seidrPoseLabel(step.pose);
+      return [
+        '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
+        "<summary>Pose \xB7 " + escapeHtml5(poseName) + "</summary>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Pose</span>',
+        "<select data-anim-pose>" + opts3(SEIDR_ACTION_POSES, step.pose) + "</select>",
+        "</div>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Wait (s)</span>',
+        waitInput,
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:8px;">',
+        '<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-anim-del-step="' + index + '">Remove</button>',
+        "</div>",
+        "</details>"
+      ].join("");
+    }
+    const feature = step.feature;
+    const exprs = [""].concat(SEIDR_ANIM_FACE_MAP[feature] || []);
+    return [
+      '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
+      "<summary>Face \xB7 " + escapeHtml5(faceSummaryLabel(step)) + "</summary>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Feature</span>',
+      "<select data-anim-feature>" + stringOpts2(Object.keys(SEIDR_ANIM_FACE_MAP), feature) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Expression</span>',
+      "<select data-anim-expr>" + stringOpts2(exprs, step.expression) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Duration</span>',
+      "<select data-anim-dur>" + stringOpts2(SEIDR_ANIM_FACE_DURATIONS, step.duration) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Wait (s)</span>',
+      waitInput,
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-anim-del-step="' + index + '">Remove</button>',
+      "</div>",
+      "</details>"
+    ].join("");
+  }
+  function readDraftFromDom2(root3) {
+    if (!draft2) return null;
+    const nameEl = root3.querySelector("#seidr-anim-name");
+    const name = (nameEl && nameEl.value || "").trim() || draft2.name;
+    const cards = root3.querySelectorAll("[data-anim-step]");
+    const steps = [];
+    cards.forEach(function(card) {
+      const waitEl = card.querySelector("[data-anim-wait]");
+      const wait2 = waitEl ? parseFloat(waitEl.value) : 0.5;
+      const poseEl = card.querySelector("[data-anim-pose]");
+      if (poseEl) {
+        steps.push({ kind: "pose", pose: poseEl.value || "Kneel", wait: wait2 });
+        return;
+      }
+      const featEl = card.querySelector("[data-anim-feature]");
+      const exprEl = card.querySelector("[data-anim-expr]");
+      const durEl = card.querySelector("[data-anim-dur]");
+      if (featEl) {
+        steps.push({
+          kind: "face",
+          feature: featEl.value || "Eyes",
+          expression: exprEl ? exprEl.value : "",
+          duration: durEl && durEl.value ? durEl.value : "keep",
+          wait: wait2
+        });
+      }
+    });
+    return { id: draft2.id, name, steps };
+  }
+  function renderEditor2(root3) {
+    const wrap = root3.querySelector("#seidr-anim-editor");
+    if (!wrap) return;
+    if (!draft2) {
+      wrap.innerHTML = '<p class="seidr-settings-hint">Select an animation or add a new one.</p>';
+      return;
+    }
+    const total = seidrAnimWaitTotal(draft2.steps);
+    wrap.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Name</span>',
+      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml5(draft2.name) + '" />',
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:8px;">Steps ' + draft2.steps.length + "/" + SEIDR_ANIM_STEPS_MAX + " \xB7 Wait total " + total.toFixed(2) + "s / " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s</p>",
+      '<div id="seidr-anim-steps">' + draft2.steps.map(stepCardHtml).join("") + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-add-pose">+ Pose</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-add-face">+ Face</button>',
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-anim-del">Delete</button>',
+      "</div>",
+      '<p class="seidr-cmd-msg" id="seidr-anim-msg"></p>'
+    ].join("");
+    wireEditor(root3);
+  }
+  function openAnimation(root3, id) {
+    const list = seidrListAnimations();
+    let found = null;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        found = JSON.parse(JSON.stringify(list[i]));
+        break;
+      }
+    }
+    editId2 = found ? found.id : null;
+    draft2 = found;
+    renderList2(root3);
+    renderEditor2(root3);
+    wireList(root3);
+  }
+  function ensureFirstOpen(root3) {
+    if (editId2 != null && draft2) return;
+    const list = seidrListAnimations();
+    if (!list.length) {
+      editId2 = null;
+      draft2 = null;
+      renderList2(root3);
+      renderEditor2(root3);
+      wireList(root3);
+      return;
+    }
+    openAnimation(root3, list[0].id);
+  }
+  function wireEditor(root3) {
+    root3.querySelector("#seidr-anim-add-pose")?.addEventListener("click", function() {
+      const cur = readDraftFromDom2(root3) || draft2;
+      if (!cur) return;
+      if (cur.steps.length >= SEIDR_ANIM_STEPS_MAX) {
+        setMsg4(root3, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
+        return;
+      }
+      cur.steps.push(seidrDefaultAnimPoseStep());
+      draft2 = cur;
+      renderEditor2(root3);
+    });
+    root3.querySelector("#seidr-anim-add-face")?.addEventListener("click", function() {
+      const cur = readDraftFromDom2(root3) || draft2;
+      if (!cur) return;
+      if (cur.steps.length >= SEIDR_ANIM_STEPS_MAX) {
+        setMsg4(root3, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
+        return;
+      }
+      cur.steps.push(seidrDefaultAnimFaceStep());
+      draft2 = cur;
+      renderEditor2(root3);
+    });
+    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const cur = readDraftFromDom2(root3) || draft2;
+        if (!cur) return;
+        const idx = parseInt(btn2.getAttribute("data-anim-del-step") || "-1", 10);
+        if (idx < 0) return;
+        cur.steps.splice(idx, 1);
+        draft2 = cur;
+        renderEditor2(root3);
+      });
+    });
+    function refreshFromDom() {
+      const cur = readDraftFromDom2(root3);
+      if (cur) {
+        draft2 = cur;
+        renderEditor2(root3);
+      }
+    }
+    root3.querySelectorAll("[data-anim-feature], [data-anim-pose], [data-anim-expr]").forEach(function(sel) {
+      sel.addEventListener("change", refreshFromDom);
+    });
+    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn2) {
+      btn2.addEventListener("click", function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const wrap = btn2.closest(".seidr-num-wrap");
+        const input = wrap ? wrap.querySelector("[data-anim-wait]") : null;
+        if (!input) return;
+        const dir = parseInt(btn2.getAttribute("data-anim-wait-dir") || "0", 10);
+        if (!dir) return;
+        let n = parseFloat(input.value);
+        if (!Number.isFinite(n)) n = 0.5;
+        n = Math.round((n + dir * 0.1) * 10) / 10;
+        if (n < 0) n = 0;
+        if (n > SEIDR_ANIM_WAIT_TOTAL_MAX) n = SEIDR_ANIM_WAIT_TOTAL_MAX;
+        input.value = String(n);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    });
+    root3.querySelector("#seidr-anim-save")?.addEventListener("click", function() {
+      const cur = readDraftFromDom2(root3);
+      if (!cur) return;
+      const total = seidrAnimWaitTotal(cur.steps);
+      if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
+        setMsg4(root3, "Total wait " + total.toFixed(2) + "s exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s");
+        return;
+      }
+      const r = seidrUpsertAnimation(cur);
+      if (!r.ok) {
+        setMsg4(root3, r.error || "Save failed");
+        return;
+      }
+      editId2 = r.animation.id;
+      draft2 = JSON.parse(JSON.stringify(r.animation));
+      setMsg4(root3, "Saved");
+      renderList2(root3);
+      renderEditor2(root3);
+      wireList(root3);
+    });
+    root3.querySelector("#seidr-anim-del")?.addEventListener("click", function() {
+      if (!draft2) return;
+      const id = draft2.id;
+      seidrDeleteAnimation(id);
+      editId2 = null;
+      draft2 = null;
+      ensureFirstOpen(root3);
+      setMsg4(root3, "Deleted");
+    });
+  }
+  function wireList(root3) {
+    const pick = root3.querySelector("#seidr-anim-pick");
+    if (pick) {
+      pick.addEventListener("change", function() {
+        const id = parseInt(pick.value, 10);
+        if (Number.isFinite(id)) openAnimation(root3, id);
+      });
+    }
+  }
+  function seidrBuildAnimationsTab(container) {
+    editId2 = null;
+    draft2 = null;
+    container.innerHTML = [
+      '<p class="seidr-settings-hint">Pose and face clips for yourself. Cap ' + SEIDR_ANIMATIONS_MAX + " animations, " + SEIDR_ANIM_STEPS_MAX + " steps, " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s total wait. Play with /animation or /ani.</p>",
+      '<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-add">Add animation</button>',
+      '<span class="seidr-settings-hint" id="seidr-anim-cap">0/' + SEIDR_ANIMATIONS_MAX + " Animations</span>",
+      "</div>",
+      '<div id="seidr-anim-list" style="margin-top:10px;"></div>',
+      '<div class="seidr-act-editor" id="seidr-anim-editor" style="margin-top:10px;"></div>'
+    ].join("");
+    const add = container.querySelector("#seidr-anim-add");
+    add?.addEventListener("click", function() {
+      const a = seidrAddAnimation();
+      if (!a) {
+        setMsg4(container, "Animation limit reached");
+        return;
+      }
+      openAnimation(container, a.id);
+    });
+    ensureFirstOpen(container);
+  }
+  function seidrRefreshAnimationsTab() {
+    const root3 = document.getElementById("seidr-settings-pane-animations");
+    if (!root3) return;
+    seidrBuildAnimationsTab(root3);
+  }
+
+  // src/roomManager/mapsUi.ts
+  var editMapId = null;
+  var editVersionId = null;
+  var importCandidates2 = null;
+  var importFileName = "";
+  function escapeHtml6(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function setMsg5(root3, text) {
+    const el = root3.querySelector("#seidr-maps-msg");
+    if (el) el.textContent = text || "";
+  }
+  function inMapRoom() {
+    return rmMapModeActive();
+  }
+  function canLoad() {
+    return rmCanApplyToRoom() && rmIsAdmin() && inMapRoom();
+  }
+  function updateStorageHint(root3) {
+    const el = root3.querySelector("#seidr-maps-storage");
+    if (!el) return;
+    const remoteBytes = rmMapsBytesEstimate();
+    const budget = rmMapBudgetBytes();
+    const local = rmLocalMapsStats();
+    el.textContent = "Remote Default " + rmFormatBytes(remoteBytes) + " / " + rmFormatBytes(budget) + " (75% budget) \xB7 " + local.label;
+  }
+  function selectedMap() {
+    if (!editMapId) return null;
+    return rmListAllMaps().find(function(m) {
+      return m.id === editMapId;
+    }) || null;
+  }
+  function renderMapSection(root3) {
+    const host = root3.querySelector("#seidr-maps-map-body");
+    if (!host) return;
+    updateStorageHint(root3);
+    const maps = rmListAllMaps();
+    const mapActive = inMapRoom();
+    const saveDisabled = mapActive ? "" : " disabled";
+    if (editMapId && !maps.some(function(m) {
+      return m.id === editMapId;
+    })) {
+      editMapId = null;
+      editVersionId = null;
+    }
+    if (!editMapId && maps.length) {
+      editMapId = maps[0].id;
+      editVersionId = rmDefaultVersionId(editMapId);
+    }
+    const map = selectedMap();
+    const loadOk = canLoad();
+    const versionSaveDisabled = mapActive && map ? "" : " disabled";
+    const loadDisabled = loadOk && map ? "" : " disabled";
+    const pickOpts = maps.length ? maps.map(function(m) {
+      const loc = m.location === "local" ? "Local" : "Remote";
+      const n = m.versions.length;
+      return '<option value="' + escapeHtml6(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml6(m.name) + " (" + loc + ", " + n + "v)</option>";
+    }).join("") : '<option value="">No maps yet</option>';
+    let editorHtml = "";
+    if (!map) {
+      editorHtml = [
+        '<p class="seidr-settings-hint">Save the current map room to create a map (version is always Default).</p>',
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">New name</span>',
+        '<input type="text" id="seidr-maps-new-name" maxlength="48" placeholder="Map name" />',
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-save-new"' + saveDisabled + ">Save as new map</button>",
+        "</div>"
+      ].join("");
+    } else {
+      const vers = rmListVersions(map.id);
+      if (!editVersionId || !vers.some(function(v) {
+        return v.id === editVersionId;
+      })) {
+        editVersionId = rmDefaultVersionId(map.id);
+      }
+      const verOpts = vers.map(function(v) {
+        const when = v.savedAt ? new Date(v.savedAt).toLocaleString() : "";
+        const tag = rmIsDefaultVersionName(v.name) ? " \xB7 remote-capable" : " \xB7 local only";
+        return '<option value="' + escapeHtml6(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml6(v.name) + tag + (when ? " \xB7 " + escapeHtml6(when) : "") + "</option>";
+      }).join("");
+      const curVer = vers.find(function(v) {
+        return v.id === editVersionId;
+      });
+      const locLocal = map.location === "local";
+      const curIsDefault = curVer ? rmIsDefaultVersionName(curVer.name) : false;
+      editorHtml = [
+        '<div class="seidr-settings-field-row">',
+        '<span class="seidr-settings-field-label">Map</span>',
+        '<select id="seidr-maps-pick">' + pickOpts + "</select>",
+        "</div>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Name</span>',
+        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml6(map.name) + '" />',
+        "</div>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Location</span>',
+        '<div class="seidr-map-loc-btns">',
+        '<button type="button" class="seidr-act-btn seidr-map-loc-btn' + (locLocal ? "" : " seidr-map-loc-on") + '" data-seidr-map-loc="remote">Remote</button>',
+        '<button type="button" class="seidr-act-btn seidr-map-loc-btn' + (locLocal ? " seidr-map-loc-on" : "") + '" data-seidr-map-loc="local">Local only</button>',
+        "</div>",
+        "</div>",
+        '<p class="seidr-settings-hint">' + (locLocal ? "Default stays in this browser. Extra versions are always local." : "Only Default syncs to the server. Other versions stay local.") + "</p>",
+        '<div class="seidr-settings-field-row" style="margin-top:10px;">',
+        '<span class="seidr-settings-field-label">Version</span>',
+        '<select id="seidr-maps-ver-pick">' + verOpts + "</select>",
+        "</div>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Ver. name</span>',
+        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml6(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-load"' + loadDisabled + ">Load version</button>",
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-overwrite"' + versionSaveDisabled + ">Overwrite Default</button>",
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-add-ver"' + versionSaveDisabled + ">Save new version</button>",
+        '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-maps-del-ver">Delete version</button>',
+        '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-maps-del-map">Delete map</button>',
+        "</div>",
+        '<hr class="seidr-maps-hr" />',
+        '<p class="seidr-settings-hint">Create another map from the current room (always starts as Default):</p>',
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">New name</span>',
+        '<input type="text" id="seidr-maps-new-name" maxlength="48" placeholder="Map name" />',
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:8px; gap:6px; display:flex; flex-wrap:wrap;">',
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-save-new"' + saveDisabled + ">Save as new map</button>",
+        "</div>"
+      ].join("");
+      if (!maps.length) {
+      }
+    }
+    if (maps.length && map) {
+      host.innerHTML = editorHtml;
+    } else if (maps.length && !map) {
+      host.innerHTML = [
+        '<div class="seidr-settings-field-row">',
+        '<span class="seidr-settings-field-label">Map</span>',
+        '<select id="seidr-maps-pick">' + pickOpts + "</select>",
+        "</div>",
+        editorHtml
+      ].join("");
+    } else {
+      host.innerHTML = editorHtml;
+    }
+    wireMapSection(root3);
+  }
+  function refreshExport(root3) {
+    const ta = root3.querySelector("#seidr-maps-export");
+    if (ta) ta.value = rmExportMapsJson();
+  }
+  function updateFileLabel(root3) {
+    const el = root3.querySelector("#seidr-maps-import-file-label");
+    if (el) el.textContent = importFileName || "No file chosen";
+  }
+  function renderImportPicker2(root3) {
+    const host = root3.querySelector("#seidr-maps-import-pick");
+    if (!host) return;
+    if (!importCandidates2 || !importCandidates2.length) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const rows = importCandidates2.map(function(m, idx) {
+      const n = m.versions.length;
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml6(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
+    }).join("");
+    host.innerHTML = [
+      '<p class="seidr-settings-hint">Select maps to import (always Local only).</p>',
+      '<div class="seidr-act-import-list">' + rows + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px; gap:6px; display:flex; flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-import-do">Import selected</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-import-cancel">Cancel</button>',
+      "</div>"
+    ].join("");
+    host.querySelector("#seidr-maps-import-cancel")?.addEventListener("click", function() {
+      importCandidates2 = null;
+      const paste = root3.querySelector("#seidr-maps-import-paste");
+      if (paste) paste.value = "";
+      renderImportPicker2(root3);
+      setMsg5(root3, "");
+    });
+    host.querySelector("#seidr-maps-import-do")?.addEventListener("click", function() {
+      if (!importCandidates2) return;
+      const selected = [];
+      host.querySelectorAll("[data-import-idx]").forEach(function(el) {
+        const cb = el;
+        if (!cb.checked) return;
+        const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
+        if (Number.isFinite(idx) && importCandidates2[idx]) selected.push(importCandidates2[idx]);
+      });
+      if (!selected.length) {
+        setMsg5(root3, "Select at least one map");
+        return;
+      }
+      const result = rmImportSelectedMaps(selected);
+      if (!result.ok && !result.imported) {
+        setMsg5(root3, result.error || "Import failed");
+        return;
+      }
+      importCandidates2 = null;
+      const paste = root3.querySelector("#seidr-maps-import-paste");
+      if (paste) paste.value = "";
+      renderImportPicker2(root3);
+      refreshAll(root3);
+      setMsg5(root3, result.error || "Imported " + result.imported + " map(s) as Local only");
+    });
+  }
+  function wireMapSection(root3) {
+    root3.querySelector("#seidr-maps-pick")?.addEventListener("change", function() {
+      const pick = root3.querySelector("#seidr-maps-pick");
+      editMapId = pick && pick.value ? pick.value : null;
+      editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
+      renderMapSection(root3);
+    });
+    root3.querySelector("#seidr-maps-save-new")?.addEventListener("click", function() {
+      const nameEl = root3.querySelector("#seidr-maps-new-name");
+      const name = nameEl && nameEl.value || "";
+      if (!String(name).trim()) {
+        setMsg5(root3, "Enter a map name");
+        return;
+      }
+      const r = rmSaveNewMap(name);
+      if (!r.ok) {
+        setMsg5(root3, r.error || "Save failed");
+        return;
+      }
+      editMapId = r.map ? r.map.id : null;
+      editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
+      refreshAll(root3);
+      setMsg5(root3, r.fellBackLocal ? "Saved as Local only (remote full or over budget). Default version created." : "Map saved with Default (" + (r.map && r.map.location === "local" ? "Local" : "Remote") + ")");
+    });
+    root3.querySelector("#seidr-maps-ver-pick")?.addEventListener("change", function() {
+      const sel = root3.querySelector("#seidr-maps-ver-pick");
+      editVersionId = sel && sel.value ? sel.value : null;
+      renderMapSection(root3);
+    });
+    root3.querySelector("#seidr-maps-save-meta")?.addEventListener("click", function() {
+      if (!editMapId) return;
+      const nameEl = root3.querySelector("#seidr-maps-name");
+      const verNameEl = root3.querySelector("#seidr-maps-ver-name");
+      const r1 = rmRenameMap(editMapId, nameEl && nameEl.value || "");
+      if (!r1.ok) {
+        setMsg5(root3, r1.error || "Rename failed");
+        return;
+      }
+      const map = selectedMap();
+      const ver = map && editVersionId ? map.versions.find(function(v) {
+        return v.id === editVersionId;
+      }) : null;
+      if (editVersionId && verNameEl && ver && !rmIsDefaultVersionName(ver.name)) {
+        const r2 = rmRenameVersion(editMapId, editVersionId, verNameEl.value);
+        if (!r2.ok) {
+          setMsg5(root3, r2.error || "Version rename failed");
+          return;
+        }
+      }
+      refreshAll(root3);
+      setMsg5(root3, "Saved names");
+    });
+    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        if (!editMapId) return;
+        const loc = btn2.getAttribute("data-seidr-map-loc");
+        if (loc !== "local" && loc !== "remote") return;
+        const r = rmSetMapLocation(editMapId, loc);
+        if (!r.ok) {
+          setMsg5(root3, r.error || "Move failed");
+          return;
+        }
+        refreshAll(root3);
+        setMsg5(root3, loc === "local" ? "Default moved to Local only" : "Default moved to Remote (extra versions stay local)");
+      });
+    });
+    root3.querySelector("#seidr-maps-load")?.addEventListener("click", function() {
+      if (!editMapId || !editVersionId) return;
+      const map = selectedMap();
+      const ver = map && map.versions.find(function(v) {
+        return v.id === editVersionId;
+      });
+      if (!confirm("Load version \u201C" + (ver ? ver.name : "") + "\u201D into this room?")) return;
+      const r = rmLoadMapVersion(editMapId, editVersionId);
+      setMsg5(root3, r.ok ? "Map version loaded" : r.error || "Load failed");
+    });
+    root3.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function() {
+      if (!editMapId) return;
+      if (!confirm("Overwrite Default with the current room map?")) return;
+      const r = rmOverwriteDefault(editMapId);
+      if (!r.ok) {
+        setMsg5(root3, r.error || "Overwrite failed");
+        return;
+      }
+      editVersionId = r.version ? r.version.id : rmDefaultVersionId(editMapId);
+      refreshAll(root3);
+      setMsg5(root3, "Default overwritten");
+    });
+    root3.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function() {
+      if (!editMapId) return;
+      const verNameEl = root3.querySelector("#seidr-maps-ver-name");
+      let verName = verNameEl && verNameEl.value.trim() || "";
+      if (!verName || verName === RM_MAP_DEFAULT_NAME) {
+        verName = window.prompt("Local version name (not Default):", "Development") || "";
+      }
+      if (!verName.trim()) {
+        setMsg5(root3, "Enter a version name");
+        return;
+      }
+      if (verName.trim() === RM_MAP_DEFAULT_NAME) {
+        setMsg5(root3, "Use Overwrite Default to update Default");
+        return;
+      }
+      const r = rmSaveNewVersion(editMapId, verName);
+      if (!r.ok) {
+        setMsg5(root3, r.error || "Save version failed");
+        return;
+      }
+      editVersionId = r.version ? r.version.id : null;
+      refreshAll(root3);
+      setMsg5(root3, "Local version saved");
+    });
+    root3.querySelector("#seidr-maps-del-ver")?.addEventListener("click", function() {
+      if (!editMapId || !editVersionId) return;
+      const map = selectedMap();
+      const ver = map && map.versions.find(function(v) {
+        return v.id === editVersionId;
+      });
+      const isDef = ver && rmIsDefaultVersionName(ver.name);
+      const only = map && map.versions.length <= 1;
+      const msg = isDef && only ? "Delete the entire map?" : isDef ? "Cannot delete Default while other versions exist. Delete the map instead?" : "Delete this local version?";
+      if (isDef && !only) {
+        setMsg5(root3, "Cannot delete Default while other versions exist \u2014 use Delete map");
+        return;
+      }
+      if (!confirm(msg)) return;
+      const r = rmDeleteVersion(editMapId, editVersionId);
+      if (!r.ok) {
+        setMsg5(root3, r.error || "Delete failed");
+        return;
+      }
+      if (only || isDef) {
+        editMapId = null;
+        editVersionId = null;
+      } else {
+        editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
+      }
+      refreshAll(root3);
+      setMsg5(root3, only || isDef ? "Map deleted" : "Version deleted");
+    });
+    root3.querySelector("#seidr-maps-del-map")?.addEventListener("click", function() {
+      if (!editMapId) return;
+      const map = selectedMap();
+      if (!confirm("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?")) return;
+      const r = rmDeleteMap(editMapId);
+      if (!r.ok) {
+        setMsg5(root3, r.error || "Delete failed");
+        return;
+      }
+      editMapId = null;
+      editVersionId = null;
+      refreshAll(root3);
+      setMsg5(root3, "Map deleted");
+    });
+  }
+  function wireIo(root3) {
+    root3.querySelector("#seidr-maps-export-refresh")?.addEventListener("click", function() {
+      refreshExport(root3);
+      setMsg5(root3, "Export refreshed");
+    });
+    root3.querySelector("#seidr-maps-export-copy")?.addEventListener("click", function() {
+      refreshExport(root3);
+      const ta = root3.querySelector("#seidr-maps-export");
+      if (!ta) return;
+      try {
+        ta.select();
+        document.execCommand("copy");
+        setMsg5(root3, "Copied JSON");
+      } catch (e) {
+        setMsg5(root3, "Copy failed \u2014 select and copy manually");
+      }
+    });
+    root3.querySelector("#seidr-maps-export-dl")?.addEventListener("click", function() {
+      refreshExport(root3);
+      const json = rmExportMapsJson();
+      try {
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "seidr-maps-export.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        setMsg5(root3, "Download started");
+      } catch (e) {
+        setMsg5(root3, "Download failed");
+      }
+    });
+    root3.querySelector("#seidr-maps-import-parse")?.addEventListener("click", function() {
+      const paste = root3.querySelector("#seidr-maps-import-paste");
+      const parsed = rmParseMapsImport(paste ? paste.value : "");
+      if (parsed.ok === false) {
+        importCandidates2 = null;
+        renderImportPicker2(root3);
+        setMsg5(root3, parsed.error);
+        return;
+      }
+      importCandidates2 = parsed.maps;
+      renderImportPicker2(root3);
+      setMsg5(root3, "Select maps to import");
+    });
+    const file = root3.querySelector("#seidr-maps-import-file");
+    root3.querySelector("#seidr-maps-import-choose")?.addEventListener("click", function() {
+      file?.click();
+    });
+    if (file) {
+      file.addEventListener("change", function() {
+        const f = file.files && file.files[0];
+        if (!f) {
+          importFileName = "";
+          updateFileLabel(root3);
+          return;
+        }
+        importFileName = f.name;
+        updateFileLabel(root3);
+        const reader = new FileReader();
+        reader.onload = function() {
+          const text = typeof reader.result === "string" ? reader.result : "";
+          const paste = root3.querySelector("#seidr-maps-import-paste");
+          if (paste) paste.value = text;
+          const parsed = rmParseMapsImport(text);
+          if (parsed.ok === false) {
+            importCandidates2 = null;
+            renderImportPicker2(root3);
+            setMsg5(root3, parsed.error);
+            return;
+          }
+          importCandidates2 = parsed.maps;
+          renderImportPicker2(root3);
+          setMsg5(root3, "Select maps to import");
+        };
+        reader.onerror = function() {
+          setMsg5(root3, "Could not read file");
+        };
+        reader.readAsText(f);
+        file.value = "";
+      });
+    }
+  }
+  function refreshAll(root3) {
+    renderMapSection(root3);
+    refreshExport(root3);
+    updateStorageHint(root3);
+    updateFileLabel(root3);
+  }
+  function seidrRefreshMapsTab(container) {
+    const root3 = container || document.getElementById("seidr-settings-pane-maps");
+    if (!root3) return;
+    refreshAll(root3);
+  }
+  function seidrBuildMapsTab(container) {
+    editMapId = null;
+    editVersionId = null;
+    importCandidates2 = null;
+    importFileName = "";
+    const mapActive = inMapRoom();
+    container.innerHTML = [
+      '<p class="seidr-settings-hint">Map library with versions. Only <strong>Default</strong> can sync remotely; other versions stay in this browser. Imports are always Local only.</p>',
+      '<p class="seidr-settings-hint" id="seidr-maps-storage"></p>',
+      '<p class="seidr-settings-hint" id="seidr-maps-msg"></p>',
+      mapActive ? "" : '<p class="seidr-settings-hint">Save / new version needs an active map room.</p>',
+      '<details class="seidr-settings-sec" open>',
+      "<summary>Map</summary>",
+      '<div id="seidr-maps-map-body" style="margin-top:8px;"></div>',
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Export / Import</summary>",
+      '<div class="seidr-settings-row" style="gap:6px;display:flex;flex-wrap:wrap;margin-top:8px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-export-refresh">Refresh export</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-export-copy">Copy JSON</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-export-dl">Download JSON</button>',
+      "</div>",
+      '<textarea class="seidr-act-io-text" id="seidr-maps-export" rows="6" readonly></textarea>',
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Import JSON (file or paste). Imported maps are Local only.</p>',
+      '<div class="seidr-maps-file-row">',
+      '<input type="file" id="seidr-maps-import-file" accept="application/json,.json,text/plain" hidden />',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-import-choose">Choose file\u2026</button>',
+      '<span class="seidr-maps-file-name" id="seidr-maps-import-file-label">No file chosen</span>',
+      "</div>",
+      '<textarea class="seidr-act-io-text" id="seidr-maps-import-paste" rows="4" placeholder="Paste SeidrMaps JSON\u2026"></textarea>',
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-maps-import-parse">Parse import</button>',
+      "</div>",
+      '<div class="seidr-act-import-panel" id="seidr-maps-import-pick" hidden></div>',
+      "</details>"
+    ].join("");
+    wireIo(container);
+    refreshAll(container);
+  }
+
   // src/settings/ui.ts
   function $3(id) {
     return document.getElementById(id);
   }
   var drawDraft = null;
   var drawDirty = false;
+  function drawNumInput(id, min, max) {
+    return [
+      '<span class="seidr-num-wrap">',
+      '<input type="number" class="seidr-settings-num" id="' + id + '" min="' + min + '" max="' + max + '" step="1" />',
+      '<span class="seidr-num-spin" aria-hidden="true">',
+      '<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="1" tabindex="-1" title="Increase">\u25B2</button>',
+      '<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="-1" tabindex="-1" title="Decrease">\u25BC</button>',
+      "</span>",
+      "</span>"
+    ].join("");
+  }
   function poseRow(id, label) {
     const xMin = id === "pull" ? "0" : String(SEIDR_DRAW_OFFSET_MIN);
+    const max = String(SEIDR_DRAW_OFFSET_MAX);
     return [
       '<div class="seidr-settings-draw-row" data-pose="' + id + '">',
       '<span class="seidr-settings-draw-label">' + label + "</span>",
       '<label class="seidr-settings-draw-field">X',
-      '<input type="number" id="seidr-set-draw-' + id + '-x" min="' + xMin + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+      drawNumInput("seidr-set-draw-" + id + "-x", xMin, max),
       "</label>",
       '<label class="seidr-settings-draw-field">Y',
-      '<input type="number" id="seidr-set-draw-' + id + '-y" min="' + SEIDR_DRAW_OFFSET_MIN + '" max="' + SEIDR_DRAW_OFFSET_MAX + '" step="1" />',
+      drawNumInput("seidr-set-draw-" + id + "-y", String(SEIDR_DRAW_OFFSET_MIN), max),
       "</label>",
       '<button type="button" data-draw-reset="' + id + '">Reset</button>',
       "</div>"
     ].join("");
   }
   function seidrBuildGeneralHtml() {
-    const opts3 = RM_LAUNCHER_POSITIONS.map(function(p) {
+    const opts4 = RM_LAUNCHER_POSITIONS.map(function(p) {
       return '<option value="' + p.id + '">' + p.label + "</option>";
     }).join("");
     const modeOpts = AROUSAL_BAR_MODES.map(function(m) {
@@ -9270,7 +11820,7 @@
       '<details class="seidr-settings-sec">',
       "<summary>Launcher position</summary>",
       '<div class="seidr-settings-row">',
-      '<select id="seidr-set-rm-pos">' + opts3 + "</select>",
+      '<select id="seidr-set-rm-pos">' + opts4 + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
       "</details>",
@@ -9296,6 +11846,14 @@
       '<select id="seidr-set-arousal-scope">' + scopeOpts + "</select>",
       "</div>",
       '<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Commands</summary>",
+      '<p class="seidr-settings-hint">Enable or disable Seidr chat commands. Off = not registered / ignored.</p>',
+      '<div id="seidr-set-cmd-enable">' + SEIDR_CMD_ENABLE_LABELS.map(function(row) {
+        return '<div class="seidr-settings-row"><label><input type="checkbox" data-seidr-cmd-en="' + row.key + '" /> ' + row.label + "</label></div>";
+      }).join("") + "</div>",
+      '<p class="seidr-settings-hint" id="seidr-set-cmd-en-msg"></p>',
       "</details>",
       '<details class="seidr-settings-sec" open>',
       "<summary>Storage</summary>",
@@ -9334,12 +11892,20 @@
         storageRow("Access", b.access),
         storageRow("Backgrounds", b.backgrounds),
         storageRow("Actions", b.actions),
+        storageRow("Commands", b.commands),
+        storageRow("Animations", b.animations),
         storageRow("Settings", b.settings),
         storageRow("UI", b.ui)
       ].join("");
     }
     if (mapsHint) {
-      mapsHint.textContent = "Maps budget (75%): " + rmFormatBytes(b.maps) + " / " + rmFormatBytes(b.mapBudget);
+      let localBit = "";
+      try {
+        const loc = rmLocalMapsStats();
+        localBit = " \xB7 Local " + loc.label;
+      } catch (e) {
+      }
+      mapsHint.textContent = "Maps budget (75%): " + rmFormatBytes(b.maps) + " / " + rmFormatBytes(b.mapBudget) + localBit;
     }
   }
   function seidrBuildSettingsBody() {
@@ -9348,11 +11914,15 @@
     if (!body) return;
     const showActions = Seidr.SHOW_ACTIONS !== false;
     const showCommands = Seidr.SHOW_COMMANDS !== false;
+    const showAnimations = Seidr.SHOW_COMMANDS !== false;
+    const showMaps = rmIsShown();
     if (tabs) {
       tabs.innerHTML = [
         '<button type="button" class="seidr-settings-tab seidr-settings-tab-on" data-seidr-tab="general">General</button>',
         showActions ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>' : "",
-        showCommands ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>' : ""
+        showCommands ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>' : "",
+        showAnimations ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="animations">Animations</button>' : "",
+        showMaps ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>' : ""
       ].join("");
     }
     body.innerHTML = [
@@ -9360,7 +11930,9 @@
       seidrBuildGeneralHtml(),
       "</div>",
       showActions ? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>' : "",
-      showCommands ? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>' : ""
+      showCommands ? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>' : "",
+      showAnimations ? '<div class="seidr-settings-pane" id="seidr-settings-pane-animations" data-seidr-pane="animations"></div>' : "",
+      showMaps ? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>' : ""
     ].join("");
     if (showActions) {
       const actPane = $3("seidr-settings-pane-actions");
@@ -9369,6 +11941,14 @@
     if (showCommands) {
       const cmdPane = $3("seidr-settings-pane-commands");
       if (cmdPane) seidrBuildCommandsTab(cmdPane);
+    }
+    if (showAnimations) {
+      const animPane = $3("seidr-settings-pane-animations");
+      if (animPane) seidrBuildAnimationsTab(animPane);
+    }
+    if (showMaps) {
+      const mapsPane = $3("seidr-settings-pane-maps");
+      if (mapsPane) seidrBuildMapsTab(mapsPane);
     }
     const tabRoot = tabs || body;
     tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
@@ -9380,6 +11960,12 @@
         body.querySelectorAll(".seidr-settings-pane").forEach(function(p) {
           p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
         });
+        if (tab === "maps") {
+          try {
+            seidrRefreshMapsTab();
+          } catch (e) {
+          }
+        }
       });
     });
   }
@@ -9450,8 +12036,20 @@
     if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
     seidrBeginDrawDraft();
     seidrRefreshStorageUi();
+    try {
+      const enMap = seidrGetCommandsBag().enabled;
+      document.querySelectorAll("[data-seidr-cmd-en]").forEach(function(el) {
+        const key = el.getAttribute("data-seidr-cmd-en");
+        if (!key) return;
+        el.checked = enMap[key] !== false;
+      });
+    } catch (e) {
+    }
     if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
-    if (Seidr.SHOW_COMMANDS !== false) seidrRefreshCommandsTab();
+    if (Seidr.SHOW_COMMANDS !== false) {
+      seidrRefreshCommandsTab();
+      seidrRefreshAnimationsTab();
+    }
   }
   function seidrBindSettingsUi(onChange) {
     const en = $3("seidr-set-rm-enabled");
@@ -9486,6 +12084,27 @@
     if (fo) fo.addEventListener("change", persist);
     if (fos) fos.addEventListener("change", persist);
     if (fom) fom.addEventListener("change", persist);
+    function persistCmdEnable() {
+      const bag = seidrGetCommandsBag();
+      const raw = {};
+      document.querySelectorAll("[data-seidr-cmd-en]").forEach(function(el) {
+        const key = el.getAttribute("data-seidr-cmd-en");
+        if (!key) return;
+        raw[key] = !!el.checked;
+      });
+      bag.enabled = seidrNormalizeCmdEnabled(raw);
+      const saved = seidrSaveCommandsBag(bag);
+      const msg = $3("seidr-set-cmd-en-msg");
+      if (msg) msg.textContent = saved.ok ? "Saved \u2014 reload chat commands applied" : saved.error || "Save failed";
+      try {
+        if (typeof Seidr.registerCommands === "function") Seidr.registerCommands();
+      } catch (e) {
+      }
+      if (onChange) onChange();
+    }
+    document.querySelectorAll("[data-seidr-cmd-en]").forEach(function(el) {
+      el.addEventListener("change", persistCmdEnable);
+    });
     if (openRm) {
       openRm.addEventListener("click", function() {
         const s = seidrGetSettings();
@@ -9524,6 +12143,28 @@
         y.addEventListener("input", onDrawLive);
         y.addEventListener("change", onDrawCommit);
       }
+    });
+    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn2) {
+      btn2.addEventListener("click", function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const wrap = btn2.closest(".seidr-num-wrap");
+        const input = wrap ? wrap.querySelector('input[type="number"]') : null;
+        if (!input) return;
+        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
+        if (!dir) return;
+        const step = parseFloat(input.step) || 1;
+        const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
+        const max = input.max !== "" ? parseFloat(input.max) : Infinity;
+        let n = parseFloat(input.value);
+        if (!Number.isFinite(n)) n = 0;
+        n = Math.round(n + dir * step);
+        if (n < min) n = min;
+        if (n > max) n = max;
+        input.value = String(n);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
     });
     document.querySelectorAll("[data-draw-reset]").forEach(function(btn2) {
       btn2.addEventListener("click", function() {

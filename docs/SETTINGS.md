@@ -2,7 +2,7 @@
 
 Open **Preference → Extensions → Seidr** (Seidr logo). The panel returns you to the game after opening (same pattern as Freyas Better Maps).
 
-Tabs: **General** | **Actions** | **Commands** (feature flags may hide a tab in some builds).
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** (feature flags may hide a tab in some builds).
 
 ---
 
@@ -73,10 +73,23 @@ Controls Club / BCTweaks on-character thermometers and orgasm tracks.
 Read-only usage for the synced ExtensionSettings bag:
 
 - Total compressed size vs ~180 KB soft cap (+ thin progress bar)  
-- Rows: **Maps**, **Rooms**, **Access**, **Backgrounds**, **Actions**, **Settings**, **UI**  
-- Maps **75%** budget line  
+- Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Settings**, **UI**  
+- Maps **75%** budget line (+ local maps note when present)  
 
 Refreshes when you open / refresh Settings. See README **Storage**.
+
+---
+
+## Maps tab
+
+Manage Room Manager map **series** and **versions** (collapsible **Map** and **Export / Import**):
+
+- Save the current map room as a new map — version is always **Default** (disabled outside a map room)  
+- Only **Default** can sync to the server; other versions (e.g. Development) are local-only  
+- Toggle **Remote** vs **Local only** for Default; **Overwrite Default**; Save new version; Load / Delete  
+- Export JSON (copy / download); **Choose file…** or paste — imports are **always Local only**  
+
+Details: [ROOM_MANAGER.md](ROOM_MANAGER.md).
 
 ---
 

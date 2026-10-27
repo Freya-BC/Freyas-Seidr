@@ -1,4 +1,6 @@
 /** Floating Seidr-styled autocomplete over #InputChat */
+import { seidrPosesForCharacter } from "../actions/model";
+import { seidrFilterAnimationsByPrefix } from "../animations/store";
 import { seidrCmdActivityAvailable } from "./catalog";
 import {
 	seidrCmdIsCommandLine,
@@ -10,6 +12,7 @@ import {
 	type SeidrCmdTokenFocus,
 } from "./parse";
 import { seidrCmdFilterPeople, seidrCmdResolveMember } from "./resolve";
+import { seidrCmdIsEnabled } from "./run";
 import { seidrListCmdActions } from "./store";
 import { seidrCmdFilterStripOptions, seidrCmdListStripOptions } from "./stripCatalog";
 import { seidrCmdCss } from "./styles";
@@ -25,9 +28,11 @@ export type SeidrCmdAcItem = {
 	hint?: string;
 };
 
+type AcKind = "member" | "action" | "slot" | "pose" | "animation";
+
 type AcState = {
 	open: boolean;
-	kind: "member" | "action" | "slot" | null;
+	kind: AcKind | null;
 	items: SeidrCmdAcItem[];
 	index: number;
 	spanStart: number;
@@ -202,44 +207,86 @@ function buildStripSlotItems(
 	});
 }
 
+function buildPoseItems(prefix: string, memberRaw: string): SeidrCmdAcItem[] {
+	if (!memberRaw) return [];
+	const mem = seidrCmdResolveMember(memberRaw);
+	if (mem.ok === false) return [];
+	const pfx = String(prefix || "").trim().toLowerCase();
+	const list = seidrPosesForCharacter(mem.character);
+	const out: SeidrCmdAcItem[] = [];
+	for (let i = 0; i < list.length; i++) {
+		const p = list[i];
+		if (pfx && p.id.toLowerCase().indexOf(pfx) < 0 && p.label.toLowerCase().indexOf(pfx) < 0) {
+			continue;
+		}
+		out.push({ insert: p.id, label: p.label, hint: p.id });
+	}
+	return out;
+}
+
+function buildAnimationItems(prefix: string): SeidrCmdAcItem[] {
+	return seidrFilterAnimationsByPrefix(prefix).map(function (a) {
+		return {
+			insert: a.name,
+			label: a.name,
+			hint: a.steps.length + " step" + (a.steps.length === 1 ? "" : "s"),
+		};
+	});
+}
+
 function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
-	if (focus.kind !== "member" && focus.kind !== "action" && focus.kind !== "slot") {
+	const kind = focus.kind;
+	if (
+		kind !== "member" && kind !== "action" && kind !== "slot" &&
+		kind !== "pose" && kind !== "animation"
+	) {
 		seidrCmdAcClose();
 		return false;
 	}
 	const peek = seidrCmdPeekLine(value);
+	if (peek && !seidrCmdIsEnabled(peek.tag)) {
+		seidrCmdAcClose();
+		return false;
+	}
 	let items: SeidrCmdAcItem[] = [];
-	if (focus.kind === "member") {
+	if (kind === "member") {
 		items = buildMemberItems(focus.prefix);
-	} else if (focus.kind === "action") {
+	} else if (kind === "action") {
 		if (!peek || peek.family !== "action") {
 			seidrCmdAcClose();
 			return false;
 		}
 		items = buildActionItems(focus.prefix, peek.memberRaw);
+	} else if (kind === "slot") {
+		if (!peek || peek.family !== "strip" || !peek.memberRaw) {
+			seidrCmdAcClose();
+			return false;
+		}
+		items = buildStripSlotItems(focus.prefix, peek.memberRaw, peek.tag === "strip");
+	} else if (kind === "pose") {
+		if (!peek || peek.family !== "poses" || !peek.memberRaw) {
+			seidrCmdAcClose();
+			return false;
+		}
+		items = buildPoseItems(focus.prefix, peek.memberRaw);
 	} else {
-		if (!peek || peek.family !== "strip") {
+		if (!peek || peek.family !== "animation") {
 			seidrCmdAcClose();
 			return false;
 		}
-		if (!peek.memberRaw) {
-			seidrCmdAcClose();
-			return false;
-		}
-		const includeBundles = peek.tag === "strip";
-		items = buildStripSlotItems(focus.prefix, peek.memberRaw, includeBundles);
+		items = buildAnimationItems(focus.prefix);
 	}
 	if (!items.length) {
 		seidrCmdAcClose();
 		return false;
 	}
 	state.open = true;
-	state.kind = focus.kind;
+	state.kind = kind;
 	state.items = items;
 	state.index = 0;
 	state.spanStart = focus.start;
 	state.spanEnd = focus.end;
-	state.quoted = focus.kind === "member" ? focus.quoted : false;
+	state.quoted = kind === "member" ? focus.quoted : false;
 	render();
 	return true;
 }
@@ -254,11 +301,16 @@ export function seidrCmdAcOnTab(): boolean {
 	}
 	const caret = input.selectionStart != null ? input.selectionStart : value.length;
 	let focus = seidrCmdTokenAtCaret(value, caret);
-	// Bare `/strip` / `/action` — insert trailing space so member token is real
+	// Bare tag — insert trailing space so next token is real
 	if (focus.kind === "tag") {
-		const bare = value.match(/^\s*\/(action|stripe|strip|a)\s*$/i);
+		const bare = value.match(
+			/^\s*\/(roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
+		);
 		if (!bare) return false;
-		const spaced = "/" + bare[1].toLowerCase() + " ";
+		const tag = bare[1].toLowerCase();
+		if (!seidrCmdIsEnabled(tag)) return false;
+		if (tag === "seidr" || tag === "roommanager") return false;
+		const spaced = "/" + tag + " ";
 		input.value = spaced;
 		try {
 			input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -267,13 +319,22 @@ export function seidrCmdAcOnTab(): boolean {
 			input.setSelectionRange(spaced.length, spaced.length);
 		}
 		value = spaced;
-		focus = {
-			kind: "member",
-			prefix: "",
-			quoted: false,
-			start: spaced.length,
-			end: spaced.length,
-		};
+		if (tag === "animation" || tag === "ani") {
+			focus = {
+				kind: "animation",
+				prefix: "",
+				start: spaced.length,
+				end: spaced.length,
+			};
+		} else {
+			focus = {
+				kind: "member",
+				prefix: "",
+				quoted: false,
+				start: spaced.length,
+				end: spaced.length,
+			};
+		}
 	}
 	if (focus.kind === "none") return false;
 	try {
@@ -312,9 +373,13 @@ export function seidrCmdAcAccept(): boolean {
 		const head = "/" + tag + " " + insert + " ";
 		nextValue = head + second;
 		nextCaret = head.length;
+	} else if (state.kind === "animation") {
+		const peek = seidrCmdPeekLine(value);
+		const tag = (peek && peek.tag) || seidrCmdTagFromLine(value) || "animation";
+		nextValue = "/" + tag + " " + insert;
+		nextCaret = nextValue.length;
 	} else {
-		const trailing = false;
-		const next = seidrCmdReplaceSpan(value, state.spanStart, state.spanEnd, insert, trailing);
+		const next = seidrCmdReplaceSpan(value, state.spanStart, state.spanEnd, insert, false);
 		nextValue = next.value;
 		nextCaret = next.caret;
 	}

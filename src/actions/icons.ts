@@ -1,4 +1,5 @@
-/** Seidr Action icons — Seidr SVGs / concept PNGs, Club Activity PNGs, custom URL resolve. */
+/** Seidr Action icons — Pages-hosted concept PNGs, Club Activity PNGs, custom URLs. */
+import { Seidr } from "../seidr";
 import {
 	seidrDefaultActionIcon,
 	seidrNormalizeActionIcon,
@@ -6,7 +7,6 @@ import {
 	type SeidrActionIcon,
 	type SeidrCustomActionIcon,
 } from "./model";
-import { SEIDR_CONCEPT_ICONS } from "./iconPngs";
 import { seidrGetSettings } from "../settings/storage";
 
 function svgDataUri(inner: string): string {
@@ -20,68 +20,53 @@ function svgDataUri(inner: string): string {
 
 export type SeidrBuiltinIcon = { id: string; label: string; url: string };
 
-/** Built-in Seidr drawn icons (inline SVG). */
-export const SEIDR_BUILTIN_ICONS: SeidrBuiltinIcon[] = [
-	{
-		id: "mark",
-		label: "Mark",
-		url: svgDataUri(
-			'<text x="32" y="42" text-anchor="middle" font-size="28" font-family="sans-serif" font-weight="700" fill="#e0b15a">A</text>',
-		),
-	},
-	{
-		id: "hand",
-		label: "Hand",
-		url: svgDataUri(
-			'<path d="M22 36 V18 a4 4 0 0 1 8 0 v10 M30 28 V14 a4 4 0 0 1 8 0 v16 M38 30 V16 a4 4 0 0 1 8 0 v20 M46 34 V24 a4 4 0 0 1 6 3 v15 a12 12 0 0 1-12 12 H28 a10 10 0 0 1-10-10 V36 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="3" stroke-linejoin="round"/>',
-		),
-	},
-	{
-		id: "kiss",
-		label: "Kiss",
-		url: svgDataUri(
-			'<path d="M20 28 Q26 18 32 28 Q38 18 44 28 Q38 42 32 48 Q26 42 20 28z" fill="#c06080" stroke="#e0b15a" stroke-width="2"/>',
-		),
-	},
-	{
-		id: "heart",
-		label: "Heart",
-		url: svgDataUri(
-			'<path d="M32 50 L14 32 a12 12 0 0 1 18-16 a12 12 0 0 1 18 16z" fill="#c06080"/>',
-		),
-	},
-	{
-		id: "pull",
-		label: "Pull",
-		url: svgDataUri(
-			'<path d="M12 32 H44 M36 22 L48 32 L36 42" fill="none" stroke="#e0b15a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>',
-		),
-	},
-	{
-		id: "spark",
-		label: "Spark",
-		url: svgDataUri(
-			'<path d="M32 10 L36 26 L52 28 L38 38 L42 54 L32 44 L22 54 L26 38 L12 28 L28 26z" fill="#e0b15a"/>',
-		),
-	},
-	{
-		id: "cuddle",
-		label: "Cuddle",
-		url: svgDataUri(
-			'<circle cx="24" cy="28" r="10" fill="none" stroke="#e0b15a" stroke-width="3"/>' +
-			'<circle cx="40" cy="28" r="10" fill="none" stroke="#c09050" stroke-width="3"/>',
-		),
-	},
-	{
-		id: "star",
-		label: "Star",
-		url: svgDataUri(
-			'<text x="32" y="44" text-anchor="middle" font-size="32" fill="#e0b15a">★</text>',
-		),
-	},
-	// Concept-art tiles (embedded PNG) — match the preview sheet exactly
-	...SEIDR_CONCEPT_ICONS,
+function assetsBase(): string {
+	const base = typeof Seidr.ASSETS_BASE_URL === "string" && Seidr.ASSETS_BASE_URL
+		? Seidr.ASSETS_BASE_URL
+		: "https://freya-bc.github.io/Freyas-Seidr/assets";
+	return base.replace(/\/$/, "");
+}
+
+/** Concept-art tiles hosted on Pages (`assets/action-icons/{id}.png`). */
+export function seidrConceptIconUrl(id: string): string {
+	return assetsBase() + "/action-icons/" + encodeURIComponent(id) + ".png";
+}
+
+const CONCEPT_ICON_META: { id: string; label: string }[] = [
+	{ id: "rope", label: "Rope" },
+	{ id: "cuff", label: "Cuff" },
+	{ id: "collar", label: "Collar" },
+	{ id: "leash", label: "Leash" },
+	{ id: "chain", label: "Chain" },
+	{ id: "blindfold", label: "Blindfold" },
+	{ id: "gag", label: "Gag" },
+	{ id: "flogger", label: "Flogger" },
+	{ id: "paddle", label: "Paddle" },
+	{ id: "candle", label: "Candle" },
+	{ id: "breast", label: "Breast" },
+	{ id: "vulva", label: "Vulva" },
+	{ id: "phallus", label: "Phallus" },
+	{ id: "plug", label: "Plug" },
+	{ id: "spank", label: "Spank" },
 ];
+
+function conceptIcons(): SeidrBuiltinIcon[] {
+	return CONCEPT_ICON_META.map(function (m) {
+		return { id: m.id, label: m.label, url: seidrConceptIconUrl(m.id) };
+	});
+}
+
+/** Private fallback for default / legacy `mark` and unknown seidr ids (not shown in picker). */
+const MARK_FALLBACK: SeidrBuiltinIcon = {
+	id: "mark",
+	label: "Mark",
+	url: svgDataUri(
+		'<text x="32" y="42" text-anchor="middle" font-size="28" font-family="sans-serif" font-weight="700" fill="#e0b15a">A</text>',
+	),
+};
+
+/** Built-in Seidr icons shown in the Action Tab picker (Pages concept tiles). */
+export const SEIDR_BUILTIN_ICONS: SeidrBuiltinIcon[] = conceptIcons();
 
 /** Club Icons/Activity/*.png basenames (R133). */
 export const SEIDR_ACTIVITY_ICON_IDS: string[] = [
@@ -100,10 +85,15 @@ export function seidrActivityIconUrl(id: string): string {
 }
 
 export function seidrBuiltinIconById(id: string): SeidrBuiltinIcon | null {
+	if (id === "mark") return MARK_FALLBACK;
 	for (let i = 0; i < SEIDR_BUILTIN_ICONS.length; i++) {
 		if (SEIDR_BUILTIN_ICONS[i].id === id) return SEIDR_BUILTIN_ICONS[i];
 	}
 	return null;
+}
+
+function seidrFallbackIconUrl(): string {
+	return MARK_FALLBACK.url;
 }
 
 export function seidrCustomIconsFromSettings(): SeidrCustomActionIcon[] {
@@ -132,20 +122,20 @@ export function seidrResolveIconRef(
 	const ref = seidrNormalizeActionIcon(icon);
 	if (ref.source === "seidr") {
 		const b = seidrBuiltinIconById(ref.id);
-		return b ? b.url : SEIDR_BUILTIN_ICONS[0].url;
+		return b ? b.url : seidrFallbackIconUrl();
 	}
 	if (ref.source === "activity") {
 		if (SEIDR_ACTIVITY_ICON_IDS.indexOf(ref.id) >= 0) return seidrActivityIconUrl(ref.id);
-		return SEIDR_BUILTIN_ICONS[0].url;
+		return seidrFallbackIconUrl();
 	}
 	if (ref.source === "custom") {
 		const customs = customList || seidrCustomIconsFromSettings();
 		for (let i = 0; i < customs.length; i++) {
 			if (customs[i].id === ref.id) return customs[i].url;
 		}
-		return SEIDR_BUILTIN_ICONS[0].url;
+		return seidrFallbackIconUrl();
 	}
-	return SEIDR_BUILTIN_ICONS[0].url;
+	return seidrFallbackIconUrl();
 }
 
 export function seidrIconLabel(icon: SeidrActionIcon, customList?: SeidrCustomActionIcon[]): string {

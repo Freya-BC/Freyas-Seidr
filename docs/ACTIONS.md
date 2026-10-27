@@ -73,7 +73,7 @@ Examples of checks: `wearing`, `isGagged`, `isBlind`, `isDeaf`, `canUseHands`, `
 
 Each action shows an icon in the Activity Menu:
 
-- Seidr built-in SVGs  
+- Seidr SVG builtins and concept tiles (Pages `assets/action-icons/`)  
 - Club `Icons/Activity/*.png`  
 - Custom **HTTPS** image URL (validated on add; up to 10 stored)
 

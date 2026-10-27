@@ -1277,6 +1277,23 @@ export function seidrBuildActionsTab(container: HTMLElement) {
 	bindEditor(container);
 	bindIoPanel(container);
 
+	// Open first action in the dropdown editor when available
+	if (editId == null) {
+		const list = seidrListActions();
+		if (list.length) {
+			editId = list[0].id;
+			draft = seidrDefaultAction(list[0].id);
+			Object.assign(draft, JSON.parse(JSON.stringify(list[0])));
+			if (!draft.items) draft.items = [];
+			if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+			arousalPickerOpen = false;
+			renderList(container);
+			renderEditor(container);
+			bindList(container);
+			bindEditor(container);
+		}
+	}
+
 	container.querySelector("#seidr-act-add")?.addEventListener("click", function () {
 		const created = seidrAddAction();
 		if (!created) {

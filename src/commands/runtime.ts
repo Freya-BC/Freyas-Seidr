@@ -1,8 +1,9 @@
-/** Install /a|/action|/strip|/stripe + Tab autocomplete */
+/** Install Seidr chat commands + Tab autocomplete */
 import { Seidr } from "../seidr";
 import { seidrCmdAcClose, seidrCmdAcHandleKeyDown, seidrCmdAcIsOpen } from "./autocomplete";
 import { seidrCmdIsCommandLine } from "./parse";
-import { seidrCmdExecuteLine } from "./run";
+import { seidrCmdExecuteLine, seidrCmdIsEnabled } from "./run";
+import { seidrGetCommandsBag } from "./store";
 
 declare const CommandCombine: any;
 declare const ElementValue: any;
@@ -18,6 +19,11 @@ function clearInput() {
 }
 
 function onCommand(fallbackTag: string, _args: string) {
+	if (!seidrCmdIsEnabled(fallbackTag)) {
+		seidrCmdExecuteLine("/" + fallbackTag);
+		clearInput();
+		return;
+	}
 	const el = document.getElementById("InputChat") as HTMLTextAreaElement | null;
 	const msg = el ? String(el.value || "").trim() : "";
 	const line = msg || "";
@@ -29,35 +35,99 @@ function onCommand(fallbackTag: string, _args: string) {
 	if (handled) clearInput();
 }
 
-function registerCommands() {
+function onMetaCommand(tag: string) {
+	seidrCmdAcClose();
+	seidrCmdExecuteLine("/" + tag);
+	clearInput();
+}
+
+export function seidrRegisterCommands(): void {
 	if (typeof CommandCombine !== "function") return;
+	const en = seidrGetCommandsBag().enabled;
+	const defs: any[] = [];
+	if (en.a !== false) {
+		defs.push({
+			Tag: "a",
+			Description: "Seidr: /a <member> <action> — run a bound activity",
+			Clear: false,
+			Action: function (args: string) { onCommand("a", args); },
+		});
+	}
+	if (en.action !== false) {
+		defs.push({
+			Tag: "action",
+			Description: "Seidr: /action <member> <action>",
+			Clear: false,
+			Action: function (args: string) { onCommand("action", args); },
+		});
+	}
+	if (en.strip !== false) {
+		defs.push({
+			Tag: "strip",
+			Description: "Seidr: /strip <member> <slot> — undress (includes Undress all)",
+			Clear: false,
+			Action: function (args: string) { onCommand("strip", args); },
+		});
+	}
+	if (en.stripe !== false) {
+		defs.push({
+			Tag: "stripe",
+			Description: "Seidr: /stripe <member> <slot> — undress one layer",
+			Clear: false,
+			Action: function (args: string) { onCommand("stripe", args); },
+		});
+	}
+	if (en.poses !== false) {
+		defs.push({
+			Tag: "poses",
+			Description: "Seidr: /poses <member> <pose> — set Club pose",
+			Clear: false,
+			Action: function (args: string) { onCommand("poses", args); },
+		});
+	}
+	if (en.p !== false) {
+		defs.push({
+			Tag: "p",
+			Description: "Seidr: /p <member> <pose> — short for /poses",
+			Clear: false,
+			Action: function (args: string) { onCommand("p", args); },
+		});
+	}
+	if (en.animation !== false) {
+		defs.push({
+			Tag: "animation",
+			Description: "Seidr: /animation <name> — play your animation",
+			Clear: false,
+			Action: function (args: string) { onCommand("animation", args); },
+		});
+	}
+	if (en.ani !== false) {
+		defs.push({
+			Tag: "ani",
+			Description: "Seidr: /ani <name> — short for /animation",
+			Clear: false,
+			Action: function (args: string) { onCommand("ani", args); },
+		});
+	}
+	if (en.seidr !== false) {
+		defs.push({
+			Tag: "seidr",
+			Description: "Seidr: open Settings",
+			Clear: false,
+			Action: function () { onMetaCommand("seidr"); },
+		});
+	}
+	if (en.roommanager !== false) {
+		defs.push({
+			Tag: "roommanager",
+			Description: "Seidr: open Room Manager",
+			Clear: false,
+			Action: function () { onMetaCommand("roommanager"); },
+		});
+	}
+	if (!defs.length) return;
 	try {
-		CommandCombine([
-			{
-				Tag: "a",
-				Description: "Seidr: /a <member> <action> — run a bound activity",
-				Clear: false,
-				Action: function (args: string) { onCommand("a", args); },
-			},
-			{
-				Tag: "action",
-				Description: "Seidr: /action <member> <action>",
-				Clear: false,
-				Action: function (args: string) { onCommand("action", args); },
-			},
-			{
-				Tag: "strip",
-				Description: "Seidr: /strip <member> <slot> — undress (includes Undress all)",
-				Clear: false,
-				Action: function (args: string) { onCommand("strip", args); },
-			},
-			{
-				Tag: "stripe",
-				Description: "Seidr: /stripe <member> <slot> — undress one layer",
-				Clear: false,
-				Action: function (args: string) { onCommand("stripe", args); },
-			},
-		]);
+		CommandCombine(defs);
 	} catch (e) {
 		console.warn("[Seidr Cmd] CommandCombine failed", e);
 	}
@@ -118,12 +188,16 @@ function hookSendChat() {
 
 export function seidrInstallCommands() {
 	if (Seidr.SHOW_COMMANDS === false) return;
-	if (Seidr._hookState && Seidr._hookState.commands) return;
+	if (Seidr._hookState && Seidr._hookState.commands) {
+		seidrRegisterCommands();
+		return;
+	}
 	if (!Seidr._hookState) Seidr._hookState = {};
 	Seidr._hookState.commands = true;
-	registerCommands();
+	seidrRegisterCommands();
 	installInputWatch();
 	hookSendChat();
 }
 
 Seidr.installCommands = seidrInstallCommands;
+Seidr.registerCommands = seidrRegisterCommands;

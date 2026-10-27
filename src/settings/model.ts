@@ -5,6 +5,7 @@ import {
 	seidrRestraintSlots,
 	type SeidrCustomActionIcon,
 } from "../actions/model";
+import { seidrNormalizeAnimationsBag } from "../animations/model";
 import { seidrNormalizeCommandsBag } from "../commands/model";
 
 export type RmLauncherPosition =
@@ -53,6 +54,8 @@ export type SeidrSettings = {
 	actions?: unknown;
 	/** Chat /a people + action bindings. Normalized in commands/model. */
 	commands?: unknown;
+	/** Pose/face animation clips. Normalized in animations/model. */
+	animations?: unknown;
 };
 
 export const FAST_OPEN_MODIFIERS: { id: SeidrFastOpenModifier; label: string }[] = [
@@ -196,7 +199,8 @@ export function seidrDefaultSettings(): SeidrSettings {
 		fastOpenActionsSlot: "ItemTorso",
 		customActionIcons: [],
 		actions: { nextId: 1, list: [] },
-		commands: { nextPersonId: 1, nextActionId: 1, people: [], actions: [] },
+		commands: seidrNormalizeCommandsBag(null),
+		animations: seidrNormalizeAnimationsBag(null),
 	};
 }
 
@@ -229,5 +233,6 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
 	base.actions = seidrNormalizeActionsBag(d.actions);
 	base.commands = seidrNormalizeCommandsBag(d.commands);
+	base.animations = seidrNormalizeAnimationsBag(d.animations);
 	return base;
 }

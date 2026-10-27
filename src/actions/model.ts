@@ -195,18 +195,46 @@ export function seidrRestraintSlots(): { id: string; label: string }[] {
 	});
 }
 
+/** Shared Club pose ids — Actions, /poses AC, Animations editor. */
 export const SEIDR_ACTION_POSES: { id: string; label: string }[] = [
 	{ id: "BaseLower", label: "Standing (legs)" },
-	{ id: "BaseUpper", label: "Hands relaxed" },
 	{ id: "LegsClosed", label: "Legs closed" },
 	{ id: "Kneel", label: "Kneel" },
 	{ id: "KneelingSpread", label: "Kneeling spread" },
+	{ id: "BaseUpper", label: "Hands relaxed" },
 	{ id: "Yoked", label: "Yoked" },
-	{ id: "OverTheHead", label: "Over the head" },
+	{ id: "OverTheHead", label: "Hands up" },
 	{ id: "BackBoxTie", label: "Back box tie" },
-	{ id: "BackElbowTouch", label: "Back elbow touch" },
-	{ id: "AllFours", label: "All fours" },
+	{ id: "BackElbowTouch", label: "Hands armbinder" },
+	{ id: "AllFours", label: "On all fours" },
 ];
+
+declare const PoseCanChangeUnaided: ((C: any, pose: string) => boolean) | undefined;
+
+/** Pose catalog entry available for character (Club gate when present). */
+export function seidrPoseAvailable(C: any, poseId: string): boolean {
+	if (!poseId) return false;
+	if (!C) return true;
+	try {
+		if (typeof PoseCanChangeUnaided === "function") {
+			return !!PoseCanChangeUnaided(C, poseId);
+		}
+	} catch (e) { /* ignore */ }
+	return true;
+}
+
+export function seidrPosesForCharacter(C: any): { id: string; label: string }[] {
+	return SEIDR_ACTION_POSES.filter(function (p) {
+		return seidrPoseAvailable(C, p.id);
+	});
+}
+
+export function seidrPoseLabel(poseId: string): string {
+	for (let i = 0; i < SEIDR_ACTION_POSES.length; i++) {
+		if (SEIDR_ACTION_POSES[i].id === poseId) return SEIDR_ACTION_POSES[i].label;
+	}
+	return poseId;
+}
 
 export const SEIDR_ACTION_SOUNDS: string[] = [
 	"SpankSkin",

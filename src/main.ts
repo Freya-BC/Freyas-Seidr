@@ -11,6 +11,7 @@ import "./draw";
 import "./arousalBars";
 import "./actions/index";
 import "./commands/index";
+import "./animations/index";
 import "./fastOpen";
 import "./net";
 import "./roomManager/index";

@@ -154,6 +154,8 @@ export type RmUsageBreakdown = {
 	access: number;
 	backgrounds: number;
 	actions: number;
+	commands: number;
+	animations: number;
 	settings: number;
 	ui: number;
 	mapBudget: number;
@@ -164,10 +166,12 @@ export function rmUsageBreakdown(store?: RmStore): RmUsageBreakdown {
 	const s = store || rmGetStore();
 	const settings = s.settings || {};
 	const actions = (settings as { actions?: unknown }).actions;
+	const commands = (settings as { commands?: unknown }).commands;
+	const animations = (settings as { animations?: unknown }).animations;
 	const settingsRest: Record<string, unknown> = {};
 	try {
 		Object.keys(settings as object).forEach(function (k) {
-			if (k === "actions") return;
+			if (k === "actions" || k === "commands" || k === "animations") return;
 			settingsRest[k] = (settings as Record<string, unknown>)[k];
 		});
 	} catch (e) { /* ignore */ }
@@ -179,6 +183,12 @@ export function rmUsageBreakdown(store?: RmStore): RmUsageBreakdown {
 		access: rmSliceBytes({ access: s.access || {} }),
 		backgrounds: rmSliceBytes({ backgrounds: s.backgrounds || [] }),
 		actions: rmSliceBytes({ actions: actions != null ? actions : { nextId: 1, list: [] } }),
+		commands: rmSliceBytes({
+			commands: commands != null ? commands : { nextPersonId: 1, nextActionId: 1, people: [], actions: [] },
+		}),
+		animations: rmSliceBytes({
+			animations: animations != null ? animations : { nextId: 1, list: [] },
+		}),
 		settings: rmSliceBytes({ settings: settingsRest }),
 		ui: rmSliceBytes({ ui: s.ui || {} }),
 		mapBudget: rmMapBudgetBytes(),

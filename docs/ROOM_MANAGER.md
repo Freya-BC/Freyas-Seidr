@@ -52,10 +52,14 @@ URLs must pass Club’s background validator and load as images.
 
 Visible when the room’s MapMode is not Never:
 
-- Up to **10** named maps  
-- Save current map / overwrite / load / delete with confirms  
+- **Map** + **version** selects (versions keep the list from flooding)  
+- Save as… creates **Default**; **Save new Version** is local-only; **Overwrite Default**; Load; Delete version / Delete map  
+- Only **Default** syncs remotely; other versions stay in the browser  
 - Uses FBM-style export / import strings under the hood  
-- Maps may use at most **75%** of the shared storage budget (~180 KB total bag)
+
+### Settings → Maps
+
+Library management (Map + Export/Import sections), Remote ↔ Local for Default, JSON export/import (always Local only). See [SETTINGS.md](SETTINGS.md).
 
 ## Settings that affect Room Manager
 
@@ -69,9 +73,9 @@ See [SETTINGS.md](SETTINGS.md).
 
 ## Storage
 
-Presets and maps are stored in `Player.ExtensionSettings.SeidrRoomManager` (LZ) and synced with your account. Soft cap ~180 KB compressed. The panel footer shows usage; Settings → **Storage** breaks it down by slice.
+Remote presets and maps are stored in `Player.ExtensionSettings.SeidrRoomManager` (LZ) and synced with your account. Soft cap ~180 KB compressed. Local-only maps use `localStorage`. The panel footer shows usage; Settings → **Storage** breaks remote slices down (Maps row is remote only).
 
-If a save would exceed the maps budget or the total cap, Seidr refuses the write and shows an error — nothing is synced until you free space.
+If a remote save would exceed the maps budget or the total cap, Seidr refuses the write and shows an error — nothing is synced until you free space or move maps to Local only.
 
 ## Related
 

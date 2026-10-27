@@ -1,4 +1,4 @@
-/** Seidr chat Commands — people aliases + slash action bindings */
+/** Seidr chat Commands — people aliases + slash action bindings + enable flags */
 
 export const SEIDR_CMD_PEOPLE_MAX = 50;
 export const SEIDR_CMD_ACTIONS_MAX = 50;
@@ -6,6 +6,38 @@ export const SEIDR_CMD_ALIAS_MAX = 48;
 export const SEIDR_CMD_NAME_MAX = 48;
 export const SEIDR_CMD_WARN_MS = 8000;
 export const SEIDR_CMD_ERROR_MS = 30000;
+
+/** Toggle keys in General → Commands (each slash tag has its own switch). */
+export type SeidrCmdEnableKey =
+	| "a"
+	| "action"
+	| "strip"
+	| "stripe"
+	| "poses"
+	| "p"
+	| "animation"
+	| "ani"
+	| "seidr"
+	| "roommanager";
+
+export const SEIDR_CMD_ENABLE_KEYS: SeidrCmdEnableKey[] = [
+	"a", "action", "strip", "stripe", "poses", "p", "animation", "ani", "seidr", "roommanager",
+];
+
+export const SEIDR_CMD_ENABLE_LABELS: { key: SeidrCmdEnableKey; label: string }[] = [
+	{ key: "a", label: "/a" },
+	{ key: "action", label: "/action" },
+	{ key: "strip", label: "/strip" },
+	{ key: "stripe", label: "/stripe" },
+	{ key: "poses", label: "/poses" },
+	{ key: "p", label: "/p" },
+	{ key: "animation", label: "/animation" },
+	{ key: "ani", label: "/ani" },
+	{ key: "seidr", label: "/seidr" },
+	{ key: "roommanager", label: "/roommanager" },
+];
+
+export type SeidrCmdEnabledMap = Record<SeidrCmdEnableKey, boolean>;
 
 export type SeidrCmdPerson = {
 	id: number;
@@ -29,10 +61,53 @@ export type SeidrCommandsBag = {
 	nextActionId: number;
 	people: SeidrCmdPerson[];
 	actions: SeidrCmdAction[];
+	/** Per-command registration / execute gates (default all true). */
+	enabled: SeidrCmdEnabledMap;
 };
 
+export function seidrDefaultCmdEnabled(): SeidrCmdEnabledMap {
+	const out = {} as SeidrCmdEnabledMap;
+	for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+		out[SEIDR_CMD_ENABLE_KEYS[i]] = true;
+	}
+	return out;
+}
+
+export function seidrNormalizeCmdEnabled(raw: unknown): SeidrCmdEnabledMap {
+	const base = seidrDefaultCmdEnabled();
+	if (!raw || typeof raw !== "object") return base;
+	const d = raw as Partial<Record<string, unknown>>;
+	for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+		const k = SEIDR_CMD_ENABLE_KEYS[i];
+		if (typeof d[k] === "boolean") base[k] = d[k] as boolean;
+	}
+	return base;
+}
+
+/** Map a chat tag (incl. aliases) to its enable key. */
+export function seidrCmdEnableKeyForTag(tag: string): SeidrCmdEnableKey | null {
+	const t = String(tag || "").toLowerCase();
+	if (t === "a") return "a";
+	if (t === "action") return "action";
+	if (t === "strip") return "strip";
+	if (t === "stripe") return "stripe";
+	if (t === "poses") return "poses";
+	if (t === "p") return "p";
+	if (t === "animation") return "animation";
+	if (t === "ani") return "ani";
+	if (t === "seidr") return "seidr";
+	if (t === "roommanager") return "roommanager";
+	return null;
+}
+
 export function seidrDefaultCommandsBag(): SeidrCommandsBag {
-	return { nextPersonId: 1, nextActionId: 1, people: [], actions: [] };
+	return {
+		nextPersonId: 1,
+		nextActionId: 1,
+		people: [],
+		actions: [],
+		enabled: seidrDefaultCmdEnabled(),
+	};
 }
 
 function cleanAlias(raw: unknown): string {
@@ -61,7 +136,6 @@ export function seidrNormalizeCmdAction(raw: unknown): SeidrCmdAction | null {
 	const name = cleanName(d.name);
 	const slot = String(d.slot || "").trim();
 	const activity = String(d.activity || "").trim();
-	// activity may be "" while drafting in Settings (Save still requires it).
 	if (!id || !name || !slot) return null;
 	return { id: id, name: name, slot: slot, activity: activity };
 }
@@ -69,7 +143,7 @@ export function seidrNormalizeCmdAction(raw: unknown): SeidrCmdAction | null {
 export function seidrNormalizeCommandsBag(raw: unknown): SeidrCommandsBag {
 	const base = seidrDefaultCommandsBag();
 	if (!raw || typeof raw !== "object") return base;
-	const d = raw as Partial<SeidrCommandsBag>;
+	const d = raw as Partial<SeidrCommandsBag> & { enabled?: unknown };
 	const people: SeidrCmdPerson[] = [];
 	const seenAlias: Record<string, boolean> = {};
 	const seenMn: Record<number, boolean> = {};
@@ -79,7 +153,6 @@ export function seidrNormalizeCommandsBag(raw: unknown): SeidrCommandsBag {
 			if (!p) continue;
 			const key = p.alias.toLowerCase();
 			if (seenAlias[key]) continue;
-			// Drafts may share memberNumber 0 — only dedupe real IDs.
 			if (p.memberNumber > 0 && seenMn[p.memberNumber]) continue;
 			seenAlias[key] = true;
 			if (p.memberNumber > 0) seenMn[p.memberNumber] = true;
@@ -108,6 +181,7 @@ export function seidrNormalizeCommandsBag(raw: unknown): SeidrCommandsBag {
 	}
 	base.people = people;
 	base.actions = actions;
+	base.enabled = seidrNormalizeCmdEnabled(d.enabled);
 	return base;
 }
 
