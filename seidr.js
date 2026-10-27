@@ -1,4 +1,4 @@
-/* Seidr v1.0.53 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.54 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.53";
+  Seidr.VERSION = "1.0.54";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -4662,8 +4662,20 @@
       "  overflow-y: auto; overflow-x: hidden;",
       "  font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;",
       "  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);",
+      "  scrollbar-width: thin;",
+      "  scrollbar-color: rgba(212,160,23,0.55) rgba(20,16,28,0.9);",
       "}",
       "#seidr-cmd-ac[hidden] { display: none !important; }",
+      "#seidr-cmd-ac::-webkit-scrollbar { width: 8px; }",
+      "#seidr-cmd-ac::-webkit-scrollbar-track {",
+      "  background: rgba(20,16,28,0.9); border-radius: 4px;",
+      "}",
+      "#seidr-cmd-ac::-webkit-scrollbar-thumb {",
+      "  background: rgba(212,160,23,0.55); border-radius: 4px;",
+      "}",
+      "#seidr-cmd-ac::-webkit-scrollbar-thumb:hover {",
+      "  background: rgba(212,160,23,0.8);",
+      "}",
       ".seidr-cmd-ac-item {",
       "  display: flex; align-items: baseline; gap: 8px; width: 100%;",
       "  text-align: left; cursor: pointer;",
@@ -4698,11 +4710,13 @@
     quoted: false
   };
   function ensureStyles() {
-    if (document.getElementById("seidr-cmd-styles")) return;
-    const style = document.createElement("style");
-    style.id = "seidr-cmd-styles";
+    let style = document.getElementById("seidr-cmd-styles");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "seidr-cmd-styles";
+      (document.head || document.documentElement).appendChild(style);
+    }
     style.textContent = seidrCmdCss();
-    (document.head || document.documentElement).appendChild(style);
   }
   function getInput() {
     const el = document.getElementById("InputChat");

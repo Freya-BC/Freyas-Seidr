@@ -46,11 +46,13 @@ const state: AcState = {
 };
 
 function ensureStyles() {
-	if (document.getElementById("seidr-cmd-styles")) return;
-	const style = document.createElement("style");
-	style.id = "seidr-cmd-styles";
+	let style = document.getElementById("seidr-cmd-styles") as HTMLStyleElement | null;
+	if (!style) {
+		style = document.createElement("style");
+		style.id = "seidr-cmd-styles";
+		(document.head || document.documentElement).appendChild(style);
+	}
 	style.textContent = seidrCmdCss();
-	(document.head || document.documentElement).appendChild(style);
 }
 
 function getInput(): HTMLTextAreaElement | HTMLInputElement | null {

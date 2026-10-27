@@ -1,4 +1,4 @@
-/* Seidr v1.0.53 — post-login stub. FUSAM type: script. Loads the full bundle after Player.MemberNumber. */
+/* Seidr v1.0.54 — post-login stub. FUSAM type: script. Loads the full bundle after Player.MemberNumber. */
 (function () {
 	"use strict";
 	if (window.__SeidrLoader) return;
@@ -21,7 +21,7 @@
 			src = src.replace(/loader\.js(\?.*)?$/, "seidr.js$1");
 		}
 		if (!src) return;
-		if (src.indexOf("v=") < 0) src += (src.indexOf("?") >= 0 ? "&" : "?") + "v=" + "1.0.53";
+		if (src.indexOf("v=") < 0) src += (src.indexOf("?") >= 0 ? "&" : "?") + "v=" + "1.0.54";
 		var s = document.createElement("script");
 		s.src = src;
 		s.crossOrigin = "anonymous";
