@@ -1,4 +1,4 @@
-/* Seidr v1.0.66 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.67 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.66";
+  Seidr.VERSION = "1.0.67";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -3480,7 +3480,7 @@
       id: "hand",
       label: "Hand",
       url: svgDataUri(
-        '<path d="M22 36 V18 a4 4 0 0 1 8 0 v10 M30 28 V14 a4 4 0 0 1 8 0 v16 M38 30 V16 a4 4 0 0 1 8 0 v20 M46 34 V24 a4 4 0 0 1 6 3 v15 a12 12 0 0 1-12 12 H28 a10 10 0 0 1-10-10 V36 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="3" stroke-linejoin="round"/>'
+        '<path d="M20 30 V18 a3 3 0 0 1 6 0 v10 M26 26 V14 a3 3 0 0 1 6 0 v14 M32 28 V16 a3 3 0 0 1 6 0 v14 M38 30 V20 a3 3 0 0 1 5 2 v16 a10 10 0 0 1-10 10 H24 a8 8 0 0 1-8-8 V34 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="2.5" stroke-linejoin="round"/>'
       )
     },
     {
@@ -3533,13 +3533,6 @@
       )
     },
     {
-      id: "cuff",
-      label: "Cuff",
-      url: svgDataUri(
-        '<path d="M44 22 a16 16 0 1 0 0 20" fill="none" stroke="#e0b15a" stroke-width="5" stroke-linecap="round"/><rect x="40" y="18" width="8" height="8" rx="1.5" fill="#e0b15a"/><rect x="40" y="38" width="8" height="8" rx="1.5" fill="#e0b15a"/>'
-      )
-    },
-    {
       id: "collar",
       label: "Collar",
       url: svgDataUri(
@@ -3568,13 +3561,6 @@
       )
     },
     {
-      id: "flogger",
-      label: "Flogger",
-      url: svgDataUri(
-        '<path d="M28 12 H36 V28 H28z" fill="#e0b15a"/><path d="M22 28 Q18 48 20 54 M28 28 Q26 50 28 56 M36 28 Q38 50 36 56 M42 28 Q46 48 44 54" fill="none" stroke="#c09050" stroke-width="2.5" stroke-linecap="round"/>'
-      )
-    },
-    {
       id: "paddle",
       label: "Paddle",
       url: svgDataUri(
@@ -3593,27 +3579,6 @@
       label: "Vulva",
       url: svgDataUri(
         '<path d="M32 14 C20 24 18 40 32 52 C46 40 44 24 32 14z" fill="#c06080" stroke="#e0b15a" stroke-width="2"/><path d="M32 22 V44" fill="none" stroke="#241c30" stroke-width="2.5" stroke-linecap="round"/>'
-      )
-    },
-    {
-      id: "ping",
-      label: "Ping",
-      url: svgDataUri(
-        '<path d="M28 48 V22 a4 4 0 0 1 8 0 V48" fill="#e0b15a"/><ellipse cx="32" cy="18" rx="6" ry="8" fill="#e0b15a"/><ellipse cx="24" cy="50" rx="7" ry="5" fill="#c09050"/><ellipse cx="40" cy="50" rx="7" ry="5" fill="#c09050"/>'
-      )
-    },
-    {
-      id: "chess",
-      label: "Chess",
-      url: svgDataUri(
-        '<path d="M32 12 C40 22 42 34 32 44 C22 34 24 22 32 12z" fill="#e0b15a"/><ellipse cx="32" cy="48" rx="14" ry="5" fill="#c09050"/>'
-      )
-    },
-    {
-      id: "spank",
-      label: "Spank",
-      url: svgDataUri(
-        '<path d="M20 30 V18 a3 3 0 0 1 6 0 v10 M26 26 V14 a3 3 0 0 1 6 0 v14 M32 28 V16 a3 3 0 0 1 6 0 v14 M38 30 V20 a3 3 0 0 1 5 2 v16 a10 10 0 0 1-10 10 H24 a8 8 0 0 1-8-8 V34 a4 4 0 0 1 4-4z" fill="none" stroke="#e0b15a" stroke-width="2.5" stroke-linejoin="round"/>'
       )
     }
   ];
@@ -3675,9 +3640,10 @@
     return "./Icons/Activity/" + id + ".png";
   }
   function seidrResolveBuiltinId(id) {
-    if (id === "phallus") return "ping";
-    if (id === "plug") return "chess";
-    if (id === "gag" || id === "breast") return "mark";
+    if (id === "spank") return "hand";
+    if (id === "ping" || id === "chess" || id === "flogger" || id === "cuff" || id === "phallus" || id === "plug" || id === "gag" || id === "breast") {
+      return "mark";
+    }
     return id;
   }
   function seidrBuiltinIconById(id) {
