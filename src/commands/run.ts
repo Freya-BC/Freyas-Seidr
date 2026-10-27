@@ -2,10 +2,12 @@
 import { seidrPoseAvailable, seidrPoseLabel } from "../actions/model";
 import { seidrPlayAnimation } from "../animations/play";
 import { seidrFindAnimationByName } from "../animations/store";
+import { seidrPublishActionText } from "../chat/actionText";
 import { Seidr } from "../seidr";
 import { seidrCmdActivityAvailable, seidrCmdFindItemActivity } from "./catalog";
 import { seidrCmdEnableKeyForTag, type SeidrCmdEnableKey } from "./model";
 import { seidrParseCmdLine } from "./parse";
+import { seidrPoseChatTemplate } from "./poseChat";
 import { seidrCmdResolveAction, seidrCmdResolveMember } from "./resolve";
 import { seidrGetCommandsBag } from "./store";
 import { seidrGetSettings } from "../settings/storage";
@@ -154,6 +156,8 @@ function executePosesCommand(memberRaw: string, poseRaw: string): boolean {
 		return true;
 	}
 	applyPose(target, pose);
+	const side = self ? "self" : "other";
+	seidrPublishActionText(seidrPoseChatTemplate(pose, side), Player, target);
 	return true;
 }
 

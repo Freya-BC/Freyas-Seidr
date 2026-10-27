@@ -1,5 +1,10 @@
 /** Settings → Animations tab */
-import { SEIDR_ACTION_POSES, seidrPoseLabel } from "../actions/model";
+import {
+	SEIDR_ACTION_CHAT_MAX,
+	SEIDR_ACTION_CHAT_TOKENS,
+	SEIDR_ACTION_POSES,
+	seidrPoseLabel,
+} from "../actions/model";
 import {
 	SEIDR_ANIMATIONS_MAX,
 	SEIDR_ANIM_FACE_DURATIONS,
@@ -48,6 +53,32 @@ function stringOpts(list: string[], selected: string): string {
 function setMsg(root: HTMLElement, text: string) {
 	const el = root.querySelector("#seidr-anim-msg");
 	if (el) el.textContent = text || "";
+}
+
+function chatTokenChips(): string {
+	return SEIDR_ACTION_CHAT_TOKENS.map(function (t) {
+		return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' +
+			escapeHtml(t.token) + '" title="' + escapeHtml(t.hint) + '">' +
+			escapeHtml(t.token) + "</button>";
+	}).join("");
+}
+
+function insertChatToken(ta: HTMLTextAreaElement, token: string): boolean {
+	const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+	const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+	const next = ta.value.slice(0, start) + token + ta.value.slice(end);
+	if (next.length > SEIDR_ACTION_CHAT_MAX) return false;
+	ta.value = next;
+	ta.focus();
+	const pos = start + token.length;
+	ta.setSelectionRange(pos, pos);
+	return true;
+}
+
+function syncAnimChatCount(root: HTMLElement) {
+	const ta = root.querySelector("#seidr-anim-chat") as HTMLTextAreaElement | null;
+	const count = root.querySelector("#seidr-anim-chat-count");
+	if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
 }
 
 function updateCap(root: HTMLElement) {
@@ -153,6 +184,10 @@ function readDraftFromDom(root: HTMLElement): SeidrAnimation | null {
 	if (!draft) return null;
 	const nameEl = root.querySelector("#seidr-anim-name") as HTMLInputElement | null;
 	const name = (nameEl && nameEl.value || "").trim() || draft.name;
+	const chatEl = root.querySelector("#seidr-anim-chat") as HTMLTextAreaElement | null;
+	const chatText = chatEl && chatEl.value.trim()
+		? chatEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX)
+		: "";
 	const cards = root.querySelectorAll("[data-anim-step]");
 	const steps: SeidrAnimStep[] = [];
 	cards.forEach(function (card) {
@@ -176,7 +211,7 @@ function readDraftFromDom(root: HTMLElement): SeidrAnimation | null {
 			});
 		}
 	});
-	return { id: draft.id, name: name, steps: steps };
+	return { id: draft.id, name: name, steps: steps, chatText: chatText };
 }
 
 function renderEditor(root: HTMLElement) {
@@ -187,6 +222,7 @@ function renderEditor(root: HTMLElement) {
 		return;
 	}
 	const total = seidrAnimWaitTotal(draft.steps);
+	const chatText = draft.chatText || "";
 	wrap.innerHTML = [
 		'<div class="seidr-settings-field-row">',
 		'<span class="seidr-settings-field-label">Name</span>',
@@ -199,6 +235,14 @@ function renderEditor(root: HTMLElement) {
 		'<button type="button" class="seidr-act-btn" id="seidr-anim-add-pose">+ Pose</button>',
 		'<button type="button" class="seidr-act-btn" id="seidr-anim-add-face">+ Face</button>',
 		"</div>",
+		'<p class="seidr-settings-hint" style="margin-top:10px;">Action text (optional, posted when play starts; Club tags, max ' +
+		SEIDR_ACTION_CHAT_MAX + ")</p>",
+		'<div class="seidr-act-ph-row" id="seidr-anim-ph">' + chatTokenChips() + "</div>",
+		'<p class="seidr-settings-hint">Club style: SourceCharacter raises PronounPossessive hands.</p>',
+		'<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' +
+		escapeHtml(chatText) + "</textarea>",
+		'<p class="seidr-settings-hint" id="seidr-anim-chat-count">' +
+		chatText.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
 		'<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
 		'<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
 		'<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-anim-del">Delete</button>',
@@ -299,6 +343,22 @@ function wireEditor(root: HTMLElement) {
 			input.value = String(n);
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 		});
+	});
+	root.querySelector("#seidr-anim-chat")?.addEventListener("input", function () {
+		syncAnimChatCount(root);
+	});
+	root.querySelector("#seidr-anim-ph")?.addEventListener("click", function (ev) {
+		const btn = (ev.target as HTMLElement).closest("[data-anim-chat-token]") as HTMLElement | null;
+		if (!btn) return;
+		const token = btn.getAttribute("data-anim-chat-token");
+		if (!token) return;
+		const ta = root.querySelector("#seidr-anim-chat") as HTMLTextAreaElement | null;
+		if (!ta) return;
+		if (!insertChatToken(ta, token)) {
+			setMsg(root, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
+		} else {
+			syncAnimChatCount(root);
+		}
 	});
 	root.querySelector("#seidr-anim-save")?.addEventListener("click", function () {
 		const cur = readDraftFromDom(root);

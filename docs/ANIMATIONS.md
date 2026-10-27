@@ -18,7 +18,8 @@ Pose and face expression clips that play on **you** (the local Player). Author u
 4. Add steps:
    - **Pose** — Club pose (friendly labels such as Standing (legs), Hands up, Kneel, …) + wait seconds  
    - **Face** — feature (Eyebrows / Eyes / Mouth / Blush / Fluids), expression, duration (`keep` / 5 / 15 / 30), + wait seconds  
-5. **Save animation**.
+5. Optional **Action text** — public Club Action line posted when the clip **starts** (same token chips as Actions: `SourceCharacter`, `PronounPossessive`, …). Leave empty for silent play.  
+6. **Save animation**.
 
 Wait steppers nudge by small increments; the UI shows the total wait for the clip.
 
@@ -30,6 +31,7 @@ Wait steppers nudge by small increments; the UI shows the total wait for the cli
 ```
 
 - Plays on **you only** (not on other room members).
+- If Action text is set, the room sees that line once when playback starts.
 - Name match is case-insensitive against your saved animation names.
 - Tab autocomplete lists your animations while the command is enabled.
 

@@ -1,4 +1,4 @@
-/* Seidr v1.0.70 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.71 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.70";
+  Seidr.VERSION = "1.0.71";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2446,7 +2446,7 @@
     return { kind: "face", feature: "Eyes", expression: "Closed", duration: "keep", wait: 0.5 };
   }
   function seidrDefaultAnimation(id) {
-    return { id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()] };
+    return { id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()], chatText: "" };
   }
   function seidrDefaultAnimationsBag() {
     return { nextId: 1, list: [] };
@@ -2508,7 +2508,8 @@
         over -= cut;
       }
     }
-    return { id, name, steps };
+    const chatText = typeof d.chatText === "string" && d.chatText.trim() ? d.chatText.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : "";
+    return { id, name, steps, chatText };
   }
   function seidrNormalizeAnimationsBag(raw) {
     const base = seidrDefaultAnimationsBag();
@@ -5014,6 +5015,109 @@
     });
   }
 
+  // src/chat/actionText.ts
+  var SEIDR_ACTION_CONTENT_KEY = "SEIDR_PLAYER_CUSTOM_DIALOG";
+  var SEIDR_ACTION_MISSING_TAG = 'MISSING TEXT IN "Interface.csv": SEIDR_PLAYER_CUSTOM_DIALOG';
+  function displayName(C) {
+    if (!C) return "?";
+    try {
+      if (typeof CharacterNickname === "function") return CharacterNickname(C);
+    } catch (e) {
+    }
+    return C.Name || String(C.MemberNumber || "?");
+  }
+  function pronounKey(C) {
+    if (!C) return null;
+    try {
+      if (typeof C.GetPronouns === "function") {
+        const k = C.GetPronouns();
+        if (k) return String(k);
+      }
+    } catch (e) {
+    }
+    try {
+      if (typeof InventoryGet === "function") {
+        const item = InventoryGet(C, "Pronouns");
+        const name = item && item.Asset && item.Asset.Name;
+        if (name) return String(name);
+      }
+    } catch (e2) {
+    }
+    return null;
+  }
+  function mapPossessive(key) {
+    if (!key) return null;
+    const raw = String(key).replace(/[\/_\-\s]/g, "");
+    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "her";
+    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "his";
+    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "their";
+    return null;
+  }
+  function mapPronounSelf(key) {
+    if (!key) return null;
+    const raw = String(key).replace(/[\/_\-\s]/g, "");
+    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "herself";
+    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "himself";
+    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "themself";
+    return null;
+  }
+  function possessiveFor(C) {
+    const mapped = mapPossessive(pronounKey(C));
+    if (mapped) return mapped;
+    try {
+      if (typeof CharacterPronoun === "function") {
+        const p = String(CharacterPronoun(C, "Possessive", false) || "").trim().toLowerCase();
+        if (p === "her" || p === "his" || p === "their") return p;
+      }
+    } catch (e) {
+    }
+    return "their";
+  }
+  function pronounSelfFor(C) {
+    const mapped = mapPronounSelf(pronounKey(C));
+    if (mapped) return mapped;
+    const poss = possessiveFor(C);
+    if (poss === "her") return "herself";
+    if (poss === "his") return "himself";
+    return "themself";
+  }
+  function seidrResolveActionText(template, source, target) {
+    const src = source || null;
+    const tgt = target || source || null;
+    let out = String(template || "");
+    if (!out.trim()) return "";
+    const srcName = displayName(src);
+    const tgtName = displayName(tgt);
+    const srcPoss = possessiveFor(src);
+    const tgtPoss = possessiveFor(tgt);
+    const srcSelf = pronounSelfFor(src);
+    out = out.split("TargetPronounPossessive").join(tgtPoss);
+    out = out.split("PronounPossessive").join(srcPoss);
+    out = out.split("PronounSelf").join(srcSelf);
+    out = out.split("TargetCharacter").join(tgtName);
+    out = out.split("SourceCharacter").join(srcName);
+    out = out.split("ActivityAsset").join("");
+    out = out.replace(/\s{2,}/g, " ").trim();
+    if (out.length > SEIDR_ACTION_CHAT_MAX) out = out.slice(0, SEIDR_ACTION_CHAT_MAX);
+    return out;
+  }
+  function seidrPublishActionText(template, source, target) {
+    const text = seidrResolveActionText(template, source, target);
+    if (!text) return false;
+    if (typeof ServerSend !== "function") return false;
+    try {
+      ServerSend("ChatRoomChat", {
+        Content: SEIDR_ACTION_CONTENT_KEY,
+        Type: "Action",
+        Dictionary: [{ Tag: SEIDR_ACTION_MISSING_TAG, Text: text }]
+      });
+      return true;
+    } catch (e) {
+      console.warn("[Seidr] publishActionText", e);
+      return false;
+    }
+  }
+
   // src/animations/play.ts
   var playing = false;
   function applyPose2(C, pose) {
@@ -5068,6 +5172,9 @@
       return Promise.resolve({ ok: false, error: "An animation is already playing" });
     }
     playing = true;
+    if (anim.chatText && String(anim.chatText).trim()) {
+      seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
+    }
     const steps = anim.steps.slice();
     let i = 0;
     function next() {
@@ -5087,6 +5194,59 @@
       return Promise.resolve({ ok: true });
     }
     return next();
+  }
+
+  // src/commands/poseChat.ts
+  var FALLBACK = {
+    self: "SourceCharacter changes PronounPossessive pose.",
+    other: "SourceCharacter changes TargetCharacter's pose."
+  };
+  var SEIDR_POSE_CHAT = {
+    BaseLower: {
+      self: "SourceCharacter straightens PronounPossessive legs to stand.",
+      other: "SourceCharacter helps TargetCharacter straighten TargetPronounPossessive legs to stand."
+    },
+    LegsClosed: {
+      self: "SourceCharacter presses PronounPossessive thighs together.",
+      other: "SourceCharacter guides TargetCharacter to press TargetPronounPossessive thighs together."
+    },
+    Kneel: {
+      self: "SourceCharacter sinks down onto PronounPossessive knees.",
+      other: "SourceCharacter guides TargetCharacter down onto TargetPronounPossessive knees."
+    },
+    KneelingSpread: {
+      self: "SourceCharacter kneels and spreads PronounPossessive knees apart.",
+      other: "SourceCharacter spreads TargetCharacter's knees while TargetCharacter kneels."
+    },
+    BaseUpper: {
+      self: "SourceCharacter lets PronounPossessive arms hang relaxed at PronounPossessive sides.",
+      other: "SourceCharacter eases TargetCharacter's arms down to hang relaxed."
+    },
+    Yoked: {
+      self: "SourceCharacter folds PronounPossessive arms behind PronounPossessive head.",
+      other: "SourceCharacter folds TargetCharacter's arms behind TargetCharacter's head."
+    },
+    OverTheHead: {
+      self: "SourceCharacter raises PronounPossessive hands high above PronounPossessive head.",
+      other: "SourceCharacter lifts TargetCharacter's hands high above TargetCharacter's head."
+    },
+    BackBoxTie: {
+      self: "SourceCharacter draws PronounPossessive arms back into a box-tie behind PronounSelf.",
+      other: "SourceCharacter draws TargetCharacter's arms back into a box-tie behind TargetCharacter."
+    },
+    BackElbowTouch: {
+      self: "SourceCharacter pulls PronounPossessive elbows together behind PronounPossessive back.",
+      other: "SourceCharacter pulls TargetCharacter's elbows together behind TargetCharacter's back."
+    },
+    AllFours: {
+      self: "SourceCharacter drops onto all fours.",
+      other: "SourceCharacter puts TargetCharacter down onto all fours."
+    }
+  };
+  function seidrPoseChatTemplate(poseId, side) {
+    const entry = SEIDR_POSE_CHAT[String(poseId || "")];
+    if (entry && entry[side]) return entry[side];
+    return FALLBACK[side];
   }
 
   // src/commands/stripCatalog.ts
@@ -5373,6 +5533,8 @@
       return true;
     }
     applyPose3(target, pose);
+    const side = self ? "self" : "other";
+    seidrPublishActionText(seidrPoseChatTemplate(pose, side), Player, target);
     return true;
   }
   function executeAnimationCommand(nameRaw) {
@@ -10937,6 +11099,27 @@
     const el = root3.querySelector("#seidr-anim-msg");
     if (el) el.textContent = text || "";
   }
+  function chatTokenChips2() {
+    return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
+      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml5(t.token) + '" title="' + escapeHtml5(t.hint) + '">' + escapeHtml5(t.token) + "</button>";
+    }).join("");
+  }
+  function insertChatToken2(ta, token) {
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+    const next = ta.value.slice(0, start) + token + ta.value.slice(end);
+    if (next.length > SEIDR_ACTION_CHAT_MAX) return false;
+    ta.value = next;
+    ta.focus();
+    const pos = start + token.length;
+    ta.setSelectionRange(pos, pos);
+    return true;
+  }
+  function syncAnimChatCount(root3) {
+    const ta = root3.querySelector("#seidr-anim-chat");
+    const count = root3.querySelector("#seidr-anim-chat-count");
+    if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
+  }
   function updateCap(root3) {
     const el = root3.querySelector("#seidr-anim-cap");
     if (!el) return;
@@ -11028,6 +11211,8 @@
     if (!draft2) return null;
     const nameEl = root3.querySelector("#seidr-anim-name");
     const name = (nameEl && nameEl.value || "").trim() || draft2.name;
+    const chatEl = root3.querySelector("#seidr-anim-chat");
+    const chatText = chatEl && chatEl.value.trim() ? chatEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : "";
     const cards = root3.querySelectorAll("[data-anim-step]");
     const steps = [];
     cards.forEach(function(card) {
@@ -11051,7 +11236,7 @@
         });
       }
     });
-    return { id: draft2.id, name, steps };
+    return { id: draft2.id, name, steps, chatText };
   }
   function renderEditor2(root3) {
     const wrap = root3.querySelector("#seidr-anim-editor");
@@ -11061,6 +11246,7 @@
       return;
     }
     const total = seidrAnimWaitTotal(draft2.steps);
+    const chatText = draft2.chatText || "";
     wrap.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
@@ -11072,6 +11258,11 @@
       '<button type="button" class="seidr-act-btn" id="seidr-anim-add-pose">+ Pose</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-add-face">+ Face</button>',
       "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Action text (optional, posted when play starts; Club tags, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
+      '<div class="seidr-act-ph-row" id="seidr-anim-ph">' + chatTokenChips2() + "</div>",
+      '<p class="seidr-settings-hint">Club style: SourceCharacter raises PronounPossessive hands.</p>',
+      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatText) + "</textarea>",
+      '<p class="seidr-settings-hint" id="seidr-anim-chat-count">' + chatText.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-anim-del">Delete</button>',
@@ -11169,6 +11360,22 @@
         input.value = String(n);
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
+    });
+    root3.querySelector("#seidr-anim-chat")?.addEventListener("input", function() {
+      syncAnimChatCount(root3);
+    });
+    root3.querySelector("#seidr-anim-ph")?.addEventListener("click", function(ev) {
+      const btn2 = ev.target.closest("[data-anim-chat-token]");
+      if (!btn2) return;
+      const token = btn2.getAttribute("data-anim-chat-token");
+      if (!token) return;
+      const ta = root3.querySelector("#seidr-anim-chat");
+      if (!ta) return;
+      if (!insertChatToken2(ta, token)) {
+        setMsg4(root3, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
+      } else {
+        syncAnimChatCount(root3);
+      }
     });
     root3.querySelector("#seidr-anim-save")?.addEventListener("click", function() {
       const cur = readDraftFromDom2(root3);

@@ -55,6 +55,7 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 - Member rules match `/a` (ID, People alias, room Name/Nickname, quotes for multi-word).
 - Pose names use the shared Seidr pose catalog (friendly labels in autocomplete).
 - You need Club permission to change someone else’s pose.
+- After a successful pose change, Seidr posts a **public Action** line (unique Self/Other text per pose, with Club-style names/pronouns).
 
 ## Quick start — animations `/animation` / `/ani`
 
@@ -115,7 +116,7 @@ Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](AN
 
 - **`/a`**: looks up your Commands binding and runs Club **ActivityRun** (same idea as the Activity Menu).
 - **`/strip` / `/stripe`**: runs the matching Seidr **Undress** / **Undress all** activity on that person.
-- **`/poses` / `/p`**: applies a Club pose when allowed.
+- **`/poses` / `/p`**: applies a Club pose when allowed, then posts a public Action line describing the pose.
 - **`/animation` / `/ani`**: plays your saved animation on the local Player.
 
 You still need Club permission to act on others. If the activity / pose is not available right now, the command is refused.

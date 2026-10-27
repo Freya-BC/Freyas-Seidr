@@ -1,5 +1,5 @@
 /** Seidr Animations — pose/face clips (Player-only playback) */
-import { SEIDR_ACTION_POSES } from "../actions/model";
+import { SEIDR_ACTION_CHAT_MAX, SEIDR_ACTION_POSES } from "../actions/model";
 
 export const SEIDR_ANIMATIONS_MAX = 50;
 export const SEIDR_ANIM_STEPS_MAX = 20;
@@ -29,6 +29,8 @@ export type SeidrAnimation = {
 	id: number;
 	name: string;
 	steps: SeidrAnimStep[];
+	/** Optional public Action Text when playback starts (Club tokens). Empty = no post. */
+	chatText?: string;
 };
 
 export type SeidrAnimationsBag = {
@@ -80,7 +82,7 @@ export function seidrDefaultAnimFaceStep(): SeidrAnimFaceStep {
 }
 
 export function seidrDefaultAnimation(id: number): SeidrAnimation {
-	return { id: id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()] };
+	return { id: id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()], chatText: "" };
 }
 
 export function seidrDefaultAnimationsBag(): SeidrAnimationsBag {
@@ -150,7 +152,10 @@ export function seidrNormalizeAnimation(raw: unknown, fallbackId?: number): Seid
 			over -= cut;
 		}
 	}
-	return { id: id, name: name, steps: steps };
+	const chatText = typeof d.chatText === "string" && d.chatText.trim()
+		? d.chatText.trim().slice(0, SEIDR_ACTION_CHAT_MAX)
+		: "";
+	return { id: id, name: name, steps: steps, chatText: chatText };
 }
 
 export function seidrNormalizeAnimationsBag(raw: unknown): SeidrAnimationsBag {

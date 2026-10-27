@@ -1,4 +1,5 @@
 /** Play a Seidr animation clip on the local Player */
+import { seidrPublishActionText } from "../chat/actionText";
 import type { SeidrAnimStep, SeidrAnimation } from "./model";
 import { seidrFindAnimationById, seidrFindAnimationByName } from "./store";
 
@@ -69,6 +70,9 @@ export function seidrPlayAnimation(ref: number | string): Promise<{ ok: boolean;
 		return Promise.resolve({ ok: false, error: "An animation is already playing" });
 	}
 	playing = true;
+	if (anim.chatText && String(anim.chatText).trim()) {
+		seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
+	}
 	const steps = anim.steps.slice();
 	let i = 0;
 
