@@ -4,6 +4,8 @@ import {
 	seidrCmdIsCommandLine,
 	seidrCmdPeekLine,
 	seidrCmdReplaceSpan,
+	seidrCmdStartsWithTag,
+	seidrCmdTagFromLine,
 	seidrCmdTokenAtCaret,
 	type SeidrCmdTokenFocus,
 } from "./parse";
@@ -244,27 +246,32 @@ function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
 export function seidrCmdAcOnTab(): boolean {
 	const input = getInput();
 	if (!input) return false;
-	const value = input.value || "";
-	if (!seidrCmdIsCommandLine(value) && !/^\s*\/(a|action|strip|stripe)/i.test(value)) {
+	let value = input.value || "";
+	if (!seidrCmdIsCommandLine(value) && !seidrCmdStartsWithTag(value)) {
 		return false;
 	}
 	const caret = input.selectionStart != null ? input.selectionStart : value.length;
 	let focus = seidrCmdTokenAtCaret(value, caret);
-	// `/a` or `/strip` with no trailing space yet — treat as start of member
+	// Bare `/strip` / `/action` — insert trailing space so member token is real
 	if (focus.kind === "tag") {
-		const bare = value.match(/^\s*\/(a|action|strip|stripe)\s*$/i);
-		if (bare) {
-			const start = value.length;
-			focus = {
-				kind: "member",
-				prefix: "",
-				quoted: false,
-				start: start,
-				end: start,
-			};
-		} else {
-			return false;
+		const bare = value.match(/^\s*\/(action|stripe|strip|a)\s*$/i);
+		if (!bare) return false;
+		const spaced = "/" + bare[1].toLowerCase() + " ";
+		input.value = spaced;
+		try {
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		} catch (e) { /* ignore */ }
+		if (typeof input.setSelectionRange === "function") {
+			input.setSelectionRange(spaced.length, spaced.length);
 		}
+		value = spaced;
+		focus = {
+			kind: "member",
+			prefix: "",
+			quoted: false,
+			start: spaced.length,
+			end: spaced.length,
+		};
 	}
 	if (focus.kind === "none") return false;
 	try {
@@ -290,19 +297,30 @@ export function seidrCmdAcAccept(): boolean {
 	if (!input) return false;
 	const item = state.items[state.index];
 	if (!item) return false;
-	let insert = item.insert;
+	const insert = item.insert;
+	const value = input.value || "";
+	let nextValue: string;
+	let nextCaret: number;
+
 	if (state.kind === "member") {
-		// Always insert MemberNumber for unambiguous resolution; label showed the name.
-		insert = item.insert;
+		// Rebuild so Tab never yields `/strip12345` — always `/tag NUMBER …`
+		const peek = seidrCmdPeekLine(value);
+		const tag = (peek && peek.tag) || seidrCmdTagFromLine(value) || "a";
+		const second = peek && peek.secondRaw ? peek.secondRaw : "";
+		const head = "/" + tag + " " + insert + " ";
+		nextValue = head + second;
+		nextCaret = head.length;
+	} else {
+		const trailing = false;
+		const next = seidrCmdReplaceSpan(value, state.spanStart, state.spanEnd, insert, trailing);
+		nextValue = next.value;
+		nextCaret = next.caret;
 	}
-	// Member gets a trailing space so the slot/action token is ready; slot/action
-	// still get a leading space via seidrCmdReplaceSpan when glued to the prior token.
-	const trailing = state.kind === "member";
-	const next = seidrCmdReplaceSpan(input.value || "", state.spanStart, state.spanEnd, insert, trailing);
-	input.value = next.value;
+
+	input.value = nextValue;
 	input.focus();
 	if (typeof input.setSelectionRange === "function") {
-		input.setSelectionRange(next.caret, next.caret);
+		input.setSelectionRange(nextCaret, nextCaret);
 	}
 	try {
 		input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -326,7 +344,7 @@ export function seidrCmdAcHandleKeyDown(ev: KeyboardEvent): boolean {
 		const onSeidrCmd =
 			state.open ||
 			seidrCmdIsCommandLine(value) ||
-			/^\s*\/(a|action|strip|stripe)/i.test(value);
+			seidrCmdStartsWithTag(value);
 		if (!onSeidrCmd) return false;
 		if (state.open) {
 			ev.preventDefault();

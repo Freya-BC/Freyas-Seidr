@@ -1,4 +1,4 @@
-/** Seidr Action icons — Seidr SVGs, Club Activity PNGs, custom URL resolve. */
+/** Seidr Action icons — Seidr SVGs / concept PNGs, Club Activity PNGs, custom URL resolve. */
 import {
 	seidrDefaultActionIcon,
 	seidrNormalizeActionIcon,
@@ -6,6 +6,7 @@ import {
 	type SeidrActionIcon,
 	type SeidrCustomActionIcon,
 } from "./model";
+import { SEIDR_CONCEPT_ICONS } from "./iconPngs";
 import { seidrGetSettings } from "../settings/storage";
 
 function svgDataUri(inner: string): string {
@@ -78,6 +79,8 @@ export const SEIDR_BUILTIN_ICONS: SeidrBuiltinIcon[] = [
 			'<text x="32" y="44" text-anchor="middle" font-size="32" fill="#e0b15a">★</text>',
 		),
 	},
+	// Concept-art tiles (embedded PNG) — match the preview sheet exactly
+	...SEIDR_CONCEPT_ICONS,
 ];
 
 /** Club Icons/Activity/*.png basenames (R133). */

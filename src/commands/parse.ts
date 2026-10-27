@@ -33,7 +33,11 @@ export type SeidrCmdTokenFocus =
 	| { kind: "action"; prefix: string; start: number; end: number }
 	| { kind: "slot"; prefix: string; start: number; end: number };
 
-const TAG_RE = /^\/(a|action|strip|stripe)(?:\s|$)/i;
+/** Longer tags first so `/action` is not parsed as `/a` + `ction`. */
+const TAG_ALT = "action|stripe|strip|a";
+const TAG_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s|$)", "i");
+const TAG_LINE_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s+(.*))?$", "i");
+const TAG_TOKEN_RE = new RegExp("^/(" + TAG_ALT + ")(\\s+)?", "i");
 
 function tagFamily(tag: SeidrCmdTag): SeidrCmdFamily {
 	return tag === "strip" || tag === "stripe" ? "strip" : "action";
@@ -52,9 +56,14 @@ export function seidrCmdIsCommandLine(msg: string): boolean {
 }
 
 export function seidrCmdTagFromLine(msg: string): SeidrCmdTag | null {
-	const m = String(msg || "").trim().match(/^\/(a|action|strip|stripe)(?:\s|$)/i);
+	const m = String(msg || "").trim().match(TAG_RE);
 	if (!m) return null;
 	return normalizeTag(m[1]);
+}
+
+/** True if the line starts with a Seidr command tag (partial OK). */
+export function seidrCmdStartsWithTag(msg: string): boolean {
+	return new RegExp("^\\s*/(" + TAG_ALT + ")", "i").test(String(msg || ""));
 }
 
 /**
@@ -69,7 +78,7 @@ export function seidrCmdPeekLine(msg: string): {
 	secondRaw: string;
 } | null {
 	const raw = String(msg || "").trim();
-	const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
+	const m = raw.match(TAG_LINE_RE);
 	if (!m) return null;
 	const tag = normalizeTag(m[1]);
 	const family = tagFamily(tag);
@@ -136,7 +145,7 @@ export function seidrCmdPeekLine(msg: string): {
  */
 export function seidrParseCmdLine(msg: string): SeidrCmdParsed {
 	const raw = String(msg || "").trim();
-	const m = raw.match(/^\/(a|action|strip|stripe)(?:\s+(.*))?$/i);
+	const m = raw.match(TAG_LINE_RE);
 	if (!m) return { ok: false, error: "Not a Seidr command", raw: raw };
 	const tag = normalizeTag(m[1]);
 	const family = tagFamily(tag);
@@ -219,7 +228,7 @@ export function seidrCmdTokenAtCaret(value: string, caret: number): SeidrCmdToke
 	const bodyCaret = pos - startOffset;
 	if (bodyCaret < 0) return { kind: "none" };
 
-	const tagMatch = body.match(/^\/(a|action|strip|stripe)(\s+)?/i);
+	const tagMatch = body.match(TAG_TOKEN_RE);
 	if (!tagMatch) return { kind: "none" };
 	const tag = normalizeTag(tagMatch[1]);
 	const family = tagFamily(tag);
