@@ -1,4 +1,4 @@
-/** Seidr Action icons — Pages-hosted concept PNGs, Club Activity PNGs, custom URLs. */
+/** Seidr Action icons — embedded concept PNGs, Club Activity PNGs, custom URLs. */
 import { Seidr } from "../seidr";
 import {
 	seidrDefaultActionIcon,
@@ -8,6 +8,7 @@ import {
 	type SeidrCustomActionIcon,
 } from "./model";
 import { seidrGetSettings } from "../settings/storage";
+import { SEIDR_CONCEPT_ICON_PNGS } from "./iconPngs.generated";
 
 function svgDataUri(inner: string): string {
 	const svg =
@@ -27,8 +28,10 @@ function assetsBase(): string {
 	return base.replace(/\/$/, "");
 }
 
-/** Concept-art tiles hosted on Pages (`assets/action-icons/{id}.png`). */
+/** Concept-art URL: embedded data URI when built from assets/; Pages fallback if missing. */
 export function seidrConceptIconUrl(id: string): string {
+	const embedded = SEIDR_CONCEPT_ICON_PNGS[id];
+	if (typeof embedded === "string" && embedded.indexOf("data:image") === 0) return embedded;
 	return assetsBase() + "/action-icons/" + encodeURIComponent(id) + ".png";
 }
 
@@ -65,7 +68,7 @@ const MARK_FALLBACK: SeidrBuiltinIcon = {
 	),
 };
 
-/** Built-in Seidr icons shown in the Action Tab picker (Pages concept tiles). */
+/** Built-in Seidr icons shown in the Action Tab picker (embedded concept tiles). */
 export const SEIDR_BUILTIN_ICONS: SeidrBuiltinIcon[] = conceptIcons();
 
 /** Club Icons/Activity/*.png basenames (R133). */
