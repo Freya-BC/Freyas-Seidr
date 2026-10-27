@@ -105,9 +105,9 @@ Chat slash-command setup (`/a` / `/action`):
 - **Slot** dropdown, then **Activity** dropdown for that slot (Club / Seidr / mods)  
 - **Save action** / **Delete**  
 
-In the chat box, **Tab** opens autocomplete for member and action tokens. Details: [COMMANDS.md](COMMANDS.md).
+In the chat box, **Tab** opens autocomplete for `/a` member and action tokens. Undress commands **`/strip`** / **`/stripe`** use Seidr’s built-in undress list (no extra Settings rows). Details: [COMMANDS.md](COMMANDS.md).
 
-These bindings are separate from the **Actions** tab (Activity Menu).
+These `/a` bindings are separate from the **Actions** tab (Activity Menu).
 
 ---
 

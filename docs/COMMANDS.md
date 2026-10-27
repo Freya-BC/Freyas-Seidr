@@ -1,8 +1,14 @@
 # Chat Commands
 
-Run activities from the Club chat box with a short slash command. Bindings are yours alone — you define call names under **Settings → Commands**.
+Run activities from the Club chat box with short slash commands.
 
-## Quick start
+| Command | Purpose |
+|---------|---------|
+| **`/a`** / **`/action`** | Your custom bindings from **Settings → Commands → Actions** |
+| **`/stripe`** | Undress **one** clothing layer (Seidr undress list, individuals only) |
+| **`/strip`** | Same individuals **plus** **Undress all {family}** when available |
+
+## Quick start — custom `/a`
 
 1. Open **Preference → Extensions → Seidr → Commands**.
 2. Under **Actions**, **Add action** → set a **call name** (e.g. `kiss`), pick a **slot**, pick an **activity**, **Save action**.
@@ -18,7 +24,23 @@ Run activities from the Club chat box with a short slash command. Bindings are y
 
 `/a` and `/action` are the same command.
 
-## Syntax
+## Quick start — undress `/strip` / `/stripe`
+
+No Settings binding needed — Seidr uses its built-in undress activities.
+
+```
+/stripe Alice Shoes
+/strip Alice Cloth
+/strip Alice all:Cloth
+/stripe 12345 Bra
+```
+
+| Command | Tab autocomplete shows |
+|---------|-------------------------|
+| **`/stripe`** | Individual worn layers you can undress right now |
+| **`/strip`** | Those layers **and** **Undress all …** bundles (insert as `all:Cloth`, etc.) |
+
+## Syntax — `/a`
 
 ```
 /a <member> <action>
@@ -38,11 +60,24 @@ Examples:
 | `/a bunny kiss` | People alias `bunny` (if registered) |
 | `/a "Red Fox" soft spank` | Quoted nick; action call name `soft spank` |
 
+## Syntax — `/strip` / `/stripe`
+
+```
+/strip <member> <slot>
+/stripe <member> <slot>
+```
+
+| Part | What you can type |
+|------|-------------------|
+| **member** | Same rules as `/a` |
+| **slot** | Clothing group id (`Shoes`, `Cloth`, Echo layer names, …), a friendly label from Tab, or `all:Cloth` for a family bundle (**`/strip` only**) |
+
 ## What happens when it runs
 
-Seidr looks up your binding (slot + Club/Seidr/mod activity) and runs it with Club’s normal **ActivityRun** path — same idea as clicking that activity in the Activity Menu on that person.
+- **`/a`**: looks up your Commands binding and runs Club **ActivityRun** (same idea as the Activity Menu).
+- **`/strip` / `/stripe`**: runs the matching Seidr **Undress** / **Undress all** activity on that person.
 
-You still need Club permission to act on them. If the activity is not available on them right now (blocked, wrong items, prefs, etc.), the command is refused.
+You still need Club permission to act on them. If the activity is not available right now, the command is refused.
 
 ## Errors and warnings
 
@@ -57,7 +92,7 @@ Messages appear **only for you** in the chat log (local), then disappear:
 
 ## Tab autocomplete
 
-While the chat input is focused and the line starts with `/a` or `/action`:
+While the chat input is focused and the line starts with `/a`, `/action`, `/strip`, or `/stripe`:
 
 | Key | Effect |
 |-----|--------|
@@ -69,7 +104,9 @@ While the chat input is focused and the line starts with `/a` or `/action`:
 
 - Placed over the chat input (Seidr styling).
 - **Member** suggestions show name/nick and ID; accepting inserts the **Member ID** (unambiguous).
-- **Action** suggestions only list bindings that are **currently available** on the resolved member. If the member is not resolved yet, unavailable ones may still appear until you finish the member token.
+- **`/a` action** suggestions only list bindings available on the resolved member.
+- **`/stripe` slot** suggestions = individual strippable layers only.
+- **`/strip` slot** suggestions = individuals + Undress-all bundles (`all:Group`).
 
 While the list is open, W / S / E are used for navigation (they do not type into chat).
 

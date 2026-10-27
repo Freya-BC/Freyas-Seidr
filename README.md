@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0.47 |
+| **Version** | 1.0.48 |
 | **Author** | Freya |
 | **Pages** | https://freya-bc.github.io/Freyas-Seidr/ |
 | **FUSAM loader** | https://freya-bc.github.io/Freyas-Seidr/loader.js |
@@ -54,7 +54,7 @@ Open **Preference → Extensions → Seidr** (Seidr logo) for the settings panel
 | **Holds** | Pull Left / Right, Cuddle, Remove, Leave on Item Torso — shared poses for Seidr peers |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
-| **Chat Commands** | `/a` / `/action <member> <action>` with Tab autocomplete; bind call names in Settings → Commands |
+| **Chat Commands** | `/a` custom bindings; `/strip` / `/stripe` undress with Tab autocomplete |
 | **Fast Open** | Modifier-click a character to open Activity View on a chosen Item\* slot |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, maps |
 | **Drawing** | Pull / cuddle visual spacing (models only; hitboxes stay put) |
@@ -116,24 +116,22 @@ More detail: [`docs/ACTIONS.md`](docs/ACTIONS.md).
 
 ## Chat Commands
 
-Run a bound activity from chat:
-
 ```
-/a <member> <action>
+/a <member> <action>          # your Settings → Commands bindings
 /action <member> <action>
+/stripe <member> <slot>       # undress one layer (Seidr undress list)
+/strip <member> <slot>        # layers + Undress all {family} when available
 ```
 
 | | |
 |---|---|
 | **Member** | Member ID, Commands → People alias, or room Name/Nickname. Multi-word: `"Long Nick"`. |
-| **Action** | Call name from **Settings → Commands → Actions** (rest of the line; spaces OK). |
+| **`/a` action** | Call name from **Settings → Commands → Actions**. |
+| **`/strip` slot** | Clothing group (`Shoes`, `Cloth`, …) or `all:Cloth` for a family bundle. |
 
-Define bindings under **Settings → Commands**:
+**`/stripe`** Tab-lists **individual** strippable layers only. **`/strip`** also offers **Undress all** bundles. No Settings setup for undress — Seidr’s built-in undress activities are used.
 
-1. **People** — optional alias → Member ID (helps when names collide).
-2. **Actions** — call name → slot → Club/Seidr/mod activity (dropdown + editor, like the Actions tab).
-
-**Tab** in the chat box opens Seidr autocomplete (W/S or arrows, E/Enter, Esc). Local warnings appear if the member is missing, ambiguous, or the activity is unavailable.
+Define custom `/a` bindings under **Settings → Commands** (People + Actions). **Tab** opens Seidr autocomplete (W/S or arrows, E/Enter, Esc).
 
 More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
