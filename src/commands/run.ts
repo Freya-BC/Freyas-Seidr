@@ -151,7 +151,7 @@ function executePosesCommand(memberRaw: string, poseRaw: string): boolean {
 		seidrCmdError("You cannot change that person's pose right now.");
 		return true;
 	}
-	if (!seidrPoseAvailable(target, pose)) {
+	if (!seidrPoseAvailable(target, pose, { aided: !self })) {
 		seidrCmdWarn("Pose \"" + (seidrPoseLabel(pose) || pose) + "\" is not available on that person.");
 		return true;
 	}

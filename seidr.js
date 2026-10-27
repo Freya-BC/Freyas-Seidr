@@ -1,4 +1,4 @@
-/* Seidr v1.0.71 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.72 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.71";
+  Seidr.VERSION = "1.0.72";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1965,10 +1965,16 @@
     { id: "BackElbowTouch", label: "Hands armbinder" },
     { id: "AllFours", label: "On all fours" }
   ];
-  function seidrPoseAvailable(C, poseId) {
+  function seidrPoseAvailable(C, poseId, opts4) {
     if (!poseId) return false;
     if (!C) return true;
+    const aided = !!(opts4 && opts4.aided);
     try {
+      if (typeof PoseCanChangeUnaidedStatus === "function" && PoseChangeStatus) {
+        const status = PoseCanChangeUnaidedStatus(C, poseId);
+        const min = aided ? PoseChangeStatus.NEVER_WITHOUT_AID : PoseChangeStatus.ALWAYS_WITH_STRUGGLE;
+        return status >= min;
+      }
       if (typeof PoseCanChangeUnaided === "function") {
         return !!PoseCanChangeUnaided(C, poseId);
       }
@@ -1976,9 +1982,9 @@
     }
     return true;
   }
-  function seidrPosesForCharacter(C) {
+  function seidrPosesForCharacter(C, opts4) {
     return SEIDR_ACTION_POSES.filter(function(p) {
-      return seidrPoseAvailable(C, p.id);
+      return seidrPoseAvailable(C, p.id, opts4);
     });
   }
   function seidrPoseLabel(poseId) {
@@ -5528,7 +5534,7 @@
       seidrCmdError("You cannot change that person's pose right now.");
       return true;
     }
-    if (!seidrPoseAvailable(target, pose)) {
+    if (!seidrPoseAvailable(target, pose, { aided: !self })) {
       seidrCmdWarn('Pose "' + (seidrPoseLabel(pose) || pose) + '" is not available on that person.');
       return true;
     }
@@ -5794,8 +5800,10 @@
     if (!memberRaw) return [];
     const mem = seidrCmdResolveMember(memberRaw);
     if (mem.ok === false) return [];
+    const target = mem.character;
+    const self = typeof Player !== "undefined" && Player && (target === Player || typeof target.MemberNumber === "number" && target.MemberNumber === Player.MemberNumber);
     const pfx = String(prefix || "").trim().toLowerCase();
-    const list = seidrPosesForCharacter(mem.character);
+    const list = seidrPosesForCharacter(target, { aided: !self });
     const out = [];
     for (let i = 0; i < list.length; i++) {
       const p = list[i];

@@ -211,8 +211,13 @@ function buildPoseItems(prefix: string, memberRaw: string): SeidrCmdAcItem[] {
 	if (!memberRaw) return [];
 	const mem = seidrCmdResolveMember(memberRaw);
 	if (mem.ok === false) return [];
+	const target = mem.character;
+	const self = typeof Player !== "undefined" && Player && (
+		target === Player
+		|| (typeof target.MemberNumber === "number" && target.MemberNumber === Player.MemberNumber)
+	);
 	const pfx = String(prefix || "").trim().toLowerCase();
-	const list = seidrPosesForCharacter(mem.character);
+	const list = seidrPosesForCharacter(target, { aided: !self });
 	const out: SeidrCmdAcItem[] = [];
 	for (let i = 0; i < list.length; i++) {
 		const p = list[i];

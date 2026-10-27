@@ -210,12 +210,36 @@ export const SEIDR_ACTION_POSES: { id: string; label: string }[] = [
 ];
 
 declare const PoseCanChangeUnaided: ((C: any, pose: string) => boolean) | undefined;
+declare const PoseCanChangeUnaidedStatus: ((C: any, pose: string) => number) | undefined;
+declare const PoseChangeStatus: {
+	NEVER: number;
+	NEVER_WITHOUT_AID: number;
+	ALWAYS_WITH_STRUGGLE: number;
+	ALWAYS: number;
+} | undefined;
 
-/** Pose catalog entry available for character (Club gate when present). */
-export function seidrPoseAvailable(C: any, poseId: string): boolean {
+export type SeidrPoseAvailableOpts = {
+	/** True when another person is applying the pose (counts as aid). */
+	aided?: boolean;
+};
+
+/**
+ * Pose catalog entry available for character.
+ * Self: status >= ALWAYS_WITH_STRUGGLE (leg binder Kneel / minigame path).
+ * Aided: status >= NEVER_WITHOUT_AID (helper can force; still hide NEVER).
+ */
+export function seidrPoseAvailable(C: any, poseId: string, opts?: SeidrPoseAvailableOpts): boolean {
 	if (!poseId) return false;
 	if (!C) return true;
+	const aided = !!(opts && opts.aided);
 	try {
+		if (typeof PoseCanChangeUnaidedStatus === "function" && PoseChangeStatus) {
+			const status = PoseCanChangeUnaidedStatus(C, poseId);
+			const min = aided
+				? PoseChangeStatus.NEVER_WITHOUT_AID
+				: PoseChangeStatus.ALWAYS_WITH_STRUGGLE;
+			return status >= min;
+		}
 		if (typeof PoseCanChangeUnaided === "function") {
 			return !!PoseCanChangeUnaided(C, poseId);
 		}
@@ -223,9 +247,12 @@ export function seidrPoseAvailable(C: any, poseId: string): boolean {
 	return true;
 }
 
-export function seidrPosesForCharacter(C: any): { id: string; label: string }[] {
+export function seidrPosesForCharacter(
+	C: any,
+	opts?: SeidrPoseAvailableOpts
+): { id: string; label: string }[] {
 	return SEIDR_ACTION_POSES.filter(function (p) {
-		return seidrPoseAvailable(C, p.id);
+		return seidrPoseAvailable(C, p.id, opts);
 	});
 }
 

@@ -54,6 +54,7 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 
 - Member rules match `/a` (ID, People alias, room Name/Nickname, quotes for multi-word).
 - Pose names use the shared Seidr pose catalog (friendly labels in autocomplete).
+- Struggle/aided lower poses still appear (e.g. **Kneel** while wearing a leg binder), matching Club’s pose menu / Kneel button — not only free unaided changes.
 - You need Club permission to change someone else’s pose.
 - After a successful pose change, Seidr posts a **public Action** line (unique Self/Other text per pose, with Club-style names/pronouns).
 
