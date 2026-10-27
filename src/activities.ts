@@ -450,6 +450,9 @@ function seidrInstallLateActivityUiHooks() {
 			if (typeof Seidr.undressRefreshLabels === "function") Seidr.undressRefreshLabels();
 		} catch (e) { /* ignore */ }
 		try { seidrBadgeActivityButtons(); } catch (e2) { /* ignore */ }
+		try {
+			if (typeof Seidr.refreshOpenActivityMenuIcons === "function") Seidr.refreshOpenActivityMenuIcons();
+		} catch (e3) { /* ignore */ }
 		return result;
 	});
 }

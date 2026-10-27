@@ -1322,3 +1322,5 @@ export function seidrRefreshActionsTab() {
 	importCandidates = null;
 	seidrBuildActionsTab(pane);
 }
+
+Seidr.refreshOpenActivityMenuIcons = refreshOpenActivityMenuIcons;
