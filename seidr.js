@@ -1,4 +1,4 @@
-/* Seidr v1.0.72 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.73 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.72";
+  Seidr.VERSION = "1.0.73";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -9765,11 +9765,14 @@
       "  cursor: pointer; font: inherit; font-size: 10px;",
       "}",
       ".seidr-act-ph:hover { border-color: #d4a017; color: #f0e6d4; }",
-      "#seidr-act-chat-other, #seidr-act-chat-self {",
+      "#seidr-act-chat-other, #seidr-act-chat-self, #seidr-anim-chat {",
       "  width: 100%; box-sizing: border-box; margin-top: 4px;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
       "  font: inherit; resize: vertical;",
+      "}",
+      "#seidr-act-chat-other:focus, #seidr-act-chat-self:focus, #seidr-anim-chat:focus {",
+      "  outline: none; border-color: #d4a017;",
       "}",
       ".seidr-act-btn {",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
