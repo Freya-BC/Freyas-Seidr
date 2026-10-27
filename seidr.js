@@ -1,4 +1,4 @@
-/* Seidr v1.0.67 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.68 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.67";
+  Seidr.VERSION = "1.0.68";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";

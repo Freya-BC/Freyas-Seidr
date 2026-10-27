@@ -1,12 +1,16 @@
 # Chat Commands
 
-Run activities from the Club chat box with short slash commands.
+Run Seidr helpers from the Club chat box with short slash commands. Each command can be turned on or off under **Settings → General → Commands**.
 
 | Command | Purpose |
 |---------|---------|
 | **`/a`** / **`/action`** | Your custom bindings from **Settings → Commands → Actions** |
 | **`/stripe`** | Undress **one** clothing layer (Seidr undress list, individuals only) |
 | **`/strip`** | Same individuals **plus** **Undress all {family}** when available |
+| **`/poses`** / **`/p`** | Set a Club pose on a room member (or yourself) |
+| **`/animation`** / **`/ani`** | Play one of **your** Animations (local Player only) |
+| **`/seidr`** | Open Seidr Settings |
+| **`/roommanager`** | Open Room Manager (when activated) |
 
 ## Quick start — custom `/a`
 
@@ -22,7 +26,7 @@ Run activities from the Club chat box with short slash commands.
 /action Alice kiss
 ```
 
-`/a` and `/action` are the same command.
+`/a` and `/action` are the same command family (separate enable toggles).
 
 ## Quick start — undress `/strip` / `/stripe`
 
@@ -40,6 +44,36 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 | **`/stripe`** | Individual worn layers you can undress right now |
 | **`/strip`** | Those layers **and** **Undress all …** bundles (insert as `all:Cloth`, etc.) |
 
+## Quick start — poses `/poses` / `/p`
+
+```
+/poses Alice Kneel
+/p me Hands up
+/p 12345 Standing (legs)
+```
+
+- Member rules match `/a` (ID, People alias, room Name/Nickname, quotes for multi-word).
+- Pose names use the shared Seidr pose catalog (friendly labels in autocomplete).
+- You need Club permission to change someone else’s pose.
+
+## Quick start — animations `/animation` / `/ani`
+
+```
+/animation wave
+/ani wave
+```
+
+Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](ANIMATIONS.md).
+
+## Meta
+
+```
+/seidr
+/roommanager
+```
+
+`/roommanager` requires **Activate Room Manager** in Settings → General.
+
 ## Syntax — `/a`
 
 ```
@@ -50,15 +84,6 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 |------|-------------------|
 | **member** | Member ID (number), a **People** alias, or someone in the room’s **Name** / **Nickname**. Multi-word names: wrap in quotes — `/a "Long Nick" kiss`. |
 | **action** | Everything after the member (spaces allowed). Must match a **Commands → Actions** call name (case-insensitive). |
-
-Examples:
-
-| Line | Meaning |
-|------|---------|
-| `/a 4829101 kiss` | Member ID + call name `kiss` |
-| `/a Alice kiss` | Room name/nick `Alice` |
-| `/a bunny kiss` | People alias `bunny` (if registered) |
-| `/a "Red Fox" soft spank` | Quoted nick; action call name `soft spank` |
 
 ## Syntax — `/strip` / `/stripe`
 
@@ -72,12 +97,28 @@ Examples:
 | **member** | Same rules as `/a` |
 | **slot** | Clothing group id (`Shoes`, `Cloth`, Echo layer names, …), a friendly label from Tab, or `all:Cloth` for a family bundle (**`/strip` only**) |
 
+## Syntax — `/poses` / `/p`
+
+```
+/poses <member> <pose>
+/p <member> <pose>
+```
+
+## Syntax — `/animation` / `/ani`
+
+```
+/animation <name>
+/ani <name>
+```
+
 ## What happens when it runs
 
 - **`/a`**: looks up your Commands binding and runs Club **ActivityRun** (same idea as the Activity Menu).
 - **`/strip` / `/stripe`**: runs the matching Seidr **Undress** / **Undress all** activity on that person.
+- **`/poses` / `/p`**: applies a Club pose when allowed.
+- **`/animation` / `/ani`**: plays your saved animation on the local Player.
 
-You still need Club permission to act on them. If the activity is not available right now, the command is refused.
+You still need Club permission to act on others. If the activity / pose is not available right now, the command is refused.
 
 ## Errors and warnings
 
@@ -87,12 +128,12 @@ Messages appear **only for you** in the chat log (local), then disappear:
 |-----------|-----------|
 | Member not in the room | Warning / error, command stops |
 | Name/nick matches **more than one** person and none is disambiguated via **People** | Short warning; refuses |
-| Unknown call name | Warning; define it under Commands → Actions |
-| Activity not available on that person | Error (~30s); autocomplete would have hidden it |
+| Unknown call name / animation | Warning; define it under Commands / Animations |
+| Activity or pose not available | Error / warn; autocomplete would have hidden it when possible |
 
 ## Tab autocomplete
 
-While the chat input is focused and the line starts with `/a`, `/action`, `/strip`, or `/stripe`:
+While the chat input is focused and the line starts with a Seidr command:
 
 | Key | Effect |
 |-----|--------|
@@ -107,6 +148,8 @@ While the chat input is focused and the line starts with `/a`, `/action`, `/stri
 - **`/a` action** suggestions only list bindings available on the resolved member.
 - **`/stripe` slot** suggestions = individual strippable layers only.
 - **`/strip` slot** suggestions = individuals + Undress-all bundles (`all:Group`).
+- **`/poses`** pose suggestions use friendly labels.
+- **`/animation`** suggestions list your saved animation names.
 
 While the list is open, W / S / E are used for navigation (they do not type into chat).
 
@@ -133,6 +176,10 @@ Pick **slot first**, then **activity** (list refreshes for that slot). Dropdown 
 
 These chat bindings are **separate** from **Settings → Actions** (custom Activity Menu entries). You can bind a chat call name to a stock Club kiss, a Seidr hold, a custom `Seidr_Act_*`, or another mod’s activity, as long as it appears for that slot.
 
+### Enable toggles
+
+**Settings → General → Commands** — one checkbox per slash tag (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored.
+
 ## Storage
 
 Saved in the shared Seidr bag: `ExtensionSettings.SeidrRoomManager` → `settings.commands` (same ~180 KB soft cap as Room Manager / Actions).
@@ -141,4 +188,5 @@ Saved in the shared Seidr bag: `ExtensionSettings.SeidrRoomManager` → `setting
 
 - [SETTINGS.md](SETTINGS.md) — Commands tab overview  
 - [ACTIONS.md](ACTIONS.md) — custom Activity Menu actions (different feature)  
+- [ANIMATIONS.md](ANIMATIONS.md) — pose/face clips  
 - [README.md](../README.md) — feature overview  

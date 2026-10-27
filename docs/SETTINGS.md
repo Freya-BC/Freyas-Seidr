@@ -2,7 +2,7 @@
 
 Open **Preference → Extensions → Seidr** (Seidr logo). The panel returns you to the game after opening (same pattern as Freyas Better Maps).
 
-Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** (feature flags may hide a tab in some builds).
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps**.
 
 ---
 
@@ -47,7 +47,11 @@ Echo-style **model** spacing for holds (hitboxes do not move):
 | Pull Y | Raises both sides |
 | Cuddle X / Y | Moves the holder |
 
-Range −400…400 (Pull X stored as non-negative magnitude). Change values to preview; click **Save Drawing** to persist.
+Range −400…400 (Pull X stored as non-negative magnitude). Use the up/down steppers or type values to preview; click **Save Drawing** to persist.
+
+### Commands (enable toggles)
+
+Collapsible **Commands** block on General: enable or disable each Seidr slash tag (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored. Details: [COMMANDS.md](COMMANDS.md).
 
 ### Arousal bars
 
@@ -73,7 +77,7 @@ Controls Club / BCTweaks on-character thermometers and orgasm tracks.
 Read-only usage for the synced ExtensionSettings bag:
 
 - Total compressed size vs ~180 KB soft cap (+ thin progress bar)  
-- Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Settings**, **UI**  
+- Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Commands**, **Animations**, **Settings**, **UI**  
 - Maps **75%** budget line (+ local maps note when present)  
 
 Refreshes when you open / refresh Settings. See README **Storage**.
@@ -103,13 +107,13 @@ See [ACTIONS.md](ACTIONS.md).
 
 ## Commands tab
 
-Chat slash-command setup (`/a` / `/action`):
+Chat slash-command setup (`/a` / `/action` bindings + People aliases). Pose / animation / undress / meta commands do not need rows here — they use built-in lists or the Animations tab.
 
 ### People
 
 - **Add person** → dropdown of saved people → editor underneath  
 - **Alias** + **Member ID** (text) → **Save person** / **Delete**  
-- Used for `/a` targets and to disambiguate duplicate room names  
+- Used for `/a` (and other member) targets and to disambiguate duplicate room names  
 
 ### Actions
 
@@ -118,16 +122,22 @@ Chat slash-command setup (`/a` / `/action`):
 - **Slot** dropdown, then **Activity** dropdown for that slot (Club / Seidr / mods)  
 - **Save action** / **Delete**  
 
-In the chat box, **Tab** opens autocomplete for `/a` member and action tokens. Undress commands **`/strip`** / **`/stripe`** use Seidr’s built-in undress list (no extra Settings rows). Details: [COMMANDS.md](COMMANDS.md).
+In the chat box, **Tab** opens autocomplete for Seidr commands. Details: [COMMANDS.md](COMMANDS.md).
 
 These `/a` bindings are separate from the **Actions** tab (Activity Menu).
 
 ---
 
+## Animations tab
+
+Author pose/face clips for the local Player (up to 50). Play with `/animation` / `/ani`. See [ANIMATIONS.md](ANIMATIONS.md).
+
+---
+
 ## Where settings are stored
 
-All of the above (except background preview thumbs) persist in:
+All of the above (except background preview thumbs and **local-only** map versions) persist in:
 
 `Player.ExtensionSettings.SeidrRoomManager`
 
-Synced with your BC account via Club ExtensionSettings. Preview thumbnails for Room Manager backgrounds use **localStorage** only.
+Synced with your BC account via Club ExtensionSettings. Preview thumbnails for Room Manager backgrounds and local-only map versions use **localStorage**.

@@ -11,7 +11,6 @@ Open **Preference → Extensions → Seidr → Actions**.
 | Actions | 50 (`n/50` shown in the UI) |
 | Chat line length | 500 characters (Other + Self), with live counters |
 | Restraint allowlist entries | 12 |
-| Custom icon URLs | 10 (stored in settings) |
 
 ## Creating an action
 
@@ -73,11 +72,12 @@ Examples of checks: `wearing`, `isGagged`, `isBlind`, `isDeaf`, `canUseHands`, `
 
 Each action shows an icon in the Activity Menu:
 
-- Seidr SVG builtins and concept tiles (Pages `assets/action-icons/`)  
-- Club `Icons/Activity/*.png`  
-- Custom **HTTPS** image URL (validated on add; up to 10 stored)
+| Source | Examples |
+|--------|----------|
+| **Seidr** (inline SVG) | Mark, Hand, Kiss, Heart, Pull, Spark, Cuddle, Star, Rope, Collar, Leash, Chain, Blindfold, Paddle, Candle, Vulva |
+| **Club Activity** | Stock `Icons/Activity/*.png` (Caress, Kiss, …) |
 
-**Select icon** opens a searchable grid modal. Save the action (or use icon save) so the menu refreshes.
+**Select icon** opens a searchable grid. Icons apply when the Activity Menu opens (no need to re-save just to refresh the tile). Custom HTTPS URL icons are **not** offered in the picker (Club Activity buttons do not load remote images reliably).
 
 ## Export / Import
 
@@ -94,3 +94,4 @@ Actions live in `ExtensionSettings.SeidrRoomManager` → `settings.actions` (sam
 
 - [README.md](../README.md) — Fast Open into Activity View  
 - [SETTINGS.md](SETTINGS.md) — General Fast Open slot / modifier  
+- [ANIMATIONS.md](ANIMATIONS.md) — pose/face clips (different feature)  
