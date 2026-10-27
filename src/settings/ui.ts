@@ -32,6 +32,7 @@ import { rmFormatBytes, rmUsageBreakdown } from "../roomManager/storage";
 import { rmIsShown } from "../roomManager/model";
 import { seidrBuildMapsTab, seidrRefreshMapsTab } from "../roomManager/mapsUi";
 import { rmLocalMapsStats } from "../roomManager/maps";
+import { seidrBuildAboutTab } from "./about";
 
 function $(id: string): HTMLElement | null {
 	return document.getElementById(id);
@@ -247,6 +248,7 @@ export function seidrBuildSettingsBody() {
 			showMaps
 				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>'
 				: "",
+			'<button type="button" class="seidr-settings-tab" data-seidr-tab="about">About</button>',
 		].join("");
 	}
 	body.innerHTML = [
@@ -265,6 +267,7 @@ export function seidrBuildSettingsBody() {
 		showMaps
 			? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>'
 			: "",
+		'<div class="seidr-settings-pane" id="seidr-settings-pane-about" data-seidr-pane="about"></div>',
 	].join("");
 	if (showActions) {
 		const actPane = $("seidr-settings-pane-actions");
@@ -282,6 +285,8 @@ export function seidrBuildSettingsBody() {
 		const mapsPane = $("seidr-settings-pane-maps");
 		if (mapsPane) seidrBuildMapsTab(mapsPane);
 	}
+	const aboutPane = $("seidr-settings-pane-about");
+	if (aboutPane) seidrBuildAboutTab(aboutPane);
 	const tabRoot = tabs || body;
 	tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function (btn) {
 		btn.addEventListener("click", function () {

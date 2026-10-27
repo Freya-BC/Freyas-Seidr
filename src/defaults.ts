@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.68";
+Seidr.VERSION = "1.0.69";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -23,6 +23,8 @@ Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
 Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
 /** Hosted static assets (action icons, logo). Sideloaded at runtime — not embedded in the script. */
 Seidr.ASSETS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr/assets";
+/** Player docs on GitHub Pages (About tab More links). */
+Seidr.DOCS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr";
 /** Room Manager UI — Dev-only until Release is approved. */
 Seidr.SHOW_ROOM_MANAGER = true;
 /** User Actions (Activity Menu) — Dev channel. */

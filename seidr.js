@@ -1,4 +1,4 @@
-/* Seidr v1.0.68 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.69 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.68";
+  Seidr.VERSION = "1.0.69";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -24,6 +24,7 @@
   Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
   Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
   Seidr.ASSETS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr/assets";
+  Seidr.DOCS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr";
   Seidr.SHOW_ROOM_MANAGER = true;
   Seidr.SHOW_ACTIONS = true;
   Seidr.SHOW_COMMANDS = true;
@@ -9348,7 +9349,7 @@
       "}",
       ".seidr-settings-icon-btn:hover { border-color: #d4a017; color: #d4a017; }",
       ".seidr-settings-tabs {",
-      "  flex-shrink: 0; display: flex; gap: 4px; padding: 8px 10px 0;",
+      "  flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px 0;",
       "  background: rgba(42, 34, 56, 0.95); border-bottom: 1px solid rgba(255,255,255,0.1);",
       "}",
       ".seidr-settings-tab {",
@@ -9485,6 +9486,31 @@
       ".seidr-settings-draw-actions { margin-top: 10px; }",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
+      "}",
+      ".seidr-about-header {",
+      "  display: flex; gap: 12px; align-items: flex-start;",
+      "}",
+      ".seidr-about-logo {",
+      "  flex-shrink: 0; width: 56px; height: 56px; border-radius: 8px;",
+      "  object-fit: contain; background: rgba(20,16,28,0.9);",
+      "  border: 1px solid rgba(255,255,255,0.1);",
+      "}",
+      ".seidr-about-header-text { flex: 1; min-width: 0; }",
+      ".seidr-about-name {",
+      "  margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #f0e6d4;",
+      "}",
+      ".seidr-about-links {",
+      "  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;",
+      "}",
+      ".seidr-about-feature { margin-top: 8px; }",
+      ".seidr-about-feature-head {",
+      "  display: flex; align-items: center; justify-content: space-between; gap: 8px;",
+      "}",
+      ".seidr-about-feature-title {",
+      "  font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: #d4a017;",
+      "}",
+      "a.seidr-act-btn {",
+      "  display: inline-flex; align-items: center; text-decoration: none;",
       "}",
       '.seidr-settings-field-row input[type="text"],',
       '.seidr-settings-field-row input[type="number"],',
@@ -11712,6 +11738,110 @@
     refreshAll(container);
   }
 
+  // src/settings/about.ts
+  var ABOUT_FEATURES = [
+    {
+      title: "Holds",
+      blurb: "Pull Left / Right, Cuddle, Remove, and Leave on Item Torso \u2014 shared poses for Seidr peers.",
+      docPath: "/docs/HOLDS.md"
+    },
+    {
+      title: "Undress",
+      blurb: "Clothing-zone undress activities, including Echo layers and Undress all when available.",
+      docPath: "/docs/UNDRESS.md"
+    },
+    {
+      title: "Custom Actions",
+      blurb: "Up to 50 Activity Menu entries with chat lines, conditions, icons, sound, pose, and export/import.",
+      docPath: "/docs/ACTIONS.md"
+    },
+    {
+      title: "Animations",
+      blurb: "Pose and face clips for you. Author under Animations; play with /animation or /ani.",
+      docPath: "/docs/ANIMATIONS.md"
+    },
+    {
+      title: "Chat Commands",
+      blurb: "/a bindings, /strip /stripe, /poses /p, /animation /ani, /seidr, and /roommanager \u2014 with Tab autocomplete.",
+      docPath: "/docs/COMMANDS.md"
+    },
+    {
+      title: "Fast Open",
+      blurb: "Modifier-click a room character to open Club Activity View on a preferred Item* slot.",
+      docPath: "/docs/SETTINGS.md"
+    },
+    {
+      title: "Room Manager",
+      blurb: "Admin panel for room definitions, access lists, backgrounds, and map series.",
+      docPath: "/docs/ROOM_MANAGER.md"
+    },
+    {
+      title: "Maps",
+      blurb: "Map versions: Default can sync remotely; other versions stay local. Manage under Settings \u2192 Maps.",
+      docPath: "/docs/ROOM_MANAGER.md"
+    },
+    {
+      title: "Drawing, Arousal & Storage",
+      blurb: "Hold drawing offsets, arousal bar modes, and ExtensionSettings usage vs the soft cap.",
+      docPath: "/docs/SETTINGS.md"
+    }
+  ];
+  function escapeHtml7(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function docsBase() {
+    const base = typeof Seidr.DOCS_BASE_URL === "string" && Seidr.DOCS_BASE_URL ? Seidr.DOCS_BASE_URL : "https://freya-bc.github.io/Freyas-Seidr";
+    return base.replace(/\/$/, "");
+  }
+  function docsUrl(path) {
+    const p = path.charAt(0) === "/" ? path : "/" + path;
+    return docsBase() + p;
+  }
+  function featureCard(f) {
+    const href = docsUrl(f.docPath);
+    return [
+      '<div class="seidr-settings-sec seidr-about-feature">',
+      '<div class="seidr-about-feature-head">',
+      '<span class="seidr-about-feature-title">' + escapeHtml7(f.title) + "</span>",
+      '<a class="seidr-act-btn" href="' + escapeHtml7(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
+      "</div>",
+      '<p class="seidr-settings-hint">' + escapeHtml7(f.blurb) + "</p>",
+      "</div>"
+    ].join("");
+  }
+  function seidrBuildAboutTab(container) {
+    const version = String(Seidr.VERSION || "\u2014");
+    const name = String(Seidr.FULL_NAME || "Seidr");
+    const logo = typeof Seidr.LOGO_URL === "string" && Seidr.LOGO_URL ? Seidr.LOGO_URL : "";
+    const home = docsBase() + "/";
+    const repo = typeof Seidr.REPO_URL === "string" && Seidr.REPO_URL ? Seidr.REPO_URL : "https://github.com/Freya-BC/Freyas-Seidr";
+    container.innerHTML = [
+      '<div class="seidr-settings-sec seidr-about-header">',
+      logo ? '<img class="seidr-about-logo" src="' + escapeHtml7(logo) + '" alt="" width="56" height="56" />' : "",
+      '<div class="seidr-about-header-text">',
+      '<p class="seidr-about-name">' + escapeHtml7(name) + "</p>",
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Version</span>',
+      "<span>" + escapeHtml7(version) + "</span>",
+      "</div>",
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Developer</span>',
+      "<span>Freya</span>",
+      "</div>",
+      '<div class="seidr-about-links">',
+      '<a class="seidr-act-btn" href="' + escapeHtml7(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml7(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
+      "</div>",
+      "</div>",
+      "</div>",
+      '<details class="seidr-settings-sec" open>',
+      "<summary>Documentation</summary>",
+      '<p class="seidr-settings-hint">Short summaries below. More opens the full player guide on GitHub Pages.</p>',
+      ABOUT_FEATURES.map(featureCard).join(""),
+      "</details>"
+    ].join("");
+  }
+
   // src/settings/ui.ts
   function $3(id) {
     return document.getElementById(id);
@@ -11897,7 +12027,8 @@
         showActions ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>' : "",
         showCommands ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>' : "",
         showAnimations ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="animations">Animations</button>' : "",
-        showMaps ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>' : ""
+        showMaps ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>' : "",
+        '<button type="button" class="seidr-settings-tab" data-seidr-tab="about">About</button>'
       ].join("");
     }
     body.innerHTML = [
@@ -11907,7 +12038,8 @@
       showActions ? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>' : "",
       showCommands ? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>' : "",
       showAnimations ? '<div class="seidr-settings-pane" id="seidr-settings-pane-animations" data-seidr-pane="animations"></div>' : "",
-      showMaps ? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>' : ""
+      showMaps ? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>' : "",
+      '<div class="seidr-settings-pane" id="seidr-settings-pane-about" data-seidr-pane="about"></div>'
     ].join("");
     if (showActions) {
       const actPane = $3("seidr-settings-pane-actions");
@@ -11925,6 +12057,8 @@
       const mapsPane = $3("seidr-settings-pane-maps");
       if (mapsPane) seidrBuildMapsTab(mapsPane);
     }
+    const aboutPane = $3("seidr-settings-pane-about");
+    if (aboutPane) seidrBuildAboutTab(aboutPane);
     const tabRoot = tabs || body;
     tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
       btn2.addEventListener("click", function() {

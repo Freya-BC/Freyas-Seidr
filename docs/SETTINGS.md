@@ -2,7 +2,7 @@
 
 Open **Preference → Extensions → Seidr** (Seidr logo). The panel returns you to the game after opening (same pattern as Freyas Better Maps).
 
-Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps**.
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**.
 
 ---
 
@@ -131,6 +131,16 @@ These `/a` bindings are separate from the **Actions** tab (Activity Menu).
 ## Animations tab
 
 Author pose/face clips for the local Player (up to 50). Play with `/animation` / `/ani`. See [ANIMATIONS.md](ANIMATIONS.md).
+
+---
+
+## About tab
+
+Plugin identity and documentation links:
+
+- **Version** (matches the loaded Seidr build) and **Developer** (Freya)  
+- Buttons to the Pages documentation home and the GitHub repo  
+- Short feature blurbs (Holds, Undress, Actions, Animations, Commands, Fast Open, Room Manager, Maps, Drawing/Arousal/Storage) each with **More** → opens the matching Pages markdown guide in a new tab  
 
 ---
 

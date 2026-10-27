@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0.67 |
+| **Version** | 1.0.68 |
 | **Author** | Freya |
 | **Pages** | https://freya-bc.github.io/Freyas-Seidr/ |
 | **FUSAM loader** | https://freya-bc.github.io/Freyas-Seidr/loader.js |
@@ -196,7 +196,7 @@ More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 **Preference → Extensions → Seidr**
 
-Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps**
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**
 
 ### General
 
