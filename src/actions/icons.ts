@@ -252,13 +252,8 @@ export function seidrResolveIconRef(
 		if (SEIDR_ACTIVITY_ICON_IDS.indexOf(ref.id) >= 0) return seidrActivityIconUrl(ref.id);
 		return SEIDR_BUILTIN_ICONS[0].url;
 	}
-	if (ref.source === "custom") {
-		const customs = customList || seidrCustomIconsFromSettings();
-		for (let i = 0; i < customs.length; i++) {
-			if (customs[i].id === ref.id) return customs[i].url;
-		}
-		return SEIDR_BUILTIN_ICONS[0].url;
-	}
+	// Custom URL icons are hidden in UI (Club mask-image rejects remote HTTPS).
+	if (ref.source === "custom") return SEIDR_BUILTIN_ICONS[0].url;
 	return SEIDR_BUILTIN_ICONS[0].url;
 }
 

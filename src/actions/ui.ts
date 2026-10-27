@@ -11,7 +11,6 @@ import {
 	SEIDR_ACTIONS_MAX,
 	SEIDR_AROUSAL_ACTIVITY_IDS,
 	SEIDR_COND_TYPES,
-	SEIDR_CUSTOM_ICONS_MAX,
 	seidrActionActivityName,
 	seidrArousalActivityLabel,
 	seidrArousalPickerGroups,
@@ -28,7 +27,6 @@ import {
 	type SeidrCondGroup,
 	type SeidrCondRule,
 	type SeidrCondType,
-	type SeidrCustomActionIcon,
 } from "./model";
 import {
 	SEIDR_ACTIVITY_ICON_IDS,
@@ -37,7 +35,6 @@ import {
 	seidrIconLabel,
 	seidrResolveActionIconUrl,
 	seidrResolveIconRef,
-	seidrValidateImageUrl,
 } from "./icons";
 import { seidrExportActionsString, seidrParseActionsImport } from "./io";
 import {
@@ -739,7 +736,6 @@ function openIconModal(root: HTMLElement) {
 	if (!draft) return;
 	closeIconModal();
 	readDraftFromDom(root);
-	const customs = (seidrGetSettings().customActionIcons || []).slice() as SeidrCustomActionIcon[];
 	const panel = document.getElementById("seidr-settings-panel") || document.body;
 	const modal = document.createElement("div");
 	modal.id = "seidr-act-icon-modal";
@@ -753,16 +749,6 @@ function openIconModal(root: HTMLElement) {
 		'<input type="search" id="seidr-act-icon-search" placeholder="Search icons…" autocomplete="off" />',
 		'<div class="seidr-act-icon-scroll" id="seidr-act-icon-scroll">',
 		'<div class="seidr-act-icon-grid" id="seidr-act-icon-grid"></div>',
-		'<div class="seidr-act-icon-custom">',
-		'<p class="seidr-settings-hint">Custom URL icons (max ' + SEIDR_CUSTOM_ICONS_MAX + ")</p>",
-		'<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap;">',
-		'<input type="url" id="seidr-act-icon-url" placeholder="https://…/icon.png" />',
-		'<input type="text" id="seidr-act-icon-url-label" placeholder="Label" maxlength="48" />',
-		'<button type="button" class="seidr-act-btn" id="seidr-act-icon-add-url">Add URL</button>',
-		"</div>",
-		'<p class="seidr-settings-hint" id="seidr-act-icon-custom-msg"></p>',
-		'<div id="seidr-act-icon-custom-list"></div>',
-		"</div>",
 		"</div>",
 		"</div>",
 	].join("");
@@ -771,45 +757,6 @@ function openIconModal(root: HTMLElement) {
 	modal.addEventListener("wheel", function (ev) {
 		ev.stopPropagation();
 	}, { passive: true });
-
-	function setCustomMsg(text: string) {
-		const el = modal.querySelector("#seidr-act-icon-custom-msg");
-		if (el) el.textContent = text || "";
-	}
-
-	function renderCustomList() {
-		const host = modal.querySelector("#seidr-act-icon-custom-list");
-		if (!host) return;
-		if (!customs.length) {
-			host.innerHTML = '<p class="seidr-settings-hint">No custom icons yet.</p>';
-			return;
-		}
-		host.innerHTML = customs.map(function (c) {
-			return (
-				'<div class="seidr-act-icon-custom-row">' +
-				'<img src="' + escapeHtml(c.url) + '" alt="" width="28" height="28" />' +
-				"<span>" + escapeHtml(c.label) + "</span>" +
-				'<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-custom-del="' +
-				escapeHtml(c.id) + '">Delete</button>' +
-				"</div>"
-			);
-		}).join("");
-		host.querySelectorAll("[data-custom-del]").forEach(function (btn) {
-			btn.addEventListener("click", function () {
-				const id = (btn as HTMLElement).getAttribute("data-custom-del") || "";
-				const next = customs.filter(function (c) { return c.id !== id; });
-				customs.length = 0;
-				next.forEach(function (c) { customs.push(c); });
-				seidrSaveSettings({ customActionIcons: customs.slice() });
-				if (draft && draft.icon && draft.icon.source === "custom" && draft.icon.id === id) {
-					draft.icon = seidrDefaultActionIcon();
-				}
-				renderCustomList();
-				paintGrid((modal.querySelector("#seidr-act-icon-search") as HTMLInputElement)?.value || "");
-				setCustomMsg("Removed custom icon");
-			});
-		});
-	}
 
 	function pickIcon(icon: SeidrActionIcon) {
 		if (!draft) return;
@@ -862,18 +809,6 @@ function openIconModal(root: HTMLElement) {
 			);
 		}).join("");
 		pushSection("Club Activity", actCells);
-		const customCells = customs.filter(function (c) {
-			if (!q) return true;
-			return (c.label + " " + c.id).toLowerCase().indexOf(q) >= 0;
-		}).map(function (c) {
-			return (
-				'<button type="button" class="seidr-act-icon-cell" data-icon-source="custom" data-icon-id="' +
-				escapeHtml(c.id) + '" title="' + escapeHtml(c.label) + '">' +
-				'<img src="' + escapeHtml(c.url) + '" alt="" />' +
-				"<span>" + escapeHtml(c.label) + "</span></button>"
-			);
-		}).join("");
-		pushSection("Custom", customCells);
 		grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
 		grid.querySelectorAll("[data-icon-id]").forEach(function (btn) {
 			btn.addEventListener("click", function () {
@@ -893,33 +828,7 @@ function openIconModal(root: HTMLElement) {
 	modal.querySelector("#seidr-act-icon-search")?.addEventListener("input", function (ev) {
 		paintGrid((ev.target as HTMLInputElement).value || "");
 	});
-	modal.querySelector("#seidr-act-icon-add-url")?.addEventListener("click", function () {
-		const urlEl = modal.querySelector("#seidr-act-icon-url") as HTMLInputElement | null;
-		const labEl = modal.querySelector("#seidr-act-icon-url-label") as HTMLInputElement | null;
-		const url = urlEl ? urlEl.value.trim() : "";
-		const label = labEl && labEl.value.trim() ? labEl.value.trim() : "Custom";
-		if (customs.length >= SEIDR_CUSTOM_ICONS_MAX) {
-			setCustomMsg("Custom icon limit (" + SEIDR_CUSTOM_ICONS_MAX + ")");
-			return;
-		}
-		setCustomMsg("Checking image…");
-		seidrValidateImageUrl(url).then(function (res) {
-			if (res.ok === false) {
-				setCustomMsg(res.error);
-				return;
-			}
-			const id = "c" + Date.now().toString(36);
-			customs.push({ id: id, url: url, label: label.slice(0, 48) });
-			seidrSaveSettings({ customActionIcons: customs.slice() });
-			if (urlEl) urlEl.value = "";
-			if (labEl) labEl.value = "";
-			renderCustomList();
-			paintGrid((modal.querySelector("#seidr-act-icon-search") as HTMLInputElement)?.value || "");
-			setCustomMsg("Added — click it in the grid to use");
-		});
-	});
 
-	renderCustomList();
 	paintGrid("");
 }
 
