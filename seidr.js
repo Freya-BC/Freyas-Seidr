@@ -4219,7 +4219,14 @@
     };
   }
   function seidrCmdReplaceSpan(value, start, end, insert, trailingSpace) {
-    const mid = insert + (trailingSpace ? " " : "");
+    let mid = String(insert || "");
+    if (start > 0 && !/\s/.test(value.charAt(start - 1))) {
+      mid = " " + mid;
+    }
+    if (trailingSpace) {
+      const after = end < value.length ? value.charAt(end) : "";
+      if (!after || !/\s/.test(after)) mid = mid + " ";
+    }
     const next = value.slice(0, start) + mid + value.slice(end);
     return { value: next, caret: start + mid.length };
   }

@@ -300,7 +300,11 @@ export function seidrCmdTokenAtCaret(value: string, caret: number): SeidrCmdToke
 	};
 }
 
-/** Rebuild input replacing the member or action/slot span with `insert`. */
+/**
+ * Rebuild input replacing the member or action/slot span with `insert`.
+ * Always keeps a space before the insert when glued to the previous token
+ * (e.g. `/strip` + Tab → `/strip 12345 `, never `/strip12345`).
+ */
 export function seidrCmdReplaceSpan(
 	value: string,
 	start: number,
@@ -308,7 +312,14 @@ export function seidrCmdReplaceSpan(
 	insert: string,
 	trailingSpace: boolean
 ): { value: string; caret: number } {
-	const mid = insert + (trailingSpace ? " " : "");
+	let mid = String(insert || "");
+	if (start > 0 && !/\s/.test(value.charAt(start - 1))) {
+		mid = " " + mid;
+	}
+	if (trailingSpace) {
+		const after = end < value.length ? value.charAt(end) : "";
+		if (!after || !/\s/.test(after)) mid = mid + " ";
+	}
 	const next = value.slice(0, start) + mid + value.slice(end);
 	return { value: next, caret: start + mid.length };
 }

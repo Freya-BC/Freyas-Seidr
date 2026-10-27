@@ -295,6 +295,8 @@ export function seidrCmdAcAccept(): boolean {
 		// Always insert MemberNumber for unambiguous resolution; label showed the name.
 		insert = item.insert;
 	}
+	// Member gets a trailing space so the slot/action token is ready; slot/action
+	// still get a leading space via seidrCmdReplaceSpan when glued to the prior token.
 	const trailing = state.kind === "member";
 	const next = seidrCmdReplaceSpan(input.value || "", state.spanStart, state.spanEnd, insert, trailing);
 	input.value = next.value;
