@@ -39,6 +39,51 @@ export const SEIDR_CMD_ENABLE_LABELS: { key: SeidrCmdEnableKey; label: string }[
 
 export type SeidrCmdEnabledMap = Record<SeidrCmdEnableKey, boolean>;
 
+/** Empty InputChat + Tab Fast Select target. */
+export type SeidrFastSelectEmpty =
+	| "disabled"
+	| "action"
+	| "poses"
+	| "animation"
+	| "strip";
+
+export const SEIDR_FAST_SELECT_EMPTY_OPTS: { id: SeidrFastSelectEmpty; label: string }[] = [
+	{ id: "disabled", label: "Disabled (normal Tab)" },
+	{ id: "action", label: "Action (/action)" },
+	{ id: "poses", label: "Poses (/poses)" },
+	{ id: "animation", label: "Animation (/animation)" },
+	{ id: "strip", label: "Strip (/strip)" },
+];
+
+/** Letter keys for Fast Select (a/s/d/p + Tab). */
+export type SeidrFastSelectKey = "a" | "s" | "d" | "p";
+
+export type SeidrFastSelectKeys = Record<SeidrFastSelectKey, boolean>;
+
+export const SEIDR_FAST_SELECT_KEYS: SeidrFastSelectKey[] = ["a", "s", "d", "p"];
+
+export const SEIDR_FAST_SELECT_KEY_LABELS: { key: SeidrFastSelectKey; label: string }[] = [
+	{ key: "a", label: "a + Tab → /action" },
+	{ key: "s", label: "s + Tab → /strip" },
+	{ key: "d", label: "d + Tab → /animation" },
+	{ key: "p", label: "p + Tab → /poses" },
+];
+
+export function seidrDefaultFastSelectKeys(): SeidrFastSelectKeys {
+	return { a: true, s: true, d: true, p: true };
+}
+
+export function seidrNormalizeFastSelectKeys(raw: unknown): SeidrFastSelectKeys {
+	const base = seidrDefaultFastSelectKeys();
+	if (!raw || typeof raw !== "object") return base;
+	const d = raw as Partial<Record<string, unknown>>;
+	for (let i = 0; i < SEIDR_FAST_SELECT_KEYS.length; i++) {
+		const k = SEIDR_FAST_SELECT_KEYS[i];
+		if (typeof d[k] === "boolean") base[k] = d[k] as boolean;
+	}
+	return base;
+}
+
 export type SeidrCmdPerson = {
 	id: number;
 	/** Short alias used in /a <alias> … (and preferred when room names collide). */
@@ -63,7 +108,23 @@ export type SeidrCommandsBag = {
 	actions: SeidrCmdAction[];
 	/** Per-command registration / execute gates (default all true). */
 	enabled: SeidrCmdEnabledMap;
+	/** Dev Fast Select letter+Tab (default true). */
+	fastSelectEnabled: boolean;
+	/** Per-letter a/s/d/p Fast Select (default all true). */
+	fastSelectKeys: SeidrFastSelectKeys;
+	/** Empty InputChat + Tab target (default disabled = Club Tab). */
+	fastSelectEmpty: SeidrFastSelectEmpty;
 };
+
+const FAST_SELECT_EMPTY_IDS: SeidrFastSelectEmpty[] = [
+	"disabled", "action", "poses", "animation", "strip",
+];
+
+export function seidrNormalizeFastSelectEmpty(raw: unknown): SeidrFastSelectEmpty {
+	const s = String(raw || "").trim().toLowerCase() as SeidrFastSelectEmpty;
+	if (FAST_SELECT_EMPTY_IDS.indexOf(s) >= 0) return s;
+	return "disabled";
+}
 
 export function seidrDefaultCmdEnabled(): SeidrCmdEnabledMap {
 	const out = {} as SeidrCmdEnabledMap;
@@ -107,6 +168,9 @@ export function seidrDefaultCommandsBag(): SeidrCommandsBag {
 		people: [],
 		actions: [],
 		enabled: seidrDefaultCmdEnabled(),
+		fastSelectEnabled: true,
+		fastSelectKeys: seidrDefaultFastSelectKeys(),
+		fastSelectEmpty: "disabled",
 	};
 }
 
@@ -182,6 +246,15 @@ export function seidrNormalizeCommandsBag(raw: unknown): SeidrCommandsBag {
 	base.people = people;
 	base.actions = actions;
 	base.enabled = seidrNormalizeCmdEnabled(d.enabled);
+	if (typeof d.fastSelectEnabled === "boolean") {
+		base.fastSelectEnabled = d.fastSelectEnabled;
+	}
+	base.fastSelectKeys = seidrNormalizeFastSelectKeys(
+		(d as { fastSelectKeys?: unknown }).fastSelectKeys
+	);
+	base.fastSelectEmpty = seidrNormalizeFastSelectEmpty(
+		(d as { fastSelectEmpty?: unknown }).fastSelectEmpty
+	);
 	return base;
 }
 

@@ -1,16 +1,22 @@
 # Room Manager
 
-FAM-style HTML panel for **room admins**: save and load room definitions, access lists, custom backgrounds, and map payloads.
+Room Manager is a FAM-style HTML panel for **room admins**: save and load room definitions, access lists, custom backgrounds, and map payloads so you can rebuild or tweak rooms quickly.
+
+Open it with **`/roommanager`**, the floating **⌂**, ChatAdmin’s Seidr button, or **Settings → General → Open Room Manager**.
+
+## When to use this
+
+Use Room Manager when you host or admin rooms and want reusable presets (name/description/size, ban lists, backgrounds, map versions) instead of retyping everything each time.
 
 ## How to open
 
 | Context | Launcher |
 |---------|----------|
 | Chat room as admin | Floating **⌂** (Settings position; drag moves it for this session only) |
-| ChatAdmin create / edit | Club-sized icon next to BCX “More” (`Icons/Preference.png`) |
-| Anywhere | **Preference → Extensions → Seidr → Room Manager → Open Room Manager** |
+| ChatAdmin create / edit | Club-sized icon next to BCX “More” |
+| Anywhere | **`/seidr` → General → Open Room Manager** or **`/roommanager`** |
 
-The floating ⌂ is hidden on non-room screens, while a character dialog is open (`CurrentCharacter` set), or when **Show Quickmenu Button** / **Activate Room Manager** is off in Settings.
+The floating ⌂ is hidden on non-room screens, while a character dialog is open, or when **Show Quickmenu Button** / **Activate Room Manager** is off in Settings.
 
 **Load** buttons work only on `ChatRoom` or `ChatAdmin`. Outside those screens you can still Save / Overwrite / Delete / Edit stored presets.
 
@@ -18,8 +24,10 @@ The floating ⌂ is hidden on non-room screens, while a character dialog is open
 
 | Mode | What Load does |
 |------|----------------|
-| **Creating** (ChatAdmin, not in a room) | Fills Club editor fields / `ChatAdminData` only — you still Save in Club |
+| **Creating** (ChatAdmin, not in a room) | Fills Club editor fields only — you still Save in Club |
 | **Live room** (you are admin) | Applies values and sends Club `ChatRoomAdmin` **Update** |
+
+If Load does nothing, check that you are admin and that Room Manager is activated in Settings.
 
 ## Areas
 
@@ -57,6 +65,8 @@ Visible when the room’s MapMode is not Never:
 - Only **Default** syncs remotely; other versions stay in the browser  
 - Uses FBM-style export / import strings under the hood  
 
+**Common mistake:** editing a Development (local) version and expecting it to appear on another device — only **Default** (remote) syncs with your account.
+
 ### Settings → Maps
 
 Library management (Map + Export/Import sections), Remote ↔ Local for Default, JSON export/import (always Local only). See [SETTINGS.md](SETTINGS.md).
@@ -79,5 +89,5 @@ If a remote save would exceed the maps budget or the total cap, Seidr refuses th
 
 ## Related
 
-- [SETTINGS.md](SETTINGS.md) — Storage breakdown  
+- [SETTINGS.md](SETTINGS.md) — Storage breakdown, Maps tab  
 - [README.md](../README.md) — Feature overview  

@@ -56,7 +56,7 @@ export function seidrRegisterCommands(): void {
 	if (en.action !== false) {
 		defs.push({
 			Tag: "action",
-			Description: "Seidr: /action <member> <action>",
+			Description: "Seidr: /action <member> <action> (Fast Select: a+Tab)",
 			Clear: false,
 			Action: function (args: string) { onCommand("action", args); },
 		});
@@ -64,7 +64,7 @@ export function seidrRegisterCommands(): void {
 	if (en.strip !== false) {
 		defs.push({
 			Tag: "strip",
-			Description: "Seidr: /strip <member> <slot> — undress (includes Undress all)",
+			Description: "Seidr: /strip <member> <slot> — undress all layers (Fast Select: s+Tab)",
 			Clear: false,
 			Action: function (args: string) { onCommand("strip", args); },
 		});
@@ -80,7 +80,7 @@ export function seidrRegisterCommands(): void {
 	if (en.poses !== false) {
 		defs.push({
 			Tag: "poses",
-			Description: "Seidr: /poses <member> <pose> — set Club pose",
+			Description: "Seidr: /poses <member> <pose> — set Club pose (Fast Select: p+Tab)",
 			Clear: false,
 			Action: function (args: string) { onCommand("poses", args); },
 		});
@@ -96,7 +96,7 @@ export function seidrRegisterCommands(): void {
 	if (en.animation !== false) {
 		defs.push({
 			Tag: "animation",
-			Description: "Seidr: /animation <name> — play your animation",
+			Description: "Seidr: /animation <name> — play your animation (Fast Select: d+Tab)",
 			Clear: false,
 			Action: function (args: string) { onCommand("animation", args); },
 		});

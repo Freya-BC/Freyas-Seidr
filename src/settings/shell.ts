@@ -109,6 +109,12 @@ export function seidrCloseSettings() {
 	try { seidrDiscardDrawDraft(); } catch (e) { /* ignore */ }
 	panel.classList.remove("seidr-settings-open");
 	panel.setAttribute("hidden", "true");
+	if (
+		typeof Seidr.stopTutorial === "function"
+		&& !(typeof Seidr.tourIsQuietClose === "function" && Seidr.tourIsQuietClose())
+	) {
+		try { Seidr.stopTutorial(); } catch (e) { /* ignore */ }
+	}
 }
 
 export function seidrLeavePreferenceToGame() {

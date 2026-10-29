@@ -1,6 +1,12 @@
 # Animations
 
-Pose and face expression clips that play on **you** (the local Player). Author under **Preference → Extensions → Seidr → Animations**, then play from chat.
+Animations are short **pose and face** clips that play on **you** (the local Player). They do not pose other people in the room — use `/poses` for that.
+
+Author under **`/seidr` → Animations**, then play from chat with `/animation` or `/ani`.
+
+## When to use this
+
+Use Animations for a scripted expression or pose sequence on yourself (wave, blush sequence, kneel then stand, and so on). Optional Action text can announce the clip to the room when it starts.
 
 ## Limits
 
@@ -14,14 +20,14 @@ Pose and face expression clips that play on **you** (the local Player). Author u
 
 1. Open **Settings → Animations**.
 2. **Add** an animation (or pick one from the dropdown).
-3. Set a **name** (this is what you type after `/animation`).
+3. Set a **name** (this is what you type after `/animation` — keep it short and unique).
 4. Add steps:
    - **Pose** — Club pose (friendly labels such as Standing (legs), Hands up, Kneel, …) + wait seconds  
    - **Face** — feature (Eyebrows / Eyes / Mouth / Blush / Fluids), expression, duration (`keep` / 5 / 15 / 30), + wait seconds  
 5. Optional **Action text** — public Club Action line posted when the clip **starts** (same token chips as Actions: `SourceCharacter`, `PronounPossessive`, …). Leave empty for silent play.  
 6. **Save animation**.
 
-Wait steppers nudge by small increments; the UI shows the total wait for the clip.
+Wait steppers nudge by small increments; the UI shows the total wait for the clip. Stay under the 60 s total.
 
 ## Playing
 
@@ -40,6 +46,14 @@ Unknown names warn locally in chat. Define them under Settings → Animations fi
 ## Enable / disable
 
 **Settings → General → Commands** has separate toggles for `/animation` and `/ani`. Off = not registered / ignored.
+
+Fast Select (when enabled) can map letter `d` + Tab to `/animation `.
+
+## Common mistakes
+
+- Expecting the clip to run on someone else — use `/poses` for other people.
+- Forgetting to **Save animation** before testing in chat.
+- Confusing this with the **pose effect** on a Custom Action (Activity Menu) — different feature.
 
 ## Storage
 

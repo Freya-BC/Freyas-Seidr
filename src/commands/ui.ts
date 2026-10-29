@@ -369,7 +369,7 @@ export function seidrBuildCommandsTab(container: HTMLElement) {
 	draftPerson = null;
 	draftAction = null;
 	container.innerHTML = [
-		'<details class="seidr-settings-sec seidr-cmd-sec" open>',
+		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-people">',
 		"<summary>People</summary>",
 		'<p class="seidr-settings-hint">Alias → Member ID for /a targets and name collisions. Max ' +
 			SEIDR_CMD_PEOPLE_MAX + ".</p>",
@@ -383,7 +383,7 @@ export function seidrBuildCommandsTab(container: HTMLElement) {
 		"</div>",
 		'<div class="seidr-act-editor" id="seidr-cmd-person-editor"></div>',
 		"</details>",
-		'<details class="seidr-settings-sec seidr-cmd-sec" open>',
+		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-actions">',
 		"<summary>Actions</summary>",
 		'<p class="seidr-settings-hint">Call name → slot + Club/Seidr/mod activity. Usage: /a &lt;member&gt; &lt;name&gt;. Max ' +
 			SEIDR_CMD_ACTIONS_MAX + ".</p>",

@@ -1,9 +1,86 @@
 /** Echo-style pose offsets and drawlist reorder. */
 import { Seidr } from "./seidr";
+import { seidrGetSettings } from "./settings/storage";
+import type { SeidrClusterNameMode } from "./settings/model";
 import { SeidrState } from "./state";
 import { seidrFindChar, seidrInEcho, seidrReconcileEcho } from "./room";
 
+declare const CharacterNickname: ((C: any) => string) | undefined;
+declare const ChatRoomCharacter: any;
+declare const CommonPhotoMode: any;
+declare const CurrentCharacter: any;
+declare const MouseIn: ((x: number, y: number, w: number, h: number) => boolean) | undefined;
+
 export const seidrNatural: Record<number, { X: number; Y: number; Zoom?: number; Space?: number }> = {};
+
+/** Character-local Y for cluster names (above arousal bar at 992). */
+const SEIDR_CLUSTER_NAME_Y = 968;
+
+type SeidrNatSeat = { X: number; Y: number; Zoom: number; Space: number };
+
+/** Active only while DrawCharacter runs for a clustered body (names only). */
+var seidrNameDrawCtx: {
+	character: any;
+	mode: SeidrClusterNameMode;
+	nat: SeidrNatSeat;
+} | null = null;
+
+function seidrClusterNameMode(): SeidrClusterNameMode {
+	try {
+		const m = seidrGetSettings().clusterNameMode;
+		if (m === "default" || m === "hitbox" || m === "hide" || m === "hover") return m;
+	} catch (e) { /* ignore */ }
+	return "hitbox";
+}
+
+function seidrNameOffset(): number {
+	try {
+		const n = typeof ChatRoomCharacter !== "undefined" && Array.isArray(ChatRoomCharacter)
+			? ChatRoomCharacter.length
+			: 0;
+		const photo = typeof CommonPhotoMode !== "undefined" && CommonPhotoMode;
+		const focused = typeof CurrentCharacter !== "undefined" && CurrentCharacter != null;
+		if ((n > 5 || (n === 5 && photo)) && !focused) return -4;
+	} catch (e) { /* ignore */ }
+	return 0;
+}
+
+/** Raised + centered over arousal/hitbox bar (same box math as arousalBars). */
+function seidrClusterNamePos(nat: SeidrNatSeat): { X: number; Y: number } {
+	const z = nat.Zoom > 0 ? nat.Zoom : 1;
+	const charW = 500 * z;
+	const spaceW = nat.Space > 0 ? nat.Space : charW;
+	const boxW = Math.min(spaceW, charW);
+	const boxX = nat.X + (spaceW > charW ? (spaceW - charW) / 2 : 0);
+	return {
+		X: boxX + boxW / 2,
+		Y: nat.Y + SEIDR_CLUSTER_NAME_Y * z + seidrNameOffset(),
+	};
+}
+
+function seidrNatFromStored(
+	stored: { X: number; Y: number; Zoom?: number; Space?: number },
+	fallbackZoom: number
+): SeidrNatSeat {
+	return {
+		X: stored.X,
+		Y: stored.Y,
+		Zoom: typeof stored.Zoom === "number" && stored.Zoom > 0 ? stored.Zoom : fallbackZoom,
+		Space: typeof stored.Space === "number" && stored.Space > 0 ? stored.Space : 0,
+	};
+}
+
+/** True when cursor is over this character’s natural seat (Club click hitbox). */
+function seidrClusterHitboxHovered(nat: SeidrNatSeat): boolean {
+	if (typeof MouseIn !== "function") return false;
+	const z = nat.Zoom > 0 ? nat.Zoom : 1;
+	const spaceW = nat.Space > 0 ? nat.Space : 500 * z;
+	try {
+		return !!MouseIn(nat.X, nat.Y, spaceW, 1000 * z);
+	} catch (e) {
+		return false;
+	}
+}
 
 function seidrViewActive() {
 	if (typeof ChatRoomCharacterViewIsActive !== "function") return true;
@@ -191,6 +268,8 @@ function seidrDrawPose(character, x, y, zoom) {
  * for z-order after the loop. Outside the room loop, args stay as-is.
  */
 var seidrInRoomLoop = false;
+/** True while replaying deferred hub/cuddle DrawCharacter (pose already baked). */
+var seidrFrontReplay = false;
 var seidrFrontCapture = null;
 
 /** Rewrite DrawCharacter X/Y/Zoom to the cluster pose (Echo SharedCenter offset). */
@@ -273,9 +352,50 @@ Seidr.installDraw = function () {
 	});
 
 	Seidr.hookFunction("DrawCharacter", 1, function (args, next) {
-		if (!seidrInRoomLoop) return next(args);
-		seidrApplyDrawPose(args);
-		if (seidrHoldFrontCharacter(args)) return;
+		if (seidrInRoomLoop) {
+			seidrApplyDrawPose(args);
+			if (seidrHoldFrontCharacter(args)) return;
+		} else if (!seidrFrontReplay) {
+			return next(args);
+		}
+		const C = args[0];
+		const mode = seidrClusterNameMode();
+		const prevCtx = seidrNameDrawCtx;
+		if (mode !== "default" && seidrInCluster(C) && typeof C.MemberNumber === "number") {
+			const stored = seidrNatural[C.MemberNumber];
+			if (stored && typeof stored.X === "number" && typeof stored.Y === "number") {
+				const fallbackZ = typeof args[3] === "number" && args[3] > 0 ? args[3] : 1;
+				seidrNameDrawCtx = {
+					character: C,
+					mode: mode,
+					nat: seidrNatFromStored(stored, fallbackZ),
+				};
+			}
+		}
+		try {
+			return next(args);
+		} finally {
+			seidrNameDrawCtx = prevCtx;
+		}
+	});
+	/** Names only — rewrite/skip Club nickname DrawText; never touch status/overlays. */
+	Seidr.hookFunction("DrawText", 2, function (args, next) {
+		const ctx = seidrNameDrawCtx;
+		if (!ctx) return next(args);
+		let nick = "";
+		try {
+			nick = typeof CharacterNickname === "function"
+				? String(CharacterNickname(ctx.character) || "")
+				: String(ctx.character && (ctx.character.Nickname || ctx.character.Name) || "");
+		} catch (e) { /* ignore */ }
+		if (!nick || String(args[0]) !== nick) return next(args);
+		if (ctx.mode === "hide") return;
+		if (ctx.mode === "hover" && !seidrClusterHitboxHovered(ctx.nat)) return;
+		if (ctx.mode === "hitbox" || ctx.mode === "hover") {
+			const pos = seidrClusterNamePos(ctx.nat);
+			args[1] = pos.X;
+			args[2] = pos.Y;
+		}
 		return next(args);
 	});
 	Seidr.hookFunction("DrawStatus", 1, function (args, next) {
@@ -313,10 +433,13 @@ Seidr.installDraw = function () {
 			var captured = seidrFrontCapture;
 			seidrFrontCapture = previous;
 			seidrInRoomLoop = previousLoop;
+			seidrFrontReplay = true;
 			try {
 				seidrReplayFront(captured);
 			} catch (eReplay) {
 				console.warn("[Seidr] replay front", eReplay);
+			} finally {
+				seidrFrontReplay = false;
 			}
 		}
 		return result;

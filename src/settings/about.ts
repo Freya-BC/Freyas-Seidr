@@ -11,47 +11,56 @@ type AboutFeature = {
 const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Holds",
-		blurb: "Pull Left / Right, Cuddle, Remove, and Leave on Item Torso — shared poses for Seidr peers.",
+		blurb:
+			"Pull Left / Right, Cuddle, Remove, and Leave on Item Torso — shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
 		docPath: "/docs/HOLDS.md",
 	},
 	{
 		title: "Undress",
-		blurb: "Clothing-zone undress activities, including Echo layers and Undress all when available.",
+		blurb:
+			"Strip clothing from the Activity Menu on the matching zone (hands required). Echo layers and Undress all appear when those groups exist; the target does not need Seidr.",
 		docPath: "/docs/UNDRESS.md",
 	},
 	{
 		title: "Custom Actions",
-		blurb: "Up to 50 Activity Menu entries with chat lines, conditions, icons, sound, pose, and export/import.",
+		blurb:
+			"Up to 50 Club Activity Menu entries with your own chat lines, conditions, icons, sound, and pose. Separate from Commands → Actions (those are /a chat shortcuts).",
 		docPath: "/docs/ACTIONS.md",
 	},
 	{
 		title: "Animations",
-		blurb: "Pose and face clips for you. Author under Animations; play with /animation or /ani.",
+		blurb:
+			"Pose and face clips that play on you only. Author them under Animations, then run /animation or /ani (Tab lists your names).",
 		docPath: "/docs/ANIMATIONS.md",
 	},
 	{
 		title: "Chat Commands",
-		blurb: "/a bindings, /strip /stripe, /poses /p, /animation /ani, /seidr, and /roommanager — with Tab autocomplete.",
+		blurb:
+			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete and optional Fast Select (letter + Tab) speed things up.",
 		docPath: "/docs/COMMANDS.md",
 	},
 	{
 		title: "Fast Open",
-		blurb: "Modifier-click a room character to open Club Activity View on a preferred Item* slot.",
+		blurb:
+			"Hold a modifier and click a room character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
 		docPath: "/docs/SETTINGS.md",
 	},
 	{
 		title: "Room Manager",
-		blurb: "Admin panel for room definitions, access lists, backgrounds, and map series.",
+		blurb:
+			"Admin panel for room definitions, access lists, backgrounds, and map series. Open with /roommanager or the floating ⌂ when you are room admin.",
 		docPath: "/docs/ROOM_MANAGER.md",
 	},
 	{
 		title: "Maps",
-		blurb: "Map versions: Default can sync remotely; other versions stay local. Manage under Settings → Maps.",
+		blurb:
+			"Map versions under Settings → Maps / Room Manager. Only Default can sync with your account; other versions stay local to this browser.",
 		docPath: "/docs/ROOM_MANAGER.md",
 	},
 	{
 		title: "Drawing, Arousal & Storage",
-		blurb: "Hold drawing offsets, arousal bar modes, and ExtensionSettings usage vs the soft cap.",
+		blurb:
+			"Pull/cuddle drawing offsets, cluster Names modes (Hitbox/Hover/Hide), arousal bar modes, and ExtensionSettings usage vs the soft cap.",
 		docPath: "/docs/SETTINGS.md",
 	},
 ];
@@ -114,6 +123,7 @@ export function seidrBuildAboutTab(container: HTMLElement) {
 		"<span>Freya</span>",
 		"</div>",
 		'<div class="seidr-about-links">',
+		'<button type="button" class="seidr-act-btn" id="seidr-about-tutorial">Tutorial</button>',
 		'<a class="seidr-act-btn" href="' + escapeHtml(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
 		'<a class="seidr-act-btn" href="' + escapeHtml(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
 		"</div>",
@@ -121,8 +131,15 @@ export function seidrBuildAboutTab(container: HTMLElement) {
 		"</div>",
 		'<details class="seidr-settings-sec" open>',
 		"<summary>Documentation</summary>",
-		'<p class="seidr-settings-hint">Short summaries below. More opens the full player guide on GitHub Pages.</p>',
+		'<p class="seidr-settings-hint">Short summaries below. More opens the full player guide on GitHub Pages. Use Tutorial (above) anytime for a guided walkthrough of Settings and chat autocomplete.</p>',
 		ABOUT_FEATURES.map(featureCard).join(""),
 		"</details>",
 	].join("");
+
+	const tutBtn = container.querySelector("#seidr-about-tutorial") as HTMLButtonElement | null;
+	if (tutBtn) {
+		tutBtn.addEventListener("click", function () {
+			if (typeof Seidr.startTutorial === "function") Seidr.startTutorial();
+		});
+	}
 }

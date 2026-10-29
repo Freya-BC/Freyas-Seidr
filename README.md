@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Version** | 1.0.68 |
+| **Version** | 1.0.82 |
 | **Author** | Freya |
 | **Pages** | https://freya-bc.github.io/Freyas-Seidr/ |
 | **FUSAM loader** | https://freya-bc.github.io/Freyas-Seidr/loader.js |
@@ -16,19 +16,20 @@
 ## Table of contents
 
 1. [Install](#install)
-2. [Feature overview](#feature-overview)
-3. [Holds](#holds)
-4. [Undress](#undress)
-5. [Custom Actions](#custom-actions)
-6. [Animations](#animations)
-7. [Chat Commands](#chat-commands)
-8. [Fast Open](#fast-open)
-9. [Room Manager](#room-manager)
-10. [Settings](#settings)
-11. [Echo coexistence](#echo-coexistence)
-12. [Storage](#storage)
-13. [Build (maintainers)](#build-maintainers)
-14. [Detailed docs](#detailed-docs)
+2. [Getting started](#getting-started)
+3. [Feature overview](#feature-overview)
+4. [Holds](#holds)
+5. [Undress](#undress)
+6. [Custom Actions](#custom-actions)
+7. [Animations](#animations)
+8. [Chat Commands](#chat-commands)
+9. [Fast Open](#fast-open)
+10. [Room Manager](#room-manager)
+11. [Settings](#settings)
+12. [Echo coexistence](#echo-coexistence)
+13. [Storage](#storage)
+14. [Build (maintainers)](#build-maintainers)
+15. [Detailed docs](#detailed-docs)
 
 ---
 
@@ -44,7 +45,19 @@ Use **one** of these after you are logged into Bondage Club:
 
 Requires a ModSDK host such as **BCX** (hooks go through ModSDK; do not rely on raw Club wraps).
 
-Open **Preference → Extensions → Seidr** (Seidr logo) for the settings panel.
+Open settings anytime with **`/seidr`** in chat, or **Preference → Extensions → Seidr**.
+
+---
+
+## Getting started
+
+![Welcome and Tutorial](assets/docs/tutorial-welcome.svg)
+
+1. **Welcome** — The first time you enter a chat room with Seidr loaded, a sticky `[Seidr]` line appears in your **local** chat log (once per character). If Seidr loaded outside a room, the welcome waits until you enter one.
+2. **Open Settings** — Type `/seidr` (or use Preference → Extensions → Seidr).
+3. **Tutorial** — In Settings → **About**, click **Tutorial** for a guided tour of the tabs and chat autocomplete. You can run it again anytime (Skip / Esc to exit).
+
+The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab completion.
 
 ---
 
@@ -52,15 +65,16 @@ Open **Preference → Extensions → Seidr** (Seidr logo) for the settings panel
 
 | Area | What it does |
 |------|----------------|
-| **Holds** | Pull Left / Right, Cuddle, Remove, Leave on Item Torso — shared poses for Seidr peers |
+| **Welcome / Tutorial** | One-time chat welcome; About → Tutorial walks Settings + autocomplete |
+| **Holds** | Pull Left / Right, Cuddle, Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace on void disconnect) |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
 | **Animations** | Pose/face clips on you; play with `/animation` / `/ani` |
-| **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` |
+| **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` + Tab AC / Fast Select |
 | **Fast Open** | Modifier-click a character to open Activity View on a chosen Item\* slot |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, map series + versions |
 | **Maps (Settings)** | Library of map versions; Default can sync; other versions stay local |
-| **Drawing** | Pull / cuddle visual spacing (models only; hitboxes stay put) |
+| **Drawing / Names** | Pull / cuddle visual spacing; cluster nickname modes (Default / Hitbox / Hide / Hover) |
 | **Arousal bars** | Hide / relocate Club (and BCTweaks) arousal meters |
 | **Storage** | Compressed ExtensionSettings bag with usage breakdown |
 
@@ -69,6 +83,8 @@ Open **Preference → Extensions → Seidr** (Seidr logo) for the settings panel
 ## Holds
 
 Open another character → **Item Torso** → **Activities**:
+
+![Hold slots](assets/docs/holds-slots.svg)
 
 | Activity | Effect |
 |----------|--------|
@@ -81,6 +97,7 @@ Open another character → **Item Torso** → **Activities**:
 - Hands are **not** required for holds / remove / leave.
 - **Both people need Seidr** for the shared pose. Without Seidr you still see chat lines and the normal lineup.
 - Hitboxes and status stay on natural seats; only the drawn models use pull/cuddle offsets.
+- **Void disconnect:** seats are kept ~**45 seconds** so a quick rejoin restores the pile. A normal room leave (or intentional Remove/Leave) clears immediately.
 
 More detail: [`docs/HOLDS.md`](docs/HOLDS.md).
 
@@ -93,8 +110,10 @@ Open the clothing zone for that slot (e.g. Item Torso for upper clothes, Item Bo
 - An **Undress …** activity appears (label uses the worn item name).
 - Hands are required.
 - The target does **not** need Seidr. Chat is visible to the whole room.
-- Echo extra layers (`_笨笨蛋Luzi`, `_笨笨笨蛋Luzi2`) appear only when those AssetGroups exist.
+- Echo extra layers appear only when those AssetGroups exist.
 - When Echo adds a second layer for a family, **Undress all {family}** removes every layer in that family at once.
+
+You can also undress from chat with `/strip` / `/stripe` (see Chat Commands).
 
 More detail: [`docs/UNDRESS.md`](docs/UNDRESS.md).
 
@@ -102,15 +121,14 @@ More detail: [`docs/UNDRESS.md`](docs/UNDRESS.md).
 
 ## Custom Actions
 
-Author under **Settings → Actions**. Actions appear in the **Club Activity Menu** (not a separate floating palette).
+Author under **Settings → Actions**. These appear in the **Club Activity Menu** (not a separate floating palette).
+
+They are **different** from **Settings → Commands → Actions**, which are short names for `/a …` in chat.
 
 - Up to **50** actions (`n/50` in the UI).
 - **Other** / **Self** chat lines (max 500 characters) with Club token chips (`SourceCharacter`, `TargetCharacter`, `ActivityAsset`, …).
-- Optional **items allowlist** (restraint catalog, max 12) — action only shows if the acted character wears a listed item.
-- Optional **arousal** via a Club activity template (off by default).
-- **Conditions** (OR of AND groups): wearing, gagged, blind, hands, pose access, anatomy, audience, …
-- **Effects**: sound (Seidr peers + vanilla spank cue), pose.
-- **Icons**: Seidr SVG builtins (Mark, Hand, Kiss, Rope, Collar, …) or Club Activity icons. Custom HTTPS URL icons are not available in the picker.
+- Optional **items allowlist**, **conditions**, **arousal** template, **sound**, **pose**.
+- **Icons**: Seidr SVG builtins or Club Activity icons.
 - **Export / Import** clipboard envelopes (`SeidrAct1:` + LZ).
 
 More detail: [`docs/ACTIONS.md`](docs/ACTIONS.md).
@@ -122,7 +140,7 @@ More detail: [`docs/ACTIONS.md`](docs/ACTIONS.md).
 Author under **Settings → Animations**. Clips play on **you** only.
 
 - Up to **50** animations, **20** steps each, **60 s** total wait.
-- Steps: **Pose** (Club poses with friendly labels) or **Face** (eyebrows / eyes / mouth / blush / fluids) + wait.
+- Steps: **Pose** or **Face** + wait; optional Action text when the clip starts.
 - Play: `/animation <name>` or `/ani <name>` (Tab autocomplete).
 
 More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
@@ -130,6 +148,8 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 ---
 
 ## Chat Commands
+
+![Commands flow](assets/docs/commands-flow.svg)
 
 ```
 /a <member> <action>          # Settings → Commands bindings
@@ -144,6 +164,13 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 /roommanager                  # open Room Manager
 ```
 
+| Setup | What you do |
+|-------|-------------|
+| **People** | Alias → Member ID so you can type a short name instead of a number |
+| **Commands → Actions** | Call name → slot + Club/Seidr/mod activity for `/a` |
+| **Enable toggles** | Settings → General → Commands — turn each slash tag on/off |
+| **Fast Select** | Letter + Tab (e.g. `a` then Tab → `/action `) when enabled |
+
 | | |
 |---|---|
 | **Member** | Member ID, Commands → People alias, or room Name/Nickname. Multi-word: `"Long Nick"`. |
@@ -151,7 +178,7 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 | **`/strip` slot** | Clothing group (`Shoes`, `Cloth`, …) or `all:Cloth` for a family bundle. |
 | **Pose / animation** | Shared pose catalog / your Animations list. |
 
-Enable or disable each tag under **Settings → General → Commands**. **Tab** opens Seidr autocomplete (W/S or arrows, E/Enter, Esc).
+**Tab** opens Seidr autocomplete (W/S or arrows, E/Enter, Esc). After `/poses`, Seidr posts a public Action line with unique Self/Other text.
 
 More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
@@ -163,7 +190,7 @@ More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
 - Hold a modifier (**Shift** / Ctrl / Alt / Cmd) and click a character in the room.
 - Opens Club Activity View on a preferred Item\* slot (default **ItemTorso**), then Activities mode.
-- If Freyas Action Manager also uses Shift-click, FAM wins when both are loaded.
+- If Freyas Action Manager also uses Shift-click, FAM wins when both are loaded — change the modifier in Seidr if needed.
 
 ---
 
@@ -182,11 +209,9 @@ For **room admins** (and on ChatAdmin create/edit):
 1. **Room Definition** — name, description, size, language, block categories, game, visibility, access mode, map mode.
 2. **Room Access** — named Admin / Whitelist / Ban lists.
 3. **Backgrounds** — named URL library with preview thumbs (thumbs stay in browser localStorage only).
-4. **Maps** — when MapMode ≠ Never: map **series** + **versions**. Only **Default** syncs to the server; other versions (e.g. Development) stay local. Save / Overwrite Default / Save new version / Load / Delete; export/import style strings.
+4. **Maps** — when MapMode ≠ Never: map **series** + **versions**. Only **Default** syncs to the server; other versions (e.g. Development) stay local.
 
 **Settings → Maps** manages the same library with Remote ↔ Local for Default and JSON import/export (imports are always Local only).
-
-**Load** applies live updates when you are admin in a room, or fills ChatAdmin fields while creating. Save / Overwrite / Delete work from the panel anytime the bag can be written.
 
 More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
@@ -194,7 +219,9 @@ More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 ## Settings
 
-**Preference → Extensions → Seidr**
+![Settings tabs](assets/docs/settings-tabs.svg)
+
+**`/seidr`** or **Preference → Extensions → Seidr**
 
 Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**
 
@@ -205,14 +232,14 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 | **Fast Open Actions** | Enable, modifier, default Item\* slot |
 | **Room Manager** | Activate master switch, show quickmenu ⌂, open panel |
 | **Launcher position** | Top/Bottom/Middle × Left/Right, Chat Left / Top / Bottom |
-| **Drawing** | Pull X/Y and Cuddle X/Y offsets (−400…400) with steppers. Models only — Save Drawing to keep |
-| **Commands** | Per-slash enable toggles (`/a`, `/strip`, `/poses`, `/animation`, …) |
+| **Drawing** | Pull X/Y and Cuddle X/Y offsets (−400…400). **Names**: Default / Hitbox / Hide / Hover. Save Drawing to keep offsets |
+| **Commands** | Per-slash enable toggles; Fast Select (letter + Tab); last-target memory |
 | **Arousal bars** | Mode: Club default / Always hide / Show on change (1s) / Bottom bar. Scope: Self / Seidr holds / Everyone |
-| **Storage** | Live KB usage vs ~180 KB cap; per-slice breakdown (incl. Animations) |
+| **Storage** | Live KB usage vs ~180 KB cap; per-slice breakdown |
 
-### Actions / Commands / Animations / Maps
+### About
 
-See the matching sections above and the detailed docs.
+Version, docs links, and **Tutorial** (repeatable guided tour).
 
 More detail: [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
@@ -262,13 +289,13 @@ Requires Node 18+. Source is TypeScript under `src/` with `bc-stubs`. Public Rel
 
 | Doc | Topic |
 |-----|--------|
-| [`docs/HOLDS.md`](docs/HOLDS.md) | Pull / cuddle / remove / leave, badges, peers |
+| [`docs/HOLDS.md`](docs/HOLDS.md) | Pull / cuddle / remove / leave, badges, reconnect grace |
 | [`docs/UNDRESS.md`](docs/UNDRESS.md) | Clothing undress + Echo layers |
 | [`docs/ACTIONS.md`](docs/ACTIONS.md) | Custom Activity Menu actions |
 | [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md) | Pose/face animation clips |
-| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Slash commands, People, Tab autocomplete |
+| [`docs/COMMANDS.md`](docs/COMMANDS.md) | Slash commands, People, Tab autocomplete, Fast Select |
 | [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md) | Admin room / access / backgrounds / maps |
-| [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference |
+| [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference, Tutorial |
 
 ---
 

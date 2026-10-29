@@ -37,7 +37,7 @@ Seidr.prepareReload = function () {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
-	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac"].forEach(function (id) {
+	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
@@ -133,6 +133,9 @@ function boot() {
 	installHooks();
 	if (typeof ServerPlayerIsInChatRoom === "function" && ServerPlayerIsInChatRoom() && typeof Seidr.hello === "function") {
 		try { Seidr.hello(true); } catch (e) { /* ignore */ }
+		if (typeof Seidr.syncRequest === "function") {
+			try { Seidr.syncRequest(); } catch (eSync) { /* ignore */ }
+		}
 	}
 	try { showLoadedToast(); } catch (eToast) { /* ignore */ }
 	console.log("[Seidr] " + Seidr.VERSION + " ready");

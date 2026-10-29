@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" role="img" aria-labelledby="title desc">
+  <title id="title">Seidr Settings tabs</title>
+  <desc id="desc">General Actions Commands Animations Maps About</desc>
+  <rect width="640" height="160" rx="12" fill="#1c1626"/>
+  <text x="24" y="32" fill="#d4a017" font-family="system-ui,sans-serif" font-size="15" font-weight="600">Seidr Settings</text>
+  <text x="24" y="52" fill="#a898b0" font-family="system-ui,sans-serif" font-size="11">Open with /seidr or Preference ’ Extensions ’ Seidr</text>
+  <g font-family="system-ui,sans-serif" font-size="11" font-weight="600">
+    <rect x="24" y="72" width="88" height="32" rx="6" fill="#2a2238" stroke="#d4a017"/>
+    <text x="68" y="92" text-anchor="middle" fill="#d4a017">General</text>
+    <rect x="120" y="72" width="88" height="32" rx="6" fill="#2a2238" stroke="rgba(255,255,255,0.12)"/>
+    <text x="164" y="92" text-anchor="middle" fill="#f0e6d4">Actions</text>
+    <rect x="216" y="72" width="96" height="32" rx="6" fill="#2a2238" stroke="rgba(255,255,255,0.12)"/>
+    <text x="264" y="92" text-anchor="middle" fill="#f0e6d4">Commands</text>
+    <rect x="320" y="72" width="100" height="32" rx="6" fill="#2a2238" stroke="rgba(255,255,255,0.12)"/>
+    <text x="370" y="92" text-anchor="middle" fill="#f0e6d4">Animations</text>
+    <rect x="428" y="72" width="72" height="32" rx="6" fill="#2a2238" stroke="rgba(255,255,255,0.12)"/>
+    <text x="464" y="92" text-anchor="middle" fill="#f0e6d4">Maps</text>
+    <rect x="508" y="72" width="72" height="32" rx="6" fill="#2a2238" stroke="rgba(255,255,255,0.12)"/>
+    <text x="544" y="92" text-anchor="middle" fill="#f0e6d4">About</text>
+  </g>
+  <text x="24" y="132" fill="#a898b0" font-family="system-ui,sans-serif" font-size="11">About ’ Tutorial walks through these tabs anytime</text>
+</svg>

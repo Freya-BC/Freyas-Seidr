@@ -30,16 +30,26 @@ export type SeidrDrawOffsets = {
 export type SeidrArousalBarMode = "off" | "alwaysHide" | "untilChange" | "bottomBar";
 export type SeidrArousalBarScope = "self" | "seidrCluster" | "all";
 
+/** Cuddle/pull cluster nickname placement (names only — not status/overlays). */
+export type SeidrClusterNameMode = "default" | "hitbox" | "hide" | "hover";
+
 /** Modifier held while clicking a room character for Fast Open Actions. */
 export type SeidrFastOpenModifier = "Shift" | "Ctrl" | "Alt" | "Meta";
 
 export type SeidrSettings = {
+	/**
+	 * One-time local chat welcome already shown in a live ChatRoom.
+	 * (Replaces unused `welcomeSeen` from 1.0.79 so missed boots get another chance.)
+	 */
+	welcomeLocalSeen: boolean;
 	roomManagerEnabled: boolean;
 	/** Floating ⌂ in ChatRoom; off hides it completely (ChatAdmin BC button unaffected). */
 	showQuickmenuButton: boolean;
 	launcherPosition: RmLauncherPosition;
 	/** DrawCharacter pose offsets only (not hitboxes). */
 	drawOffsets: SeidrDrawOffsets;
+	/** Cluster nickname draw: follow art / natural seat / hide. Default hitbox. */
+	clusterNameMode: SeidrClusterNameMode;
 	/** On-character / bottom HUD arousal meter chrome. */
 	arousalBarMode: SeidrArousalBarMode;
 	arousalBarScope: SeidrArousalBarScope;
@@ -82,8 +92,18 @@ export const AROUSAL_BAR_SCOPES: { id: SeidrArousalBarScope; label: string }[] =
 	{ id: "all", label: "Everyone" },
 ];
 
+export const CLUSTER_NAME_MODES: { id: SeidrClusterNameMode; label: string }[] = [
+	{ id: "default", label: "Default (follow art)" },
+	{ id: "hitbox", label: "Hitbox (natural seats)" },
+	{ id: "hide", label: "Hide" },
+	{ id: "hover", label: "Hover (on hitbox)" },
+];
+
 const AROUSAL_MODE_IDS: SeidrArousalBarMode[] = AROUSAL_BAR_MODES.map(function (m) { return m.id; });
 const AROUSAL_SCOPE_IDS: SeidrArousalBarScope[] = AROUSAL_BAR_SCOPES.map(function (s) { return s.id; });
+const CLUSTER_NAME_MODE_IDS: SeidrClusterNameMode[] = CLUSTER_NAME_MODES.map(function (m) {
+	return m.id;
+});
 
 export const RM_LAUNCHER_POSITIONS: { id: RmLauncherPosition; label: string }[] = [
 	{ id: "topLeft", label: "Top Left" },
@@ -188,10 +208,12 @@ function normalizeFastOpenSlot(raw: unknown): string {
 
 export function seidrDefaultSettings(): SeidrSettings {
 	return {
+		welcomeLocalSeen: false,
 		roomManagerEnabled: true,
 		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
 		drawOffsets: seidrDefaultDrawOffsets(),
+		clusterNameMode: "hitbox",
 		arousalBarMode: "off",
 		arousalBarScope: "seidrCluster",
 		fastOpenActionsEnabled: true,
@@ -208,12 +230,19 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	const base = seidrDefaultSettings();
 	if (!raw || typeof raw !== "object") return base;
 	const d = raw as Partial<SeidrSettings>;
+	if (typeof d.welcomeLocalSeen === "boolean") base.welcomeLocalSeen = d.welcomeLocalSeen;
 	if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
 	if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
 	if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition as RmLauncherPosition) >= 0) {
 		base.launcherPosition = d.launcherPosition as RmLauncherPosition;
 	}
 	base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
+	if (
+		typeof d.clusterNameMode === "string" &&
+		CLUSTER_NAME_MODE_IDS.indexOf(d.clusterNameMode as SeidrClusterNameMode) >= 0
+	) {
+		base.clusterNameMode = d.clusterNameMode as SeidrClusterNameMode;
+	}
 	if (typeof d.arousalBarMode === "string" && AROUSAL_MODE_IDS.indexOf(d.arousalBarMode as SeidrArousalBarMode) >= 0) {
 		base.arousalBarMode = d.arousalBarMode as SeidrArousalBarMode;
 	}

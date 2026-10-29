@@ -1,6 +1,8 @@
 # Chat Commands
 
-Run Seidr helpers from the Club chat box with short slash commands. Each command can be turned on or off under **Settings → General → Commands**.
+Run Seidr helpers from the Club chat box with short slash commands. Each command can be turned on or off under **Settings → General → Commands**. Open Settings with **`/seidr`**.
+
+![Commands flow](../assets/docs/commands-flow.svg)
 
 | Command | Purpose |
 |---------|---------|
@@ -12,21 +14,56 @@ Run Seidr helpers from the Club chat box with short slash commands. Each command
 | **`/seidr`** | Open Seidr Settings |
 | **`/roommanager`** | Open Room Manager (when activated) |
 
+**Important:** **Commands → Actions** (this page) are chat shortcuts for `/a`. **Settings → Actions** is a different feature — custom entries in the Club Activity Menu. See [ACTIONS.md](ACTIONS.md).
+
+---
+
+## Setup checklist — People
+
+People store a short **alias** for a Member Number so you do not have to type IDs, and so duplicate nicknames resolve correctly.
+
+1. Open **`/seidr`** → **Commands** tab.
+2. Under **People**, click **Add person**.
+3. Set **Alias** (what you will type, e.g. `Alice`) and **Member number**.
+4. Click **Save person**.
+5. Later: pick someone from the Person dropdown to edit or **Delete**.
+
+Max **50** people. You can still target anyone in the room by Name/Nickname or raw Member ID without saving them here.
+
+---
+
+## Setup checklist — Commands → Actions
+
+These bindings power `/a <person> <action-name>`.
+
+1. Still on the **Commands** tab, open **Actions**.
+2. Click **Add action**.
+3. Set a **call name** (what you type after the person, e.g. `kiss`).
+4. Pick **Slot** first (body/clothing zone), then **Activity** for that slot (list refreshes after Slot).
+5. Click **Save action**.
+
+You can bind a call name to a stock Club activity, a Seidr hold/undress, a custom Activity Menu action, or another mod’s activity — as long as it appears for that slot. Max **50**.
+
+`/strip`, `/poses`, `/animation`, and `/seidr` do **not** need rows here.
+
+---
+
 ## Quick start — custom `/a`
 
-1. Open **Preference → Extensions → Seidr → Commands**.
-2. Under **Actions**, **Add action** → set a **call name** (e.g. `kiss`), pick a **slot**, pick an **activity**, **Save action**.
-3. Optionally under **People**, register **alias → Member ID** for friends with common nicknames.
-4. In a chat room, type:
+After People (optional) and Actions are saved:
 
 ```
 /a 12345 kiss
 /a Alice kiss
-/a "Long Nick" kiss her
+/a "Long Nick" kiss
 /action Alice kiss
 ```
 
 `/a` and `/action` are the same command family (separate enable toggles).
+
+Press **Tab** after `/a ` to pick a member, then Tab again for your action names.
+
+---
 
 ## Quick start — undress `/strip` / `/stripe`
 
@@ -44,6 +81,10 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 | **`/stripe`** | Individual worn layers you can undress right now |
 | **`/strip`** | Those layers **and** **Undress all …** bundles (insert as `all:Cloth`, etc.) |
 
+Hands and Club clothing permission still apply. See [UNDRESS.md](UNDRESS.md).
+
+---
+
 ## Quick start — poses `/poses` / `/p`
 
 ```
@@ -54,9 +95,11 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 
 - Member rules match `/a` (ID, People alias, room Name/Nickname, quotes for multi-word).
 - Pose names use the shared Seidr pose catalog (friendly labels in autocomplete).
-- Struggle/aided lower poses still appear (e.g. **Kneel** while wearing a leg binder), matching Club’s pose menu / Kneel button — not only free unaided changes.
+- Struggle/aided lower poses still appear (e.g. **Kneel** while wearing a leg binder), matching Club’s pose menu.
 - You need Club permission to change someone else’s pose.
 - After a successful pose change, Seidr posts a **public Action** line (unique Self/Other text per pose, with Club-style names/pronouns).
+
+---
 
 ## Quick start — animations `/animation` / `/ani`
 
@@ -65,7 +108,9 @@ No Settings binding needed — Seidr uses its built-in undress activities.
 /ani wave
 ```
 
-Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](ANIMATIONS.md).
+Plays a clip from **Settings → Animations** on **you** only. See [ANIMATIONS.md](ANIMATIONS.md).
+
+---
 
 ## Meta
 
@@ -76,7 +121,11 @@ Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](AN
 
 `/roommanager` requires **Activate Room Manager** in Settings → General.
 
-## Syntax — `/a`
+---
+
+## Syntax reference
+
+### `/a` / `/action`
 
 ```
 /a <member> <action>
@@ -84,10 +133,10 @@ Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](AN
 
 | Part | What you can type |
 |------|-------------------|
-| **member** | Member ID (number), a **People** alias, or someone in the room’s **Name** / **Nickname**. Multi-word names: wrap in quotes — `/a "Long Nick" kiss`. |
+| **member** | Member ID, a **People** alias, or room **Name** / **Nickname**. Multi-word: `/a "Long Nick" kiss`. |
 | **action** | Everything after the member (spaces allowed). Must match a **Commands → Actions** call name (case-insensitive). |
 
-## Syntax — `/strip` / `/stripe`
+### `/strip` / `/stripe`
 
 ```
 /strip <member> <slot>
@@ -97,21 +146,23 @@ Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](AN
 | Part | What you can type |
 |------|-------------------|
 | **member** | Same rules as `/a` |
-| **slot** | Clothing group id (`Shoes`, `Cloth`, Echo layer names, …), a friendly label from Tab, or `all:Cloth` for a family bundle (**`/strip` only**) |
+| **slot** | Clothing group id, a friendly label from Tab, or `all:Cloth` for a family bundle (**`/strip` only**) |
 
-## Syntax — `/poses` / `/p`
+### `/poses` / `/p`
 
 ```
 /poses <member> <pose>
 /p <member> <pose>
 ```
 
-## Syntax — `/animation` / `/ani`
+### `/animation` / `/ani`
 
 ```
 /animation <name>
 /ani <name>
 ```
+
+---
 
 ## What happens when it runs
 
@@ -121,6 +172,8 @@ Plays a clip from **Settings → Animations** on **you**. See [ANIMATIONS.md](AN
 - **`/animation` / `/ani`**: plays your saved animation on the local Player.
 
 You still need Club permission to act on others. If the activity / pose is not available right now, the command is refused.
+
+---
 
 ## Errors and warnings
 
@@ -132,6 +185,8 @@ Messages appear **only for you** in the chat log (local), then disappear:
 | Name/nick matches **more than one** person and none is disambiguated via **People** | Short warning; refuses |
 | Unknown call name / animation | Warning; define it under Commands / Animations |
 | Activity or pose not available | Error / warn; autocomplete would have hidden it when possible |
+
+---
 
 ## Tab autocomplete
 
@@ -148,39 +203,35 @@ While the chat input is focused and the line starts with a Seidr command:
 - Placed over the chat input (Seidr styling).
 - **Member** suggestions show name/nick and ID; accepting inserts the **Member ID** (unambiguous).
 - **`/a` action** suggestions only list bindings available on the resolved member.
-- **`/stripe` slot** suggestions = individual strippable layers only.
-- **`/strip` slot** suggestions = individuals + Undress-all bundles (`all:Group`).
-- **`/poses`** pose suggestions use friendly labels.
-- **`/animation`** suggestions list your saved animation names.
+- **`/stripe` / `/strip`**, **`/poses`**, **`/animation`** follow the tables above.
 
 While the list is open, W / S / E are used for navigation (they do not type into chat).
 
-## Settings → Commands
+---
 
-### People
+## Enable toggles
 
-| Field | Purpose |
-|-------|---------|
-| **Alias** | Short name you type in `/a` |
-| **Member ID** | Their Bondage Club member number |
+**Settings → General → Commands** — one checkbox per slash tag. Off = not registered / ignored. Keep **`/seidr`** enabled so you can always reopen Settings.
 
-Use this when several people share a name/nick, or when you want a stable short alias. Dropdown picks who you edit; **Add person** / **Save** / **Delete**. Max **50**.
+---
 
-### Actions
+## Last target + Fast Select
 
-| Field | Purpose |
-|-------|---------|
-| **Call name** | What you type after the member in `/a` |
-| **Slot** | Item\* (or clothing) zone for the activity |
-| **Activity** | Club / Seidr / mod activity that targets that slot |
+**Last target:** After a successful `/a` / `/action` / `/strip` / `/stripe` / `/poses` / `/p`, member autocomplete remembers that person for the session. Next `/a` + Tab highlights them if they still match the filter and are in the room; otherwise Self. Esc does not clear the memory.
 
-Pick **slot first**, then **activity** (list refreshes for that slot). Dropdown of saved actions above the editor — same pattern as the **Actions** tab. Max **50**.
+**Fast Select** (Settings → General → Commands, when enabled):
 
-These chat bindings are **separate** from **Settings → Actions** (custom Activity Menu entries). You can bind a chat call name to a stock Club kiss, a Seidr hold, a custom `Seidr_Act_*`, or another mod’s activity, as long as it appears for that slot.
+| Type in chat | Then Tab |
+|--------------|----------|
+| `a` | `/action ` (checkbox) |
+| `s` | `/strip ` (checkbox) |
+| `d` | `/animation ` (checkbox) |
+| `p` | `/poses ` (checkbox) |
+| (empty) | Configurable: Disabled / Action / Poses / Animation / Strip |
 
-### Enable toggles
+Per-letter checkboxes can turn individual shortcuts off. Any other chat text keeps normal Tab behavior. Next Tab after Fast Select opens member or animation autocomplete as usual.
 
-**Settings → General → Commands** — one checkbox per slash tag (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored.
+---
 
 ## Storage
 
@@ -188,7 +239,7 @@ Saved in the shared Seidr bag: `ExtensionSettings.SeidrRoomManager` → `setting
 
 ## Related
 
-- [SETTINGS.md](SETTINGS.md) — Commands tab overview  
+- [SETTINGS.md](SETTINGS.md) — Commands tab overview, Tutorial  
 - [ACTIONS.md](ACTIONS.md) — custom Activity Menu actions (different feature)  
 - [ANIMATIONS.md](ANIMATIONS.md) — pose/face clips  
 - [README.md](../README.md) — feature overview  

@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "1.0.73";
+Seidr.VERSION = "1.0.82";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -31,6 +31,8 @@ Seidr.SHOW_ROOM_MANAGER = true;
 Seidr.SHOW_ACTIONS = true;
 /** Chat /a commands + Commands settings tab. */
 Seidr.SHOW_COMMANDS = true;
+/** Last-actor AC + letter/empty Tab Fast Select — Dev channel. */
+Seidr.SHOW_CMD_FAST_SELECT = true;
 Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
 Seidr.RM_DATA_VERSION = 1;
 Seidr.RM_MAX_COMPRESSED = 180000;

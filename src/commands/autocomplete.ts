@@ -11,6 +11,8 @@ import {
 	seidrCmdTokenAtCaret,
 	type SeidrCmdTokenFocus,
 } from "./parse";
+import { seidrFastSelectApply } from "./fastSelect";
+import { seidrCmdPreferMemberIndex } from "./lastActor";
 import { seidrCmdFilterPeople, seidrCmdResolveMember } from "./resolve";
 import { seidrCmdIsEnabled } from "./run";
 import { seidrListCmdActions } from "./store";
@@ -288,7 +290,7 @@ function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
 	state.open = true;
 	state.kind = kind;
 	state.items = items;
-	state.index = 0;
+	state.index = kind === "member" ? seidrCmdPreferMemberIndex(items) : 0;
 	state.spanStart = focus.start;
 	state.spanEnd = focus.end;
 	state.quoted = kind === "member" ? focus.quoted : false;
@@ -413,6 +415,12 @@ export function seidrCmdAcHandleKeyDown(ev: KeyboardEvent): boolean {
 
 	if (key === "Tab") {
 		const value = input.value || "";
+		// Fast Select: a/s/d/p or empty+Tab → slash command (AC closed only)
+		if (!state.open && seidrFastSelectApply(input)) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			return true;
+		}
 		const onSeidrCmd =
 			state.open ||
 			seidrCmdIsCommandLine(value) ||

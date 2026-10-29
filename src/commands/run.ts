@@ -11,6 +11,7 @@ import { seidrPoseChatTemplate } from "./poseChat";
 import { seidrCmdResolveAction, seidrCmdResolveMember } from "./resolve";
 import { seidrGetCommandsBag } from "./store";
 import { seidrGetSettings } from "../settings/storage";
+import { seidrCmdSetLastActor } from "./lastActor";
 import { seidrCmdResolveStripSlot } from "./stripCatalog";
 import { seidrCmdError, seidrCmdWarn } from "./warn";
 
@@ -105,7 +106,9 @@ function executeActionCommand(memberRaw: string, actionRaw: string): boolean {
 			return true;
 		}
 	} catch (e) { /* ignore */ }
-	runItemActivity(target, binding.slot, binding.activity);
+	if (runItemActivity(target, binding.slot, binding.activity)) {
+		seidrCmdSetLastActor(mem.memberNumber);
+	}
 	return true;
 }
 
@@ -129,7 +132,9 @@ function executeStripCommand(tag: "strip" | "stripe", memberRaw: string, slotRaw
 		seidrCmdWarn(slot.error);
 		return true;
 	}
-	runItemActivity(target, slot.option.zone, slot.option.activityName);
+	if (runItemActivity(target, slot.option.zone, slot.option.activityName)) {
+		seidrCmdSetLastActor(mem.memberNumber);
+	}
 	return true;
 }
 
@@ -156,6 +161,7 @@ function executePosesCommand(memberRaw: string, poseRaw: string): boolean {
 		return true;
 	}
 	applyPose(target, pose);
+	seidrCmdSetLastActor(mem.memberNumber);
 	const side = self ? "self" : "other";
 	seidrPublishActionText(seidrPoseChatTemplate(pose, side), Player, target);
 	return true;

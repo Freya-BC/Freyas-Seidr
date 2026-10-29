@@ -3,6 +3,7 @@ import { Seidr } from "../seidr";
 import {
 	AROUSAL_BAR_MODES,
 	AROUSAL_BAR_SCOPES,
+	CLUSTER_NAME_MODES,
 	FAST_OPEN_MODIFIERS,
 	RM_LAUNCHER_POSITIONS,
 	seidrCloneDrawOffsets,
@@ -13,6 +14,7 @@ import {
 	type RmLauncherPosition,
 	type SeidrArousalBarMode,
 	type SeidrArousalBarScope,
+	type SeidrClusterNameMode,
 	type SeidrDrawOffsets,
 	type SeidrFastOpenModifier,
 } from "./model";
@@ -23,8 +25,14 @@ import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
 import { seidrBuildAnimationsTab, seidrRefreshAnimationsTab } from "../animations/ui";
 import {
 	SEIDR_CMD_ENABLE_LABELS,
+	SEIDR_FAST_SELECT_EMPTY_OPTS,
+	SEIDR_FAST_SELECT_KEY_LABELS,
 	seidrNormalizeCmdEnabled,
+	seidrNormalizeFastSelectEmpty,
+	seidrNormalizeFastSelectKeys,
 	type SeidrCmdEnableKey,
+	type SeidrFastSelectEmpty,
+	type SeidrFastSelectKey,
 } from "../commands/model";
 import { seidrBuildCommandsTab, seidrRefreshCommandsTab } from "../commands/ui";
 import { seidrGetCommandsBag, seidrSaveCommandsBag } from "../commands/store";
@@ -82,6 +90,9 @@ function seidrBuildGeneralHtml(): string {
 	const scopeOpts = AROUSAL_BAR_SCOPES.map(function (s) {
 		return '<option value="' + s.id + '">' + s.label + "</option>";
 	}).join("");
+	const nameOpts = CLUSTER_NAME_MODES.map(function (m) {
+		return '<option value="' + m.id + '">' + m.label + "</option>";
+	}).join("");
 	const modOpts = FAST_OPEN_MODIFIERS.map(function (m) {
 		return '<option value="' + m.id + '">' + m.label + "</option>";
 	}).join("");
@@ -89,7 +100,7 @@ function seidrBuildGeneralHtml(): string {
 		return '<option value="' + s.id + '">' + s.label + "</option>";
 	}).join("");
 	return [
-		'<details class="seidr-settings-sec">',
+		'<details class="seidr-settings-sec" data-seidr-tour="fast-open">',
 		"<summary>Fast Open Actions</summary>",
 		'<div class="seidr-settings-row">',
 		'<label><input type="checkbox" id="seidr-set-fast-open" /> Enable Fast Open Actions</label>',
@@ -131,6 +142,11 @@ function seidrBuildGeneralHtml(): string {
 		'<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only — hitboxes stay put. Save Drawing to keep.</p>',
 		poseRow("pull", "Pull"),
 		poseRow("cuddle", "Cuddle"),
+		'<div class="seidr-settings-field-row" style="margin-top:10px;">',
+		'<span class="seidr-settings-field-label">Names</span>',
+		'<select id="seidr-set-cluster-names">' + nameOpts + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Cuddle / pull nicknames only (raised and centered over the arousal bar). Hitbox always shows; Hover shows only while the cursor is on that seat; Hide never. Does not change status icons or art.</p>',
 		'<div class="seidr-settings-row seidr-settings-draw-actions">',
 		'<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
 		"</div>",
@@ -149,7 +165,7 @@ function seidrBuildGeneralHtml(): string {
 		"</div>",
 		'<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
 		"</details>",
-		'<details class="seidr-settings-sec">',
+		'<details class="seidr-settings-sec" data-seidr-tour="commands-enable">',
 		"<summary>Commands</summary>",
 		'<p class="seidr-settings-hint">Enable or disable Seidr chat commands. Off = not registered / ignored.</p>',
 		'<div id="seidr-set-cmd-enable">' +
@@ -161,6 +177,32 @@ function seidrBuildGeneralHtml(): string {
 			);
 		}).join("") +
 		"</div>",
+		Seidr.SHOW_CMD_FAST_SELECT !== false
+			? [
+				'<p class="seidr-settings-hint" style="margin-top:12px;">Fast Select (Dev) — letter + Tab in chat. Last successful /a /strip /poses target is preselected in member autocomplete.</p>',
+				'<div class="seidr-settings-row">',
+				'<label><input type="checkbox" id="seidr-set-fast-select" /> Enable Fast Select</label>',
+				"</div>",
+				'<div id="seidr-set-fast-select-keys" style="margin-top:8px;">' +
+				SEIDR_FAST_SELECT_KEY_LABELS.map(function (row) {
+					return (
+						'<div class="seidr-settings-row">' +
+						'<label><input type="checkbox" data-seidr-fs-key="' + row.key + '" /> ' +
+						row.label + "</label></div>"
+					);
+				}).join("") +
+				"</div>",
+				'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+				'<span class="seidr-settings-field-label">Empty Tab</span>',
+				'<select id="seidr-set-fast-select-empty">' +
+				SEIDR_FAST_SELECT_EMPTY_OPTS.map(function (o) {
+					return '<option value="' + o.id + '">' + o.label + "</option>";
+				}).join("") +
+				"</select>",
+				"</div>",
+				'<p class="seidr-settings-hint">Letter checkboxes gate a/s/d/p + Tab. Empty Tab uses the dropdown (Disabled = Club Tab).</p>',
+			].join("")
+			: "",
 		'<p class="seidr-settings-hint" id="seidr-set-cmd-en-msg"></p>',
 		"</details>",
 		'<details class="seidr-settings-sec" open>',
@@ -291,17 +333,26 @@ export function seidrBuildSettingsBody() {
 	tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function (btn) {
 		btn.addEventListener("click", function () {
 			const tab = (btn as HTMLElement).getAttribute("data-seidr-tab");
-			tabRoot.querySelectorAll(".seidr-settings-tab").forEach(function (t) {
-				t.classList.toggle("seidr-settings-tab-on", t.getAttribute("data-seidr-tab") === tab);
-			});
-			body.querySelectorAll(".seidr-settings-pane").forEach(function (p) {
-				p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
-			});
-			if (tab === "maps") {
-				try { seidrRefreshMapsTab(); } catch (e) { /* ignore */ }
-			}
+			if (tab) seidrSelectSettingsTab(tab);
 		});
 	});
+}
+
+/** Switch settings pane by tab id (general / actions / commands / …). */
+export function seidrSelectSettingsTab(tab: string) {
+	const body = $("seidr-settings-body");
+	const tabs = $("seidr-settings-tabs");
+	if (!body || !tab) return;
+	const tabRoot = tabs || body;
+	tabRoot.querySelectorAll(".seidr-settings-tab").forEach(function (t) {
+		t.classList.toggle("seidr-settings-tab-on", t.getAttribute("data-seidr-tab") === tab);
+	});
+	body.querySelectorAll(".seidr-settings-pane").forEach(function (p) {
+		p.classList.toggle("seidr-settings-pane-on", p.getAttribute("data-seidr-pane") === tab);
+	});
+	if (tab === "maps") {
+		try { seidrRefreshMapsTab(); } catch (e) { /* ignore */ }
+	}
 }
 
 function setDrawMsg(text: string) {
@@ -365,6 +416,7 @@ export function seidrRefreshSettingsUi() {
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const as = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
+	const cn = $("seidr-set-cluster-names") as HTMLSelectElement | null;
 	const fo = $("seidr-set-fast-open") as HTMLInputElement | null;
 	const fom = $("seidr-set-fast-open-mod") as HTMLSelectElement | null;
 	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
@@ -373,17 +425,28 @@ export function seidrRefreshSettingsUi() {
 	if (pos) pos.value = s.launcherPosition;
 	if (am) am.value = s.arousalBarMode;
 	if (as) as.value = s.arousalBarScope;
+	if (cn) cn.value = s.clusterNameMode || "hitbox";
 	if (fo) fo.checked = s.fastOpenActionsEnabled !== false;
 	if (fom) fom.value = s.fastOpenActionsModifier || "Shift";
 	if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
 	seidrBeginDrawDraft();
 	seidrRefreshStorageUi();
 	try {
-		const enMap = seidrGetCommandsBag().enabled;
+		const bag = seidrGetCommandsBag();
 		document.querySelectorAll("[data-seidr-cmd-en]").forEach(function (el) {
 			const key = (el as HTMLElement).getAttribute("data-seidr-cmd-en") as SeidrCmdEnableKey | null;
 			if (!key) return;
-			(el as HTMLInputElement).checked = enMap[key] !== false;
+			(el as HTMLInputElement).checked = bag.enabled[key] !== false;
+		});
+		const fs = $("seidr-set-fast-select") as HTMLInputElement | null;
+		const fse = $("seidr-set-fast-select-empty") as HTMLSelectElement | null;
+		if (fs) fs.checked = bag.fastSelectEnabled !== false;
+		if (fse) fse.value = bag.fastSelectEmpty || "disabled";
+		const keys = bag.fastSelectKeys || seidrNormalizeFastSelectKeys(null);
+		document.querySelectorAll("[data-seidr-fs-key]").forEach(function (el) {
+			const key = (el as HTMLElement).getAttribute("data-seidr-fs-key") as SeidrFastSelectKey | null;
+			if (!key) return;
+			(el as HTMLInputElement).checked = keys[key] !== false;
 		});
 	} catch (e) { /* ignore */ }
 	if (Seidr.SHOW_ACTIONS !== false) seidrRefreshActionsTab();
@@ -399,6 +462,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const ascope = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
+	const cn = $("seidr-set-cluster-names") as HTMLSelectElement | null;
 	const fo = $("seidr-set-fast-open") as HTMLInputElement | null;
 	const fom = $("seidr-set-fast-open-mod") as HTMLSelectElement | null;
 	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
@@ -411,6 +475,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
 			arousalBarMode: (am && am.value ? am.value : "off") as SeidrArousalBarMode,
 			arousalBarScope: (ascope && ascope.value ? ascope.value : "seidrCluster") as SeidrArousalBarScope,
+			clusterNameMode: (cn && cn.value ? cn.value : "hitbox") as SeidrClusterNameMode,
 			fastOpenActionsEnabled: !!(fo && fo.checked),
 			fastOpenActionsModifier: (fom && fom.value ? fom.value : "Shift") as SeidrFastOpenModifier,
 			fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso",
@@ -423,6 +488,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (pos) pos.addEventListener("change", persist);
 	if (am) am.addEventListener("change", persist);
 	if (ascope) ascope.addEventListener("change", persist);
+	if (cn) cn.addEventListener("change", persist);
 	if (fo) fo.addEventListener("change", persist);
 	if (fos) fos.addEventListener("change", persist);
 	if (fom) fom.addEventListener("change", persist);
@@ -436,6 +502,19 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			raw[key] = !!(el as HTMLInputElement).checked;
 		});
 		bag.enabled = seidrNormalizeCmdEnabled(raw);
+		const fs = $("seidr-set-fast-select") as HTMLInputElement | null;
+		const fse = $("seidr-set-fast-select-empty") as HTMLSelectElement | null;
+		if (fs) bag.fastSelectEnabled = !!fs.checked;
+		if (fse) {
+			bag.fastSelectEmpty = seidrNormalizeFastSelectEmpty(fse.value) as SeidrFastSelectEmpty;
+		}
+		const keyRaw: Record<string, boolean> = {};
+		document.querySelectorAll("[data-seidr-fs-key]").forEach(function (el) {
+			const key = (el as HTMLElement).getAttribute("data-seidr-fs-key");
+			if (!key) return;
+			keyRaw[key] = !!(el as HTMLInputElement).checked;
+		});
+		bag.fastSelectKeys = seidrNormalizeFastSelectKeys(keyRaw);
 		const saved = seidrSaveCommandsBag(bag);
 		const msg = $("seidr-set-cmd-en-msg");
 		if (msg) msg.textContent = saved.ok ? "Saved — reload chat commands applied" : (saved.error || "Save failed");
@@ -447,6 +526,13 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	document.querySelectorAll("[data-seidr-cmd-en]").forEach(function (el) {
 		el.addEventListener("change", persistCmdEnable);
 	});
+	document.querySelectorAll("[data-seidr-fs-key]").forEach(function (el) {
+		el.addEventListener("change", persistCmdEnable);
+	});
+	const fsEl = $("seidr-set-fast-select");
+	const fseEl = $("seidr-set-fast-select-empty");
+	if (fsEl) fsEl.addEventListener("change", persistCmdEnable);
+	if (fseEl) fseEl.addEventListener("change", persistCmdEnable);
 
 	if (openRm) {
 		openRm.addEventListener("click", function () {
