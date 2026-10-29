@@ -12381,47 +12381,47 @@
     {
       title: "Holds",
       blurb: "Pull Left / Right, Cuddle, Remove, and Leave on Item Torso \u2014 shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
-      docPath: "/docs/HOLDS.md"
+      docPath: "/docs/view.html#HOLDS"
     },
     {
       title: "Undress",
       blurb: "Strip clothing from the Activity Menu on the matching zone (hands required). Echo layers and Undress all appear when those groups exist; the target does not need Seidr.",
-      docPath: "/docs/UNDRESS.md"
+      docPath: "/docs/view.html#UNDRESS"
     },
     {
       title: "Custom Actions",
       blurb: "Up to 50 Club Activity Menu entries with your own chat lines, conditions, icons, sound, and pose. Separate from Commands \u2192 Actions (those are /a chat shortcuts).",
-      docPath: "/docs/ACTIONS.md"
+      docPath: "/docs/view.html#ACTIONS"
     },
     {
       title: "Animations",
       blurb: "Pose and face clips that play on you only. Author them under Animations, then run /animation or /ani (Tab lists your names).",
-      docPath: "/docs/ANIMATIONS.md"
+      docPath: "/docs/view.html#ANIMATIONS"
     },
     {
       title: "Chat Commands",
       blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete and optional Fast Select (letter + Tab) speed things up.",
-      docPath: "/docs/COMMANDS.md"
+      docPath: "/docs/view.html#COMMANDS"
     },
     {
       title: "Fast Open",
       blurb: "Hold a modifier and click a room character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
-      docPath: "/docs/SETTINGS.md"
+      docPath: "/docs/view.html#SETTINGS"
     },
     {
       title: "Room Manager",
       blurb: "Admin panel for room definitions, access lists, backgrounds, and map series. Open with /roommanager or the floating \u2302 when you are room admin.",
-      docPath: "/docs/ROOM_MANAGER.md"
+      docPath: "/docs/view.html#ROOM_MANAGER"
     },
     {
       title: "Maps",
       blurb: "Map versions under Settings \u2192 Maps / Room Manager. Only Default can sync with your account; other versions stay local to this browser.",
-      docPath: "/docs/ROOM_MANAGER.md"
+      docPath: "/docs/view.html#ROOM_MANAGER"
     },
     {
       title: "Drawing, Arousal & Storage",
       blurb: "Pull/cuddle drawing offsets, cluster Names modes (Hitbox/Hover/Hide), arousal bar modes, and ExtensionSettings usage vs the soft cap.",
-      docPath: "/docs/SETTINGS.md"
+      docPath: "/docs/view.html#SETTINGS"
     }
   ];
   function escapeHtml7(s) {
