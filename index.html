@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Seidr — Bondage Club plugin</title>
+	<meta name="description" content="Seidr: holds, undress, custom actions, chat commands, animations, and room tools for Bondage Club." />
+	<link rel="icon" href="assets/freyas-seidr-logo.png" />
+	<style>
+		:root {
+			--bg: #1c1626;
+			--panel: #2a2238;
+			--text: #f0e6d4;
+			--muted: #a898b0;
+			--gold: #d4a017;
+			--line: rgba(255, 255, 255, 0.12);
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			min-height: 100vh;
+			font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+			color: var(--text);
+			background:
+				radial-gradient(ellipse at top, #3c3050 0%, transparent 55%),
+				var(--bg);
+		}
+		main {
+			max-width: 720px;
+			margin: 0 auto;
+			padding: 48px 20px 64px;
+		}
+		.hero {
+			display: flex;
+			gap: 20px;
+			align-items: center;
+			margin-bottom: 28px;
+		}
+		.hero img {
+			width: 88px;
+			height: 88px;
+			border-radius: 14px;
+			border: 1px solid var(--line);
+			background: rgba(20, 16, 28, 0.9);
+		}
+		h1 {
+			margin: 0 0 6px;
+			font-size: 2rem;
+			letter-spacing: 0.02em;
+		}
+		.tag {
+			display: inline-block;
+			font-size: 11px;
+			font-weight: 600;
+			letter-spacing: 0.08em;
+			text-transform: uppercase;
+			color: var(--gold);
+			border: 1px solid rgba(212, 160, 23, 0.35);
+			border-radius: 999px;
+			padding: 2px 10px;
+		}
+		.lead {
+			color: var(--muted);
+			margin: 0 0 28px;
+			max-width: 58ch;
+		}
+		.panel {
+			background: rgba(42, 34, 56, 0.92);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 18px 20px;
+			margin-bottom: 16px;
+		}
+		.panel h2 {
+			margin: 0 0 10px;
+			font-size: 0.95rem;
+			color: var(--gold);
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+		ul {
+			margin: 0;
+			padding-left: 1.2em;
+		}
+		li { margin: 0.35em 0; }
+		a {
+			color: var(--gold);
+			text-decoration: none;
+		}
+		a:hover { text-decoration: underline; }
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 10px;
+		}
+		.card {
+			display: block;
+			padding: 12px 14px;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			background: rgba(28, 22, 38, 0.85);
+			color: var(--text);
+		}
+		.card:hover {
+			border-color: rgba(212, 160, 23, 0.55);
+			text-decoration: none;
+		}
+		.card strong {
+			display: block;
+			color: var(--gold);
+			margin-bottom: 4px;
+		}
+		.card span {
+			font-size: 0.88rem;
+			color: var(--muted);
+		}
+		.foot {
+			margin-top: 28px;
+			font-size: 0.85rem;
+			color: var(--muted);
+		}
+	</style>
+</head>
+<body>
+	<main>
+		<div class="hero">
+			<img src="assets/freyas-seidr-logo.png" width="88" height="88" alt="Seidr logo" />
+			<div>
+				<h1>Seidr</h1>
+				<span class="tag">Bondage Club plugin</span>
+			</div>
+		</div>
+		<p class="lead">
+			Holds, undress, custom Activity Menu actions, chat commands, animations, and room tools.
+			Open settings in Club with <code>/seidr</code>.
+		</p>
+
+		<section class="panel">
+			<h2>Guides</h2>
+			<div class="grid">
+				<a class="card" href="README.md"><strong>Full README</strong><span>Install, overview, getting started</span></a>
+				<a class="card" href="docs/HOLDS.md"><strong>Holds</strong><span>Pull, cuddle, reconnect grace</span></a>
+				<a class="card" href="docs/COMMANDS.md"><strong>Commands</strong><span>/a, Tab autocomplete, Fast Select</span></a>
+				<a class="card" href="docs/SETTINGS.md"><strong>Settings</strong><span>Drawing, Names, Tutorial</span></a>
+				<a class="card" href="docs/ACTIONS.md"><strong>Custom Actions</strong><span>Activity Menu entries</span></a>
+				<a class="card" href="docs/ANIMATIONS.md"><strong>Animations</strong><span>Pose and face clips</span></a>
+				<a class="card" href="docs/UNDRESS.md"><strong>Undress</strong><span>Clothing strip activities</span></a>
+				<a class="card" href="docs/ROOM_MANAGER.md"><strong>Room Manager</strong><span>Admin presets and maps</span></a>
+			</div>
+		</section>
+
+		<section class="panel">
+			<h2>Install</h2>
+			<ul>
+				<li><a href="bookmark.js">bookmark.js</a> — Release bookmark (loads Pages <code>seidr.js</code>)</li>
+				<li><a href="seidr.user.js">seidr.user.js</a> — Tampermonkey</li>
+				<li><a href="loader.js">loader.js</a> — FUSAM after login</li>
+				<li><a href="https://github.com/Freya-BC/Freyas-Seidr">GitHub repository</a></li>
+			</ul>
+		</section>
+
+		<p class="foot">Author Freya · Requires BCX / ModSDK in Club</p>
+	</main>
+</body>
+</html>
