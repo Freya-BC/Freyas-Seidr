@@ -2,7 +2,7 @@
 
 Holds let you **Pull** someone to your left or right, or **Cuddle** them close, with a shared pose that syncs between Seidr players. Everything lives in the normal Club **Activity** menu on **Item Torso** — no extra floating panel.
 
-![Hold slots](../assets/docs/holds-slots.svg)
+![Hold slots](../assets/docs/holds-slots.png)
 
 ## When to use this
 

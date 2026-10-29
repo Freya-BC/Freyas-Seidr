@@ -7,7 +7,7 @@ Open it with:
 - **`/seidr`** in chat (recommended), or  
 - **Preference → Extensions → Seidr** (Seidr logo) — the panel returns you to the game after opening.
 
-![Settings tabs](../assets/docs/settings-tabs.svg)
+![Settings tabs](../assets/docs/settings-tabs.png)
 
 Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**.
 

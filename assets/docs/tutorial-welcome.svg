@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
   <title id="title">Welcome and Tutorial</title>
   <desc id="desc">First-load welcome in chat, then /seidr and About Tutorial</desc>
@@ -10,10 +11,10 @@
   <rect x="230" y="52" width="180" height="88" rx="10" fill="#2a2238" stroke="rgba(255,255,255,0.14)"/>
   <text x="320" y="82" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="13" font-weight="600">2. /seidr</text>
   <text x="320" y="104" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="11">Opens Settings</text>
-  <text x="320" y="122" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="10">or Extensions ’ Seidr</text>
+  <text x="320" y="122" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="10">or Extensions - Seidr</text>
   <rect x="436" y="52" width="180" height="88" rx="10" fill="#3c3050" stroke="#d4a017" stroke-width="2"/>
   <text x="526" y="82" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="13" font-weight="600">3. Tutorial</text>
-  <text x="526" y="104" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="11">About ’ Tutorial</text>
+  <text x="526" y="104" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="11">About - Tutorial</text>
   <text x="526" y="122" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="10">repeatable guided tour</text>
   <text x="320" y="164" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="11">If Seidr loads outside a room, welcome waits until you enter one</text>
 </svg>

@@ -1,24 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 220" role="img" aria-labelledby="title desc">
   <title id="title">Seidr hold slots</title>
   <desc id="desc">Hub in the center with Pull Left, Pull Right, and Cuddle slots</desc>
   <rect width="560" height="220" rx="12" fill="#1c1626"/>
   <text x="28" y="36" fill="#d4a017" font-family="system-ui,sans-serif" font-size="16" font-weight="600">Hold slots (you are the hub)</text>
-  <!-- Left -->
   <rect x="28" y="70" width="120" height="100" rx="10" fill="#2a2238" stroke="#d4a017" stroke-width="2"/>
   <text x="88" y="115" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="28" font-weight="700">L</text>
   <text x="88" y="145" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="12">Pull Left</text>
-  <!-- Hub -->
   <rect x="220" y="70" width="120" height="100" rx="10" fill="#3c3050" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
   <text x="280" y="115" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="18" font-weight="600">You</text>
   <text x="280" y="145" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="12">Hub</text>
-  <!-- Right -->
   <rect x="412" y="70" width="120" height="100" rx="10" fill="#2a2238" stroke="#d4a017" stroke-width="2"/>
   <text x="472" y="115" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="28" font-weight="700">R</text>
   <text x="472" y="145" text-anchor="middle" fill="#f0e6d4" font-family="system-ui,sans-serif" font-size="12">Pull Right</text>
-  <!-- Cuddle -->
   <rect x="220" y="28" width="120" height="32" rx="8" fill="#2a2238" stroke="#d4a017" stroke-width="1.5"/>
-  <text x="280" y="49" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="13" font-weight="600">C · Cuddle</text>
-  <path d="M148 120 H212" stroke="#a898b0" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="280" y="49" text-anchor="middle" fill="#d4a017" font-family="system-ui,sans-serif" font-size="13" font-weight="600">C - Cuddle</text>
+  <path d="M148 120 H212" stroke="#a898b0" stroke-width="1.5"/>
   <path d="M340 120 H404" stroke="#a898b0" stroke-width="1.5"/>
   <text x="280" y="200" text-anchor="middle" fill="#a898b0" font-family="system-ui,sans-serif" font-size="11">Both people need Seidr for the shared pose</text>
 </svg>

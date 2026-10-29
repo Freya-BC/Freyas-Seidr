@@ -51,7 +51,7 @@ Open settings anytime with **`/seidr`** in chat, or **Preference → Extensions 
 
 ## Getting started
 
-![Welcome and Tutorial](assets/docs/tutorial-welcome.svg)
+![Welcome and Tutorial](assets/docs/tutorial-welcome.png)
 
 1. **Welcome** — The first time you enter a chat room with Seidr loaded, a sticky `[Seidr]` line appears in your **local** chat log (once per character). If Seidr loaded outside a room, the welcome waits until you enter one.
 2. **Open Settings** — Type `/seidr` (or use Preference → Extensions → Seidr).
@@ -84,7 +84,7 @@ The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab co
 
 Open another character → **Item Torso** → **Activities**:
 
-![Hold slots](assets/docs/holds-slots.svg)
+![Hold slots](assets/docs/holds-slots.png)
 
 | Activity | Effect |
 |----------|--------|
@@ -149,7 +149,7 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 
 ## Chat Commands
 
-![Commands flow](assets/docs/commands-flow.svg)
+![Commands flow](assets/docs/commands-flow.png)
 
 ```
 /a <member> <action>          # Settings → Commands bindings
@@ -219,7 +219,7 @@ More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 ## Settings
 
-![Settings tabs](assets/docs/settings-tabs.svg)
+![Settings tabs](assets/docs/settings-tabs.png)
 
 **`/seidr`** or **Preference → Extensions → Seidr**
 

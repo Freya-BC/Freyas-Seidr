@@ -2,7 +2,7 @@
 
 Run Seidr helpers from the Club chat box with short slash commands. Each command can be turned on or off under **Settings → General → Commands**. Open Settings with **`/seidr`**.
 
-![Commands flow](../assets/docs/commands-flow.svg)
+![Commands flow](../assets/docs/commands-flow.png)
 
 | Command | Purpose |
 |---------|---------|
