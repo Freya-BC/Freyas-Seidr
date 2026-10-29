@@ -136,6 +136,20 @@
 			});
 		}
 
+		/**
+		 * view.html lives under /docs/. README.md paths like assets/… resolve wrongly
+		 * (→ /docs/assets/…). Prefix with ../ when the source file is the repo root README.
+		 * Doc pages already use ../assets/… so they stay as-is.
+		 */
+		function rewriteAssetPaths(root, fromReadme) {
+			if (!fromReadme) return;
+			root.querySelectorAll("img[src]").forEach(function (img) {
+				var src = img.getAttribute("src") || "";
+				if (!src || /^(https?:|data:|\/|\.\.\/)/i.test(src)) return;
+				img.setAttribute("src", "../" + src.replace(/^\.\//, ""));
+			});
+		}
+
 		async function load() {
 			var key = keyFromLocation();
 			var file = ALLOW[key];
@@ -158,6 +172,7 @@
 				if (typeof marked === "undefined") throw new Error("Markdown library failed to load");
 				doc.innerHTML = marked.parse(text);
 				rewriteDocLinks(doc);
+				rewriteAssetPaths(doc, key === "README");
 				status.hidden = true;
 				doc.hidden = false;
 			} catch (e) {
