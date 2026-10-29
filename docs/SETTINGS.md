@@ -33,13 +33,17 @@ Hold the modifier, click someone in the room. If Freyas Action Manager is also l
 
 ### Room Manager
 
-![Room Manager](../assets/docs/settings-general-room-manager.png)
+![Room Manager settings](../assets/docs/settings-general-room-manager.png)
 
 | Option | Default | Meaning |
 |--------|---------|---------|
 | Activate Room Manager | On | Master switch (floating ⌂ + ChatAdmin button) |
 | Show Quickmenu Button | On | Floating ⌂ in ChatRoom; off hides it completely |
 | Open Room Manager | — | Opens the admin panel from Settings |
+
+Panel overview (definition / access / backgrounds):
+
+![Room Manager](../assets/docs/settings-room-manager.png)
 
 Details: [ROOM_MANAGER.md](ROOM_MANAGER.md).
 

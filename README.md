@@ -204,6 +204,8 @@ More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
 For **room admins** (and on ChatAdmin create/edit):
 
+![Room Manager](assets/docs/settings-room-manager.png)
+
 | Entry | |
 |-------|--|
 | Chat room | Floating **⌂** (position from Settings; drag for this session) |

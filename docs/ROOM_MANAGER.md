@@ -4,6 +4,8 @@ Room Manager is a FAM-style HTML panel for **room admins**: save and load room d
 
 Open it with **`/roommanager`**, the floating **⌂**, ChatAdmin’s Seidr button, or **Settings → General → Open Room Manager**.
 
+![Room Manager](../assets/docs/settings-room-manager.png)
+
 ## When to use this
 
 Use Room Manager when you host or admin rooms and want reusable presets (name/description/size, ban lists, backgrounds, map versions) instead of retyping everything each time.
