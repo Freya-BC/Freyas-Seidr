@@ -4,6 +4,8 @@ Run Seidr helpers from the Club chat box with short slash commands. Each command
 
 ![Commands flow](../assets/docs/commands-flow.png)
 
+![Commands tab](../assets/docs/settings-commands.png)
+
 | Command | Purpose |
 |---------|---------|
 | **`/a`** / **`/action`** | Your custom bindings from **Settings → Commands → Actions** |
@@ -20,11 +22,13 @@ Run Seidr helpers from the Club chat box with short slash commands. Each command
 
 ## Setup checklist — People
 
+![People](../assets/docs/settings-commands-people.png)
+
 People store a short **alias** for a Member Number so you do not have to type IDs, and so duplicate nicknames resolve correctly.
 
 1. Open **`/seidr`** → **Commands** tab.
 2. Under **People**, click **Add person**.
-3. Set **Alias** (what you will type, e.g. `Alice`) and **Member number**.
+3. Set **Alias** (what you will type, e.g. `Alice`) and **Member ID**.
 4. Click **Save person**.
 5. Later: pick someone from the Person dropdown to edit or **Delete**.
 
@@ -33,6 +37,8 @@ Max **50** people. You can still target anyone in the room by Name/Nickname or r
 ---
 
 ## Setup checklist — Commands → Actions
+
+![Commands → Actions](../assets/docs/settings-commands-actions.png)
 
 These bindings power `/a <person> <action-name>`.
 

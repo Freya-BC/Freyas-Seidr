@@ -69,7 +69,13 @@ Visible when the room’s MapMode is not Never:
 
 ### Settings → Maps
 
-Library management (Map + Export/Import sections), Remote ↔ Local for Default, JSON export/import (always Local only). See [SETTINGS.md](SETTINGS.md).
+![Maps tab](../assets/docs/settings-maps.png)
+
+Library management (Map + Export/Import sections), Remote ↔ Local for Default, JSON export/import (always Local only).
+
+![Export / Import](../assets/docs/settings-maps-export.png)
+
+See [SETTINGS.md](SETTINGS.md).
 
 ## Settings that affect Room Manager
 

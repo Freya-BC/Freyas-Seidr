@@ -15,7 +15,11 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 
 ## General
 
+![General tab](../assets/docs/settings-general.png)
+
 ### Fast Open Actions
+
+![Fast Open Actions](../assets/docs/settings-general-fast-open.png)
 
 Jump into Club **Activity View** without hunting through the character menu.
 
@@ -29,6 +33,8 @@ Hold the modifier, click someone in the room. If Freyas Action Manager is also l
 
 ### Room Manager
 
+![Room Manager](../assets/docs/settings-general-room-manager.png)
+
 | Option | Default | Meaning |
 |--------|---------|---------|
 | Activate Room Manager | On | Master switch (floating ⌂ + ChatAdmin button) |
@@ -39,6 +45,8 @@ Details: [ROOM_MANAGER.md](ROOM_MANAGER.md).
 
 ### Launcher position
 
+![Launcher position](../assets/docs/settings-general-launcher.png)
+
 Default placement of the floating ⌂:
 
 - Top / Bottom / Middle × Left / Right  
@@ -47,6 +55,8 @@ Default placement of the floating ⌂:
 Drag still overrides for the current session.
 
 ### Drawing
+
+![Drawing](../assets/docs/settings-general-drawing.png)
 
 Echo-style **model** spacing for holds (hitboxes do not move):
 
@@ -74,6 +84,8 @@ Only Club **nickname** text for people in a Seidr hold is affected — not statu
 
 ### Commands (enable toggles + Fast Select)
 
+![Commands (General)](../assets/docs/settings-general-commands.png)
+
 Collapsible **Commands** block on General:
 
 1. **Enable toggles** — turn each slash tag on or off (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored. Keep `/seidr` on so you can always reopen Settings.
@@ -83,6 +95,8 @@ Collapsible **Commands** block on General:
 Full chat guide: [COMMANDS.md](COMMANDS.md).
 
 ### Arousal bars
+
+![Arousal bars](../assets/docs/settings-general-arousal.png)
 
 Controls Club / BCTweaks on-character thermometers and orgasm tracks.
 
@@ -103,6 +117,8 @@ Controls Club / BCTweaks on-character thermometers and orgasm tracks.
 
 ### Storage
 
+![Storage](../assets/docs/settings-general-storage.png)
+
 Read-only usage for the synced ExtensionSettings bag:
 
 - Total compressed size vs ~180 KB soft cap (+ thin progress bar)  
@@ -115,12 +131,19 @@ Refreshes when you open / refresh Settings. Saving when full is refused until yo
 
 ## Maps tab
 
+![Maps tab](../assets/docs/settings-maps.png)
+
 Manage Room Manager map **series** and **versions** (collapsible **Map** and **Export / Import**):
 
+![Map editor](../assets/docs/settings-maps-editor.png)
+
 - Save the current map room as a new map — version is always **Default** (disabled outside a map room)  
-- Only **Default** can sync to the server; other versions (e.g. Development) are local-only  
+- Only **Default** can sync to the server; other versions (e.g. Development / named local versions) stay in this browser  
 - Toggle **Remote** vs **Local only** for Default; **Overwrite Default**; Save new version; Load / Delete  
-- Export JSON (copy / download); **Choose file…** or paste — imports are **always Local only**  
+
+![Export / Import](../assets/docs/settings-maps-export.png)
+
+- Export JSON (refresh / copy / download); **Choose file…** or paste — imports are **always Local only**  
 
 Details: [ROOM_MANAGER.md](ROOM_MANAGER.md).
 
@@ -128,45 +151,57 @@ Details: [ROOM_MANAGER.md](ROOM_MANAGER.md).
 
 ## Actions tab
 
-Full editor for **custom Activity Menu** entries (up to 50): list, chat, items, conditions, arousal template, sound, pose, icons, export/import.
+![Actions tab](../assets/docs/settings-actions.png)
 
-These are **not** the same as **Commands → Actions** (those are `/a` shortcuts). See [ACTIONS.md](ACTIONS.md).
+Full editor for **custom Activity Menu** entries (up to 50): identity, slots, chat, items, conditions, arousal template, sound, pose, icons, export/import.
+
+These are **not** the same as **Commands → Actions** (those are `/a` shortcuts). Per-section screenshots and walkthrough: [ACTIONS.md](ACTIONS.md).
 
 ---
 
 ## Commands tab
 
-Chat slash-command setup: **People** aliases and **`/a` Action** bindings.
+![Commands tab](../assets/docs/settings-commands.png)
+
+Chat slash-command setup: **People** aliases and **`/a` Action** bindings. Tab in chat on `/a …` for autocomplete (W/S or arrows, E/Enter, Esc).
 
 ### People — what to do
 
+![People](../assets/docs/settings-commands-people.png)
+
 1. Click **Add person**.
-2. Set an **Alias** (short name you type in chat) and **Member number**.
+2. Set an **Alias** (short name you type in chat) and **Member ID**.
 3. **Save person**.
 4. Use the Person dropdown later to edit or delete.
 
-Aliases help when several people share a display name — Seidr resolves the Member ID you saved.
+Aliases help when several people share a display name — Seidr resolves the Member ID you saved. Max **50**.
 
 ### Actions — what to do
 
+![Commands → Actions](../assets/docs/settings-commands-actions.png)
+
 1. Click **Add action**.
 2. Set a **call name** (what you type after the person in `/a`).
-3. Pick **Slot** first (e.g. ItemTorso), then **Activity** for that slot.
+3. Pick **Slot** first (e.g. Mouth), then **Activity** for that slot.
 4. **Save action**.
 
-Pose / animation / undress / meta commands do **not** need rows here — they use built-in lists or the Animations tab.
+Pose / animation / undress / meta commands do **not** need rows here — they use built-in lists or the Animations tab. Max **50**.
 
-In the chat box, **Tab** opens autocomplete. Details: [COMMANDS.md](COMMANDS.md).
+In the chat box, **Tab** opens autocomplete. Full guide: [COMMANDS.md](COMMANDS.md).
 
 ---
 
 ## Animations tab
 
-Author pose/face clips for the local Player (up to 50). Play with `/animation` / `/ani`. See [ANIMATIONS.md](ANIMATIONS.md).
+![Animations tab](../assets/docs/settings-animations.png)
+
+Author pose/face clips for the local Player (up to 50 animations, 20 steps, 60 s total wait). Play with `/animation` / `/ani`. Steps, face rows, and Action text screenshots: [ANIMATIONS.md](ANIMATIONS.md).
 
 ---
 
 ## About tab
+
+![About tab](../assets/docs/settings-about.png)
 
 Plugin identity and documentation:
 

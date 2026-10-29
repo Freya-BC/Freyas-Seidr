@@ -4,6 +4,8 @@ Custom Actions are user-defined activities that appear in the **Club Activity Me
 
 Open **`/seidr` → Actions**, or Preference → Extensions → Seidr → Actions.
 
+![Actions tab](../assets/docs/settings-actions.png)
+
 **Not the same as Commands → Actions.** Those are short names for `/a` in chat. This tab builds real Activity Menu entries (with conditions, chat lines, icons, and so on).
 
 ## When to use this
@@ -26,7 +28,39 @@ Use Custom Actions when you want a new button in the Activity Menu with your own
 4. Optionally add **items**, **conditions**, **arousal**, **sound**, **pose**, and an **icon**.
 5. **Save action**.
 
+### Identity
+
+![Action identity](../assets/docs/settings-actions-identity.png)
+
+| Field | Role |
+|-------|------|
+| **Action** | Which saved action you are editing |
+| **Name** | Label in the Activity Menu |
+| **Who** | Self only / Others only / Self and others |
+| **Mark** | Menu icon preview; **Select icon** opens the picker |
+
+### Slots (Activity Menu zones)
+
+![Slots](../assets/docs/settings-actions-slots.png)
+
+Pick one or more Club Item\* zones where the button should appear (gold border = selected). The action shows on those slots in the Activity Menu.
+
+### Icons
+
+![Select icon](../assets/docs/settings-actions-icon-picker.png)
+
+Each action shows an icon in the Activity Menu:
+
+| Source | Examples |
+|--------|----------|
+| **Seidr** (inline SVG) | Mark, Hand, Kiss, Heart, Pull, Spark, Cuddle, Star, Rope, Collar, Leash, Chain, Blindfold, Paddle, Candle, Vulva |
+| **Club Activity** | Stock `Icons/Activity/*.png` (Caress, Kiss, …) |
+
+**Select icon** opens a searchable grid. Icons apply when the Activity Menu opens (no need to re-save just to refresh the tile). Custom HTTPS URL icons are **not** offered in the picker (Club Activity buttons do not load remote images reliably).
+
 ### Chat tokens
+
+![Action text](../assets/docs/settings-actions-text.png)
 
 Insert chips match stock Club ActivityDictionary tags, for example:
 
@@ -42,6 +76,8 @@ Example: `SourceCharacter kisses TargetCharacter's lips.`
 
 ## Items allowlist
 
+![Items catalog](../assets/docs/settings-actions-items.png)
+
 Optional list of restraints `{ slot, name }` on Item\* groups (gags, binders, etc. — not clothing/hair).
 
 - **Empty** = no filter (action can appear whenever Club would show activities).
@@ -49,43 +85,37 @@ Optional list of restraints `{ slot, name }` on Item\* groups (gags, binders, et
 
 **Add restraint** opens a searchable Club catalog for Item\* slots.
 
-## Arousal
-
-Off by default. When enabled, pick a Club **template** activity (e.g. Caress) via the Template picker.
-
-Seidr remaps the custom action to that template for partners so vanilla arousal prefs still apply. The acted character needs Hybrid/Automatic as usual for Club arousal.
-
-There is **no** separate Hidden peer arousal protocol — delivery uses Club Type Activity behaviour.
-
 ## Conditions
+
+![When visible](../assets/docs/settings-actions-conditions.png)
 
 Conditions are an **OR of AND groups**. Each check has a `who` (source / target) and optional `not`.
 
 Examples of checks: `wearing`, `isGagged`, `isBlind`, `isDeaf`, `canUseHands`, `canMoveLegs`, `canChangePose`, `accessible`, `hasPenis`, `hasVagina`, `hasBreasts`.
 
-**Audience:** `selfOnly` | `othersOnly` | `both` — controls whether the action shows when targeting yourself vs others.
+**Audience:** `selfOnly` | `othersOnly` | `both` — controls whether the action shows when targeting yourself vs others (the **Who** field above).
 
 Tip: start with Audience **both** and add conditions only when you need them; overly strict rules hide the button with no obvious error.
 
 ## Effects
 
+![Effects](../assets/docs/settings-actions-effects.png)
+
 | Effect | Behaviour |
 |--------|-----------|
+| **Add arousal** | Off by default. When on, pick a Club **TEMPLATE** activity (e.g. Caress) so vanilla arousal prefs still apply |
 | **Sound** | Seidr peers play via a dictionary cue; SpankSkin also appends a `-Spank` style cue for vanilla |
 | **Pose** | Applies a Club pose and updates the character |
 
-## Icons
+Seidr remaps the custom action to the template for partners. The acted character needs Hybrid/Automatic as usual for Club arousal. There is **no** separate Hidden peer arousal protocol — delivery uses Club Type Activity behaviour.
 
-Each action shows an icon in the Activity Menu:
-
-| Source | Examples |
-|--------|----------|
-| **Seidr** (inline SVG) | Mark, Hand, Kiss, Heart, Pull, Spark, Cuddle, Star, Rope, Collar, Leash, Chain, Blindfold, Paddle, Candle, Vulva |
-| **Club Activity** | Stock `Icons/Activity/*.png` (Caress, Kiss, …) |
-
-**Select icon** opens a searchable grid. Icons apply when the Activity Menu opens (no need to re-save just to refresh the tile). Custom HTTPS URL icons are **not** offered in the picker (Club Activity buttons do not load remote images reliably).
+Chat text stays your action name; the template is for prefs / arousal only.
 
 ## Export / Import
+
+![Export](../assets/docs/settings-actions-export.png)
+
+![Import](../assets/docs/settings-actions-import.png)
 
 On the Actions tab:
 

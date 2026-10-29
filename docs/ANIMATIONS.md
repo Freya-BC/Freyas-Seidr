@@ -4,6 +4,8 @@ Animations are short **pose and face** clips that play on **you** (the local Pla
 
 Author under **`/seidr` → Animations**, then play from chat with `/animation` or `/ani`.
 
+![Animations tab](../assets/docs/settings-animations.png)
+
 ## When to use this
 
 Use Animations for a scripted expression or pose sequence on yourself (wave, blush sequence, kneel then stand, and so on). Optional Action text can announce the clip to the room when it starts.
@@ -28,6 +30,24 @@ Use Animations for a scripted expression or pose sequence on yourself (wave, blu
 6. **Save animation**.
 
 Wait steppers nudge by small increments; the UI shows the total wait for the clip. Stay under the 60 s total.
+
+### Pose steps
+
+![Pose steps](../assets/docs/settings-animations-steps.png)
+
+Each **+ Pose** row picks a Club pose and a **Wait (s)** before the next step. The header shows `Steps n/20 · Wait total … / 60s`.
+
+### Face steps
+
+![Face step](../assets/docs/settings-animations-face.png)
+
+Each **+ Face** row sets **Feature**, **Expression**, **Duration** (`keep` / timed), and **Wait (s)**.
+
+### Action text
+
+![Action text](../assets/docs/settings-animations-text.png)
+
+Optional line posted once when play starts (Club tags, max 500). Same token chips as Custom Actions.
 
 ## Playing
 

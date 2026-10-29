@@ -123,6 +123,8 @@ More detail: [`docs/UNDRESS.md`](docs/UNDRESS.md).
 
 Author under **Settings → Actions**. These appear in the **Club Activity Menu** (not a separate floating palette).
 
+![Actions tab](assets/docs/settings-actions.png)
+
 They are **different** from **Settings → Commands → Actions**, which are short names for `/a …` in chat.
 
 - Up to **50** actions (`n/50` in the UI).
@@ -131,13 +133,15 @@ They are **different** from **Settings → Commands → Actions**, which are sho
 - **Icons**: Seidr SVG builtins or Club Activity icons.
 - **Export / Import** clipboard envelopes (`SeidrAct1:` + LZ).
 
-More detail: [`docs/ACTIONS.md`](docs/ACTIONS.md).
+More detail (slots, conditions, icon picker, import/export screenshots): [`docs/ACTIONS.md`](docs/ACTIONS.md).
 
 ---
 
 ## Animations
 
 Author under **Settings → Animations**. Clips play on **you** only.
+
+![Animations tab](assets/docs/settings-animations.png)
 
 - Up to **50** animations, **20** steps each, **60 s** total wait.
 - Steps: **Pose** or **Face** + wait; optional Action text when the clip starts.
@@ -150,6 +154,8 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 ## Chat Commands
 
 ![Commands flow](assets/docs/commands-flow.png)
+
+![Commands tab](assets/docs/settings-commands.png)
 
 ```
 /a <member> <action>          # Settings → Commands bindings
@@ -213,6 +219,8 @@ For **room admins** (and on ChatAdmin create/edit):
 
 **Settings → Maps** manages the same library with Remote ↔ Local for Default and JSON import/export (imports are always Local only).
 
+![Maps tab](assets/docs/settings-maps.png)
+
 More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 ---
@@ -227,6 +235,8 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 
 ### General
 
+![General tab](assets/docs/settings-general.png)
+
 | Section | Options |
 |---------|---------|
 | **Fast Open Actions** | Enable, modifier, default Item\* slot |
@@ -239,9 +249,11 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 
 ### About
 
-Version, docs links, and **Tutorial** (repeatable guided tour).
+![About tab](assets/docs/settings-about.png)
 
-More detail: [`docs/SETTINGS.md`](docs/SETTINGS.md).
+Version, docs links, feature blurbs with **More**, and **Tutorial** (repeatable guided tour).
+
+Per-section screenshots and full option tables: [`docs/SETTINGS.md`](docs/SETTINGS.md).
 
 ---
 
