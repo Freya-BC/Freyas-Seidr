@@ -1,4 +1,4 @@
-/* Seidr v1.0.84 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.85 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.84";
+  Seidr.VERSION = "1.0.85";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -222,6 +222,17 @@
     if (mine && mine.hub === a && mine[slot] != null) return false;
     return true;
   }
+  function canJoin(hubs, joiner, hub, slot) {
+    const j = num(joiner);
+    const h = num(hub);
+    if (j == null || h == null || j === h || SLOTS.indexOf(slot) < 0) return false;
+    if (relation(hubs, j, h)) return false;
+    if (clusterOf(hubs, j)) return false;
+    const hubCluster = clusterOf(hubs, h);
+    if (hubCluster && hubCluster.hub !== h) return false;
+    if (occupant(hubs, h, slot) != null) return false;
+    return true;
+  }
   function canRemove(hubs, actor, target) {
     const a = num(actor);
     const t = num(target);
@@ -279,6 +290,9 @@
       const rel = relation(hubs, a, t);
       if (rel && rel.role === "satellite") return t;
     }
+    if (typeof activityName === "string" && activityName.indexOf("Seidr_Join") === 0) {
+      return t != null ? t : a;
+    }
     return a;
   }
   var SeidrState = {
@@ -293,6 +307,7 @@
     replaceHub,
     pruneMissing,
     canPlace,
+    canJoin,
     canRemove,
     canRemoveSlot,
     clearSlot,
@@ -1041,6 +1056,30 @@
       chat: "SourceCharacter cuddles TargetCharacter."
     },
     {
+      name: "Seidr_JoinLeft",
+      joinSlot: "left",
+      prereq: "Seidr_CanJoinLeft",
+      needsHands: true,
+      label: "Go Left",
+      chat: "SourceCharacter moves to TargetCharacter's left."
+    },
+    {
+      name: "Seidr_JoinRight",
+      joinSlot: "right",
+      prereq: "Seidr_CanJoinRight",
+      needsHands: true,
+      label: "Go Right",
+      chat: "SourceCharacter moves to TargetCharacter's right."
+    },
+    {
+      name: "Seidr_JoinCuddle",
+      joinSlot: "cuddle",
+      prereq: "Seidr_CanJoinCuddle",
+      needsHands: true,
+      label: "Cuddle Into",
+      chat: "SourceCharacter cuddles into TargetCharacter."
+    },
+    {
       name: "Seidr_RemoveLeft",
       removeSlot: "left",
       prereq: "Seidr_CanRemoveLeft",
@@ -1110,6 +1149,15 @@
     }
     if (name === "Seidr_Cuddle") {
       return seidrSvg(bg + '<circle cx="24" cy="28" r="8" fill="#f0e6d4"/><circle cx="40" cy="28" r="8" fill="#f0e6d4"/><path d="M16 46 Q32 34 48 46" fill="none" stroke="#e0b15a" stroke-width="4"/>');
+    }
+    if (name === "Seidr_JoinLeft") {
+      return seidrSvg(bg + '<circle cx="40" cy="32" r="9" fill="#e0b15a"/><path d="M38 16 L16 32 L38 48" fill="none" stroke="#f0e6d4" stroke-width="5" stroke-linejoin="round"/>');
+    }
+    if (name === "Seidr_JoinRight") {
+      return seidrSvg(bg + '<circle cx="24" cy="32" r="9" fill="#e0b15a"/><path d="M26 16 L48 32 L26 48" fill="none" stroke="#f0e6d4" stroke-width="5" stroke-linejoin="round"/>');
+    }
+    if (name === "Seidr_JoinCuddle") {
+      return seidrSvg(bg + '<circle cx="36" cy="28" r="9" fill="#e0b15a"/><circle cx="22" cy="30" r="7" fill="#f0e6d4"/><path d="M14 48 Q28 36 46 46" fill="none" stroke="#e0b15a" stroke-width="4"/>');
     }
     if (name === "Seidr_RemoveLeft") {
       return seidrSvg(bg + '<path d="M42 16 L20 32 L42 48" fill="none" stroke="#e07a7a" stroke-width="5"/><path d="M18 18 L46 46" stroke="#e07a7a" stroke-width="4"/>');
@@ -1235,6 +1283,15 @@
     if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
     return SeidrState.canPlace(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
   }
+  function seidrCanJoin(acting, acted, slot) {
+    if (!acting || !acted) return false;
+    if (typeof acting.MemberNumber !== "number" || typeof acted.MemberNumber !== "number") return false;
+    if (acting.MemberNumber === acted.MemberNumber) return false;
+    if (!seidrPeerOk(acted.MemberNumber)) return false;
+    if (!seidrAllowAct(acting, acted)) return false;
+    if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
+    return SeidrState.canJoin(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
+  }
   function seidrCanRemove(acting, acted) {
     if (!acting || !acted) return false;
     if (typeof acting.MemberNumber !== "number" || typeof acted.MemberNumber !== "number") return false;
@@ -1256,6 +1313,7 @@
     var act2 = seidrActivityByName(name);
     if (!act2 || typeof source !== "number" || typeof target !== "number") return hubs;
     if (act2.undress) return hubs;
+    if (act2.joinSlot) return SeidrState.applySlot(hubs, target, act2.joinSlot, source);
     if (act2.slot) return SeidrState.applySlot(hubs, source, act2.slot, target);
     if (act2.removeSlot) return SeidrState.clearSlot(hubs, source, act2.removeSlot);
     if (source === target) return SeidrState.leaveSelf(hubs, source);
@@ -1352,7 +1410,16 @@
       var letter = "";
       var tip = "";
       var active = false;
-      if (act2.slot) {
+      if (act2.joinSlot) {
+        if (focusedN != null) {
+          var joinHeld = SeidrState.occupant(hubs, focusedN, act2.joinSlot);
+          if (joinHeld === Player.MemberNumber) {
+            letter = act2.joinSlot === "cuddle" ? "C" : act2.joinSlot === "left" ? "L" : "R";
+            tip = act2.label + ": " + seidrCharName(focusedN);
+            active = true;
+          }
+        }
+      } else if (act2.slot) {
         var held = SeidrState.occupant(hubs, Player.MemberNumber, act2.slot);
         if (held != null) {
           letter = act2.slot === "cuddle" ? "C" : act2.slot === "left" ? "L" : "R";
@@ -1442,6 +1509,9 @@
         if (name === "Seidr_CanPullLeft") return seidrCanPlace(args[1], args[2], "left");
         if (name === "Seidr_CanPullRight") return seidrCanPlace(args[1], args[2], "right");
         if (name === "Seidr_CanCuddle") return seidrCanPlace(args[1], args[2], "cuddle");
+        if (name === "Seidr_CanJoinLeft") return seidrCanJoin(args[1], args[2], "left");
+        if (name === "Seidr_CanJoinRight") return seidrCanJoin(args[1], args[2], "right");
+        if (name === "Seidr_CanJoinCuddle") return seidrCanJoin(args[1], args[2], "cuddle");
         if (name === "Seidr_CanRemoveLeft") return seidrCanRemoveSlot(args[1], args[2], "left");
         if (name === "Seidr_CanRemoveRight") return seidrCanRemoveSlot(args[1], args[2], "right");
         if (name === "Seidr_CanRemoveCuddle") return seidrCanRemoveSlot(args[1], args[2], "cuddle");
@@ -12380,7 +12450,7 @@
   var ABOUT_FEATURES = [
     {
       title: "Holds",
-      blurb: "Pull Left / Right, Cuddle, Remove, and Leave on Item Torso \u2014 shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
+      blurb: "Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso \u2014 shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
       docPath: "/docs/view.html#HOLDS"
     },
     {
@@ -13292,8 +13362,8 @@
       {
         title: "Holds & Undress",
         blocks: [
-          "Holds live on Item Torso in the Club Activity menu: Pull Left, Pull Right, Cuddle, Remove Left/Right/Cuddle, and Leave.",
-          "Pull slides someone beside you; Cuddle stacks them in front. Both of you need Seidr for the shared pose to sync.",
+          "Holds live on Item Torso in the Club Activity menu: Pull Left/Right, Cuddle, Go Left/Right, Cuddle Into, Remove, and Leave.",
+          "Pull / Cuddle make you the hub; Go / Cuddle Into put you on their slots. Both of you need Seidr for the shared pose to sync.",
           "Undress activities appear on clothing zones (and Undress all when available). Echo cuddle/pull tokens make Seidr yield that hold so Echo can take over."
         ],
         prepare: function() {

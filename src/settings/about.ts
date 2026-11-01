@@ -12,7 +12,7 @@ const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Holds",
 		blurb:
-			"Pull Left / Right, Cuddle, Remove, and Leave on Item Torso — shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
+			"Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso — shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
 		docPath: "/docs/view.html#HOLDS",
 	},
 	{

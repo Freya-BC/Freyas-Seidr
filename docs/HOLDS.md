@@ -1,6 +1,6 @@
 # Holds
 
-Holds let you **Pull** someone to your left or right, or **Cuddle** them close, with a shared pose that syncs between Seidr players. Everything lives in the normal Club **Activity** menu on **Item Torso** — no extra floating panel.
+Holds let you **Pull** someone to your left or right, **Cuddle** them close, or **Go** / **Cuddle Into** their slots yourself, with a shared pose that syncs between Seidr players. Everything lives in the normal Club **Activity** menu on **Item Torso** — no extra floating panel.
 
 ![Hold slots](../assets/docs/holds-slots.png)
 
@@ -20,22 +20,28 @@ Use holds when you want a visible paired pose with another Seidr player in the s
 
 | Button | What happens |
 |--------|----------------|
-| **Pull Left** | Target moves to your left slot. |
-| **Pull Right** | Target moves to your right slot. |
-| **Cuddle** | Target moves into a close cuddle in front of you. Does **not** clear left/right. |
-| **Remove Left / Right / Cuddle** | Clears that person from **your** corresponding slot. |
+| **Pull Left** | Target moves to **your** left slot (you become the hub). |
+| **Pull Right** | Target moves to **your** right slot. |
+| **Cuddle** | Target moves into a close cuddle in front of **you**. Does **not** clear left/right. |
+| **Go Left** | **You** move to the target’s left slot (they become the hub). |
+| **Go Right** | **You** move to the target’s right slot. |
+| **Cuddle Into** | **You** cuddle into the target (they become the hub). Does **not** clear their left/right. |
+| **Remove Left / Right / Cuddle** | Clears that person from **your** corresponding slot (hub only). |
 | **Leave** | You step out of **someone else’s** hold on you. |
 
 ### Slot rules
 
-- You are the **hub**. Each of left, right, and cuddle can hold **one** person.
-- Pulling into an already filled side **releases** the previous person on that side.
-- Cuddle does not kick people off your left/right.
-- A held person is not also a hub for someone else at the same time (Seidr keeps one cluster role per member).
+- **Pull / Cuddle** make **you** the hub. **Go Left / Go Right / Cuddle Into** make the **clicked person** the hub.
+- Each of left, right, and cuddle can hold **one** person on a hub.
+- Pulling or joining into an already filled side **releases** the previous person on that side.
+- Cuddle / Cuddle Into do not kick people off left/right.
+- A held person is not also a hub for someone else at the same time (Seidr keeps one cluster role per member). Joining while you already hub others abandons your pile.
+- You must be free (not already held or hubbing) to use Go / Cuddle Into.
 
 ### Badges
 
 - A gold **L**, **R**, or **C** mark on the activity button shows that slot is filled.
+- On Pull / Remove, badges reflect **your** hub slots; on Go / Cuddle Into, they mark when **you** occupy that slot on the focused character.
 - The button you share with that person is outlined so you can see the active hold at a glance.
 
 ## Pose vs hitbox

@@ -66,7 +66,7 @@ The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab co
 | Area | What it does |
 |------|----------------|
 | **Welcome / Tutorial** | One-time chat welcome; About → Tutorial walks Settings + autocomplete |
-| **Holds** | Pull Left / Right, Cuddle, Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace on void disconnect) |
+| **Holds** | Pull / Cuddle (you hub) or Go Left/Right / Cuddle Into (they hub); Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace) |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
 | **Animations** | Pose/face clips on you; play with `/animation` / `/ani` |
@@ -88,8 +88,10 @@ Open another character → **Item Torso** → **Activities**:
 
 | Activity | Effect |
 |----------|--------|
-| **Pull Left** / **Pull Right** | Place them on that side. One person per slot; a new pull into a filled slot releases the previous person. |
-| **Cuddle** | Close hold. Does not clear left/right. |
+| **Pull Left** / **Pull Right** | Place them on **your** side (you are hub). One person per slot; a new pull into a filled slot releases the previous person. |
+| **Cuddle** | Close hold in front of you. Does not clear left/right. |
+| **Go Left** / **Go Right** | You move to **their** side (they are hub). |
+| **Cuddle Into** | You cuddle into them (they are hub). Does not clear their left/right. |
 | **Remove Left / Right / Cuddle** | Clear that person from your slot. |
 | **Leave** | Step out of someone else’s hold. |
 

@@ -199,6 +199,19 @@ function canPlace(hubs: any, actor: unknown, target: unknown, slot: string) {
 	return true;
 }
 
+/** Joiner sits on hub's slot (hub = clicked person). Joiner must be free; hub may already be a hub. */
+function canJoin(hubs: any, joiner: unknown, hub: unknown, slot: string) {
+	const j = num(joiner);
+	const h = num(hub);
+	if (j == null || h == null || j === h || (SLOTS as readonly string[]).indexOf(slot) < 0) return false;
+	if (relation(hubs, j, h)) return false;
+	if (clusterOf(hubs, j)) return false;
+	const hubCluster = clusterOf(hubs, h);
+	if (hubCluster && hubCluster.hub !== h) return false;
+	if (occupant(hubs, h, slot) != null) return false;
+	return true;
+}
+
 function canRemove(hubs: any, actor: unknown, target: unknown) {
 	const a = num(actor);
 	const t = num(target);
@@ -261,6 +274,9 @@ function affectedHub(hubs: any, actor: unknown, target: unknown, activityName: s
 		const rel = relation(hubs, a, t);
 		if (rel && rel.role === "satellite") return t;
 	}
+	if (typeof activityName === "string" && activityName.indexOf("Seidr_Join") === 0) {
+		return t != null ? t : a;
+	}
 	return a;
 }
 
@@ -276,6 +292,7 @@ export const SeidrState = {
 	replaceHub,
 	pruneMissing,
 	canPlace,
+	canJoin,
 	canRemove,
 	canRemoveSlot,
 	clearSlot,

@@ -146,8 +146,8 @@ function buildSteps(): TourStep[] {
 		{
 			title: "Holds & Undress",
 			blocks: [
-				"Holds live on Item Torso in the Club Activity menu: Pull Left, Pull Right, Cuddle, Remove Left/Right/Cuddle, and Leave.",
-				"Pull slides someone beside you; Cuddle stacks them in front. Both of you need Seidr for the shared pose to sync.",
+				"Holds live on Item Torso in the Club Activity menu: Pull Left/Right, Cuddle, Go Left/Right, Cuddle Into, Remove, and Leave.",
+				"Pull / Cuddle make you the hub; Go / Cuddle Into put you on their slots. Both of you need Seidr for the shared pose to sync.",
 				"Undress activities appear on clothing zones (and Undress all when available). Echo cuddle/pull tokens make Seidr yield that hold so Echo can take over.",
 			],
 			prepare: function () {
