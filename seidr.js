@@ -1,4 +1,4 @@
-/* Seidr v1.0.85 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v1.0.91 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.85";
+  Seidr.VERSION = "1.0.91";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2966,7 +2966,13 @@
   }
 
   // src/draw.ts
+  var SEIDR_PAGE_SIZE = 10;
   var seidrNatural = {};
+  function seidrClearNatural() {
+    Object.keys(seidrNatural).forEach(function(key) {
+      delete seidrNatural[key];
+    });
+  }
   var SEIDR_CLUSTER_NAME_Y = 968;
   var seidrNameDrawCtx = null;
   function seidrClusterNameMode() {
@@ -3037,31 +3043,14 @@
     });
     return out;
   }
-  function seidrReorderDrawlist() {
-    if (typeof ChatRoomCharacterDrawlist === "undefined" || !Array.isArray(ChatRoomCharacterDrawlist)) return;
-    var old = ChatRoomCharacterDrawlist;
-    if (!old.length) return;
-    var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
-    if (!hubs) return;
+  function seidrPackList(list, hubs) {
+    if (!Array.isArray(list) || !list.length || !hubs) return Array.isArray(list) ? list.slice() : [];
     var byId = {};
     var i;
-    for (i = 0; i < old.length; i++) {
-      var c = old[i];
+    for (i = 0; i < list.length; i++) {
+      var c = list[i];
       if (c && typeof c.MemberNumber === "number") byId[c.MemberNumber] = c;
     }
-    Object.keys(hubs).forEach(function(key) {
-      var cluster2 = SeidrState.clusterOf(hubs, key);
-      if (!cluster2) return;
-      var present = seidrClusterOrder(cluster2).some(function(id) {
-        return !!byId[id];
-      });
-      if (!present) return;
-      seidrClusterOrder(cluster2).forEach(function(id) {
-        if (byId[id]) return;
-        var found = seidrFindChar(id);
-        if (found && !seidrInEcho(found)) byId[id] = found;
-      });
-    });
     var used = {};
     var nextList = [];
     function emitCluster(cluster2) {
@@ -3074,8 +3063,8 @@
       });
       return block;
     }
-    for (i = 0; i < old.length; i++) {
-      var character = old[i];
+    for (i = 0; i < list.length; i++) {
+      var character = list[i];
       if (!character || typeof character.MemberNumber !== "number") continue;
       if (used[character.MemberNumber]) continue;
       if (seidrInEcho(character)) {
@@ -3099,26 +3088,154 @@
       nextList.push(byId[id]);
       used[id] = true;
     });
+    return nextList;
+  }
+  function seidrPageUnits(packed, hubs) {
+    var units = [];
+    for (var i = 0; i < packed.length; i++) {
+      var ch = packed[i];
+      var cluster = ch && typeof ch.MemberNumber === "number" && !seidrInEcho(ch) ? SeidrState.clusterOf(hubs, ch.MemberNumber) : null;
+      var last = units.length ? units[units.length - 1] : null;
+      if (cluster && last && last.hub === cluster.hub) {
+        last.members.push(ch);
+        continue;
+      }
+      units.push({ hub: cluster ? cluster.hub : null, members: [ch] });
+    }
+    return units;
+  }
+  function seidrPaginate(list, hubs) {
+    var packed = hubs ? seidrPackList(list, hubs) : Array.isArray(list) ? list.slice() : [];
+    if (packed.length <= SEIDR_PAGE_SIZE) return { page1: packed, page2: [] };
+    var units = seidrPageUnits(packed, hubs || {});
+    var onPage1 = [];
+    var count1 = 0;
+    units.forEach(function(u2, idx) {
+      if (u2.hub == null) return;
+      if (count1 + u2.members.length > SEIDR_PAGE_SIZE) return;
+      onPage1[idx] = true;
+      count1 += u2.members.length;
+    });
+    units.forEach(function(u2, idx) {
+      if (u2.hub != null || count1 >= SEIDR_PAGE_SIZE) return;
+      onPage1[idx] = true;
+      count1 += 1;
+    });
+    var page1Units = [];
+    var page2Units = [];
+    units.forEach(function(u2, idx) {
+      (onPage1[idx] ? page1Units : page2Units).push(u2);
+    });
+    var count2 = packed.length - count1;
+    if (count2 > SEIDR_PAGE_SIZE && count1 < SEIDR_PAGE_SIZE) {
+      var need = SEIDR_PAGE_SIZE - count1;
+      for (var k = page2Units.length - 1; k >= 0; k--) {
+        var u = page2Units[k];
+        if (u.hub == null || u.members.length <= need) continue;
+        page1Units.push({ hub: u.hub, members: u.members.slice(0, need) });
+        page2Units[k] = { hub: u.hub, members: u.members.slice(need) };
+        break;
+      }
+    }
+    function flat(arr) {
+      var out = [];
+      arr.forEach(function(u2) {
+        out.push.apply(out, u2.members);
+      });
+      return out;
+    }
+    return { page1: flat(page1Units), page2: flat(page2Units) };
+  }
+  function seidrApplyPages() {
+    if (!seidrViewActive()) return;
+    if (typeof ChatRoomCharacter === "undefined" || !Array.isArray(ChatRoomCharacter)) return;
+    if (typeof ChatRoomCharacterViewCharacterCountTotal !== "number") return;
+    var total = ChatRoomCharacterViewCharacterCountTotal;
+    if (total <= SEIDR_PAGE_SIZE || total !== ChatRoomCharacter.length) return;
+    var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
+    if (!hubs) return;
+    var pages = seidrPaginate(ChatRoomCharacter, hubs);
+    var offset = typeof ChatRoomCharacterViewOffset === "number" ? ChatRoomCharacterViewOffset : 0;
+    var page = offset !== 0 ? pages.page2 : pages.page1;
+    if (!page.length) return;
+    ChatRoomCharacterDrawlist = page;
+    ChatRoomCharacterViewCharacterCount = page.length;
+  }
+  function seidrReorderDrawlist() {
+    if (typeof ChatRoomCharacterDrawlist === "undefined" || !Array.isArray(ChatRoomCharacterDrawlist)) return;
+    var old = ChatRoomCharacterDrawlist;
+    if (!old.length) return;
+    var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
+    if (!hubs) return;
+    var nextList = seidrPackList(old, hubs);
     ChatRoomCharacterDrawlist = nextList;
     if (typeof ChatRoomCharacterViewCharacterCount === "number") {
       ChatRoomCharacterViewCharacterCount = nextList.length;
     }
   }
+  var SEIDR_ROW_Y_GAP = 300;
+  function seidrAverageSeats(seats, zoom) {
+    var z = typeof zoom === "number" ? zoom : 1;
+    if (!seats || !seats.length) return null;
+    var sumX = 0;
+    var sumY = 0;
+    for (var i = 0; i < seats.length; i++) {
+      sumX += seats[i].X;
+      sumY += seats[i].Y;
+    }
+    return { X: sumX / seats.length, Y: sumY / seats.length, Zoom: z };
+  }
   function seidrSharedCenter(cluster, zoom) {
     var z = typeof zoom === "number" ? zoom : 1;
     if (!cluster) return null;
-    var sumX = 0;
-    var sumY = 0;
-    var count = 0;
+    var seats = [];
     seidrClusterOrder(cluster).forEach(function(id) {
       var pos = seidrNatural[id];
-      if (!pos || typeof pos.X !== "number") return;
-      sumX += pos.X;
-      sumY += pos.Y;
-      count += 1;
+      if (!pos || typeof pos.X !== "number" || typeof pos.Y !== "number") return;
+      seats.push({ id, X: pos.X, Y: pos.Y });
     });
-    if (!count) return null;
-    return { X: sumX / count, Y: sumY / count, Zoom: z };
+    if (!seats.length) return null;
+    var minY = seats[0].Y;
+    var maxY = seats[0].Y;
+    for (var i = 1; i < seats.length; i++) {
+      if (seats[i].Y < minY) minY = seats[i].Y;
+      if (seats[i].Y > maxY) maxY = seats[i].Y;
+    }
+    if (maxY - minY <= SEIDR_ROW_Y_GAP) {
+      return seidrAverageSeats(seats, z);
+    }
+    var rows = [];
+    seats.forEach(function(seat) {
+      var row = null;
+      for (var r2 = 0; r2 < rows.length; r2++) {
+        if (Math.abs(rows[r2].y - seat.Y) <= SEIDR_ROW_Y_GAP) {
+          row = rows[r2];
+          break;
+        }
+      }
+      if (!row) {
+        row = { y: seat.Y, seats: [] };
+        rows.push(row);
+      }
+      row.seats.push(seat);
+    });
+    var chosen = rows[0];
+    for (var r = 1; r < rows.length; r++) {
+      var cand = rows[r];
+      if (cand.seats.length > chosen.seats.length) {
+        chosen = cand;
+        continue;
+      }
+      if (cand.seats.length < chosen.seats.length) continue;
+      var candHasHub = cand.seats.some(function(s) {
+        return s.id === cluster.hub;
+      });
+      var chosenHasHub = chosen.seats.some(function(s) {
+        return s.id === cluster.hub;
+      });
+      if (candHasHub && !chosenHasHub) chosen = cand;
+    }
+    return seidrAverageSeats(chosen.seats, z);
   }
   function seidrLiveOffsets() {
     var o = Seidr.drawOffsets;
@@ -3187,8 +3304,10 @@
     if (seidrInEcho(character)) return 0;
     var cluster = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
     if (!cluster) return 0;
-    if (cluster.cuddle === character.MemberNumber) return 2;
-    if (cluster.hub === character.MemberNumber) return 1;
+    if (cluster.left === character.MemberNumber) return 1;
+    if (cluster.right === character.MemberNumber) return 2;
+    if (cluster.hub === character.MemberNumber) return 3;
+    if (cluster.cuddle === character.MemberNumber) return 4;
     return 0;
   }
   function seidrHoldFrontCharacter(args) {
@@ -3207,7 +3326,7 @@
     });
     for (var i = 0; i < list.length; i++) {
       try {
-        fn.apply(null, list[i].args);
+        fn.apply(null, seidrApplyDrawPose(list[i].args));
       } catch (e) {
         console.warn("[Seidr] front draw", e);
       }
@@ -3241,6 +3360,11 @@
       }
       var result = next(args);
       try {
+        seidrApplyPages();
+      } catch (ePage) {
+        console.warn("[Seidr] pages", ePage);
+      }
+      try {
         seidrReorderDrawlist();
       } catch (e) {
         console.warn("[Seidr] reorder", e);
@@ -3249,7 +3373,6 @@
     });
     Seidr.hookFunction("DrawCharacter", 1, function(args, next) {
       if (seidrInRoomLoop) {
-        seidrApplyDrawPose(args);
         if (seidrHoldFrontCharacter(args)) return;
       } else if (!seidrFrontReplay) {
         return next(args);
@@ -3306,6 +3429,7 @@
         seidrReorderDrawlist();
       } catch (e) {
       }
+      seidrClearNatural();
       var original = args[0];
       args[0] = function(charIdx, charX, charY, space, zoom) {
         try {
@@ -3364,7 +3488,12 @@
     drawPose: seidrDrawPose,
     statusCoords: seidrStatusCoords,
     clusterOrder: seidrClusterOrder,
-    reorder: seidrReorderDrawlist
+    reorder: seidrReorderDrawlist,
+    frontRank: seidrFrontRank,
+    packList: seidrPackList,
+    paginate: seidrPaginate,
+    clearNatural: seidrClearNatural,
+    pageSize: SEIDR_PAGE_SIZE
   };
 
   // src/arousalBars.ts

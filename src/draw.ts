@@ -6,12 +6,24 @@ import { SeidrState } from "./state";
 import { seidrFindChar, seidrInEcho, seidrReconcileEcho } from "./room";
 
 declare const CharacterNickname: ((C: any) => string) | undefined;
-declare const ChatRoomCharacter: any;
+declare var ChatRoomCharacter: any;
+declare var ChatRoomCharacterDrawlist: any;
+declare var ChatRoomCharacterViewCharacterCount: number;
+declare var ChatRoomCharacterViewCharacterCountTotal: number;
+declare var ChatRoomCharacterViewOffset: number;
 declare const CommonPhotoMode: any;
 declare const CurrentCharacter: any;
 declare const MouseIn: ((x: number, y: number, w: number, h: number) => boolean) | undefined;
 
+/** Club character-view page size (Echo page-split boundary at index 10). */
+var SEIDR_PAGE_SIZE = 10;
+
 export const seidrNatural: Record<number, { X: number; Y: number; Zoom?: number; Space?: number }> = {};
+
+/** Seats are per-frame: off-page members must not keep pulling the pose. */
+function seidrClearNatural() {
+	Object.keys(seidrNatural).forEach(function (key) { delete seidrNatural[key as any]; });
+}
 
 /** Character-local Y for cluster names (above arousal bar at 992). */
 const SEIDR_CLUSTER_NAME_Y = 968;
@@ -104,42 +116,24 @@ function seidrClusterOrder(cluster) {
 }
 
 /**
- * Put each hold in adjacent drawlist seats (Echo ChatRoomOrder).
- * Clicks then use those full normal hitboxes; art is pulled together separately.
+ * Pack Seidr clusters adjacent (left → hub → cuddle → right). Pure: no expand.
+ * Echo ChatRoomOrder style — page cohesion runs on the full room list before Club slices.
  */
-function seidrReorderDrawlist() {
-	if (typeof ChatRoomCharacterDrawlist === "undefined" || !Array.isArray(ChatRoomCharacterDrawlist)) return;
-	var old = ChatRoomCharacterDrawlist;
-	if (!old.length) return;
-	var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
-	if (!hubs) return;
-
-	var byId = {};
+function seidrPackList(list: any[], hubs: any): any[] {
+	if (!Array.isArray(list) || !list.length || !hubs) return Array.isArray(list) ? list.slice() : [];
+	var byId: Record<number, any> = {};
 	var i;
-	for (i = 0; i < old.length; i++) {
-		var c = old[i];
+	for (i = 0; i < list.length; i++) {
+		var c: any = list[i];
 		if (c && typeof c.MemberNumber === "number") byId[c.MemberNumber] = c;
 	}
 
-	// Bring missing cluster partners into the draw list (Echo focus-mode expand).
-	Object.keys(hubs).forEach(function (key) {
-		var cluster = SeidrState.clusterOf(hubs, key);
-		if (!cluster) return;
-		var present = seidrClusterOrder(cluster).some(function (id) { return !!byId[id]; });
-		if (!present) return;
-		seidrClusterOrder(cluster).forEach(function (id) {
-			if (byId[id]) return;
-			var found = seidrFindChar(id);
-			if (found && !seidrInEcho(found)) byId[id] = found;
-		});
-	});
+	var used: Record<number, boolean> = {};
+	var nextList: any[] = [];
 
-	var used = {};
-	var nextList = [];
-
-	function emitCluster(cluster) {
-		var block = [];
-		seidrClusterOrder(cluster).forEach(function (id) {
+	function emitCluster(cluster: any) {
+		var block: any[] = [];
+		seidrClusterOrder(cluster).forEach(function (id: number) {
 			var ch = byId[id];
 			if (!ch || used[id] || seidrInEcho(ch)) return;
 			used[id] = true;
@@ -148,8 +142,8 @@ function seidrReorderDrawlist() {
 		return block;
 	}
 
-	for (i = 0; i < old.length; i++) {
-		var character = old[i];
+	for (i = 0; i < list.length; i++) {
+		var character: any = list[i];
 		if (!character || typeof character.MemberNumber !== "number") continue;
 		if (used[character.MemberNumber]) continue;
 		if (seidrInEcho(character)) {
@@ -175,28 +169,186 @@ function seidrReorderDrawlist() {
 		used[id] = true;
 	});
 
+	return nextList;
+}
+
+/** Split a packed list into units: one per Seidr cluster, one per everyone else. */
+function seidrPageUnits(packed: any[], hubs: any): { hub: number | null; members: any[] }[] {
+	var units: { hub: number | null; members: any[] }[] = [];
+	for (var i = 0; i < packed.length; i++) {
+		var ch: any = packed[i];
+		var cluster = ch && typeof ch.MemberNumber === "number" && !seidrInEcho(ch)
+			? SeidrState.clusterOf(hubs, ch.MemberNumber)
+			: null;
+		var last = units.length ? units[units.length - 1] : null;
+		if (cluster && last && last.hub === cluster.hub) {
+			last.members.push(ch);
+			continue;
+		}
+		units.push({ hub: cluster ? cluster.hub : null, members: [ch] });
+	}
+	return units;
+}
+
+/**
+ * Seidr-owned pages: clusters stay whole, page 1 filled first (clusters, then singles).
+ * Page 1 may be short. If page 2 would exceed a page, the last page-2 cluster is
+ * split to top page 1 up to exactly SEIDR_PAGE_SIZE.
+ */
+function seidrPaginate(list: any[], hubs: any): { page1: any[]; page2: any[] } {
+	var packed = hubs ? seidrPackList(list, hubs) : (Array.isArray(list) ? list.slice() : []);
+	if (packed.length <= SEIDR_PAGE_SIZE) return { page1: packed, page2: [] };
+
+	var units = seidrPageUnits(packed, hubs || {});
+	// Clusters claim page 1 first; singles fill the remaining seats. Order kept per page.
+	var onPage1: boolean[] = [];
+	var count1 = 0;
+	units.forEach(function (u, idx) {
+		if (u.hub == null) return;
+		if (count1 + u.members.length > SEIDR_PAGE_SIZE) return;
+		onPage1[idx] = true;
+		count1 += u.members.length;
+	});
+	units.forEach(function (u, idx) {
+		if (u.hub != null || count1 >= SEIDR_PAGE_SIZE) return;
+		onPage1[idx] = true;
+		count1 += 1;
+	});
+	var page1Units: { hub: number | null; members: any[] }[] = [];
+	var page2Units: { hub: number | null; members: any[] }[] = [];
+	units.forEach(function (u, idx) {
+		(onPage1[idx] ? page1Units : page2Units).push(u);
+	});
+
+	var count2 = packed.length - count1;
+	if (count2 > SEIDR_PAGE_SIZE && count1 < SEIDR_PAGE_SIZE) {
+		var need = SEIDR_PAGE_SIZE - count1;
+		for (var k = page2Units.length - 1; k >= 0; k--) {
+			var u = page2Units[k];
+			if (u.hub == null || u.members.length <= need) continue;
+			page1Units.push({ hub: u.hub, members: u.members.slice(0, need) });
+			page2Units[k] = { hub: u.hub, members: u.members.slice(need) };
+			break;
+		}
+	}
+
+	function flat(arr: { members: any[] }[]) {
+		var out: any[] = [];
+		arr.forEach(function (u) { out.push.apply(out, u.members); });
+		return out;
+	}
+	return { page1: flat(page1Units), page2: flat(page2Units) };
+}
+
+/**
+ * After Club's UpdateDisplay: replace its 10-slice with Seidr pages.
+ * Only when unfiltered (no focus / VR / blind-adjacent / single render),
+ * i.e. Club's total equals the full room.
+ */
+function seidrApplyPages() {
+	if (!seidrViewActive()) return;
+	if (typeof ChatRoomCharacter === "undefined" || !Array.isArray(ChatRoomCharacter)) return;
+	if (typeof ChatRoomCharacterViewCharacterCountTotal !== "number") return;
+	var total = ChatRoomCharacterViewCharacterCountTotal;
+	if (total <= SEIDR_PAGE_SIZE || total !== ChatRoomCharacter.length) return;
+	var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
+	if (!hubs) return;
+	var pages = seidrPaginate(ChatRoomCharacter, hubs);
+	var offset = typeof ChatRoomCharacterViewOffset === "number" ? ChatRoomCharacterViewOffset : 0;
+	var page = offset !== 0 ? pages.page2 : pages.page1;
+	if (!page.length) return;
+	ChatRoomCharacterDrawlist = page;
+	ChatRoomCharacterViewCharacterCount = page.length;
+}
+
+/**
+ * Put each hold in adjacent drawlist seats (Echo ChatRoomOrder).
+ * No off-page expand — Seidr pages keep partners on the shown page.
+ */
+function seidrReorderDrawlist() {
+	if (typeof ChatRoomCharacterDrawlist === "undefined" || !Array.isArray(ChatRoomCharacterDrawlist)) return;
+	var old = ChatRoomCharacterDrawlist;
+	if (!old.length) return;
+	var hubs = Seidr.getHubs ? Seidr.getHubs() : null;
+	if (!hubs) return;
+
+	var nextList = seidrPackList(old, hubs);
 	ChatRoomCharacterDrawlist = nextList;
 	if (typeof ChatRoomCharacterViewCharacterCount === "number") {
 		ChatRoomCharacterViewCharacterCount = nextList.length;
 	}
 }
 
-/** Average of the cluster's natural standing seats (Echo SharedCenter). */
+/**
+ * Echo same-line threshold (|ΔY|). Seidr does not use Echo's always-next row:
+ * multi-row clusters pick majority of seats, hub's row on a tie.
+ */
+var SEIDR_ROW_Y_GAP = 300;
+
+function seidrAverageSeats(seats, zoom) {
+	var z = typeof zoom === "number" ? zoom : 1;
+	if (!seats || !seats.length) return null;
+	var sumX = 0;
+	var sumY = 0;
+	for (var i = 0; i < seats.length; i++) {
+		sumX += seats[i].X;
+		sumY += seats[i].Y;
+	}
+	return { X: sumX / seats.length, Y: sumY / seats.length, Zoom: z };
+}
+
+/** Average of the cluster's natural standing seats (Echo SharedCenter + majority row). */
 function seidrSharedCenter(cluster, zoom) {
 	var z = typeof zoom === "number" ? zoom : 1;
 	if (!cluster) return null;
-	var sumX = 0;
-	var sumY = 0;
-	var count = 0;
+	var seats = [];
 	seidrClusterOrder(cluster).forEach(function (id) {
 		var pos = seidrNatural[id];
-		if (!pos || typeof pos.X !== "number") return;
-		sumX += pos.X;
-		sumY += pos.Y;
-		count += 1;
+		if (!pos || typeof pos.X !== "number" || typeof pos.Y !== "number") return;
+		seats.push({ id: id, X: pos.X, Y: pos.Y });
 	});
-	if (!count) return null;
-	return { X: sumX / count, Y: sumY / count, Zoom: z };
+	if (!seats.length) return null;
+
+	var minY = seats[0].Y;
+	var maxY = seats[0].Y;
+	for (var i = 1; i < seats.length; i++) {
+		if (seats[i].Y < minY) minY = seats[i].Y;
+		if (seats[i].Y > maxY) maxY = seats[i].Y;
+	}
+	if (maxY - minY <= SEIDR_ROW_Y_GAP) {
+		return seidrAverageSeats(seats, z);
+	}
+
+	// Bucket by row (Y within SEIDR_ROW_Y_GAP). Majority wins; tie → hub's row.
+	var rows = [];
+	seats.forEach(function (seat) {
+		var row = null;
+		for (var r = 0; r < rows.length; r++) {
+			if (Math.abs(rows[r].y - seat.Y) <= SEIDR_ROW_Y_GAP) {
+				row = rows[r];
+				break;
+			}
+		}
+		if (!row) {
+			row = { y: seat.Y, seats: [] };
+			rows.push(row);
+		}
+		row.seats.push(seat);
+	});
+
+	var chosen = rows[0];
+	for (var r = 1; r < rows.length; r++) {
+		var cand = rows[r];
+		if (cand.seats.length > chosen.seats.length) {
+			chosen = cand;
+			continue;
+		}
+		if (cand.seats.length < chosen.seats.length) continue;
+		var candHasHub = cand.seats.some(function (s) { return s.id === cluster.hub; });
+		var chosenHasHub = chosen.seats.some(function (s) { return s.id === cluster.hub; });
+		if (candHasHub && !chosenHasHub) chosen = cand;
+	}
+	return seidrAverageSeats(chosen.seats, z);
 }
 
 /**
@@ -282,17 +434,24 @@ function seidrApplyDrawPose(args) {
 	return args;
 }
 
+/**
+ * Defer all clustered DrawCharacter to post-loop replay so Club's per-row
+ * background redraw cannot wipe sides whose pose sits on a later row.
+ * Order: left → right → hub → cuddle.
+ */
 function seidrFrontRank(character) {
 	if (!character || typeof character.MemberNumber !== "number") return 0;
 	if (seidrInEcho(character)) return 0;
 	var cluster = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
 	if (!cluster) return 0;
-	if (cluster.cuddle === character.MemberNumber) return 2;
-	if (cluster.hub === character.MemberNumber) return 1;
+	if (cluster.left === character.MemberNumber) return 1;
+	if (cluster.right === character.MemberNumber) return 2;
+	if (cluster.hub === character.MemberNumber) return 3;
+	if (cluster.cuddle === character.MemberNumber) return 4;
 	return 0;
 }
 
-/** Capture already-posed DrawCharacter args for hub/cuddle z-order. */
+/** Capture already-posed DrawCharacter args for cluster z-order replay. */
 function seidrHoldFrontCharacter(args) {
 	if (!seidrInRoomLoop || !seidrFrontCapture) return false;
 	var rank = seidrFrontRank(args[0]);
@@ -308,7 +467,8 @@ function seidrReplayFront(captured) {
 	var list = captured.characters.slice().sort(function (a, b) { return a.rank - b.rank; });
 	for (var i = 0; i < list.length; i++) {
 		try {
-			fn.apply(null, list[i].args);
+			// Pose after the loop: every on-page seat for this frame is recorded.
+			fn.apply(null, seidrApplyDrawPose(list[i].args));
 		} catch (e) {
 			console.warn("[Seidr] front draw", e);
 		}
@@ -347,13 +507,13 @@ Seidr.installDraw = function () {
 	Seidr.tryHook("ChatRoomUpdateDisplay", "ChatRoomUpdateDisplay", 10, function (args, next) {
 		try { seidrReconcileEcho(); } catch (e) { /* ignore */ }
 		var result = next(args);
+		try { seidrApplyPages(); } catch (ePage) { console.warn("[Seidr] pages", ePage); }
 		try { seidrReorderDrawlist(); } catch (e) { console.warn("[Seidr] reorder", e); }
 		return result;
 	});
 
 	Seidr.hookFunction("DrawCharacter", 1, function (args, next) {
 		if (seidrInRoomLoop) {
-			seidrApplyDrawPose(args);
 			if (seidrHoldFrontCharacter(args)) return;
 		} else if (!seidrFrontReplay) {
 			return next(args);
@@ -410,6 +570,7 @@ Seidr.installDraw = function () {
 	Seidr.hookFunction("ChatRoomCharacterViewLoopCharacters", 5, function (args, next) {
 		if (!seidrViewActive()) return next(args);
 		try { seidrReorderDrawlist(); } catch (e) { /* ignore */ }
+		seidrClearNatural();
 		var original = args[0];
 		args[0] = function (charIdx, charX, charY, space, zoom) {
 			try {
@@ -474,4 +635,9 @@ Seidr._draw = {
 	statusCoords: seidrStatusCoords,
 	clusterOrder: seidrClusterOrder,
 	reorder: seidrReorderDrawlist,
+	frontRank: seidrFrontRank,
+	packList: seidrPackList,
+	paginate: seidrPaginate,
+	clearNatural: seidrClearNatural,
+	pageSize: SEIDR_PAGE_SIZE,
 };
