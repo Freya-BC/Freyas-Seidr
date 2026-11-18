@@ -1,4 +1,4 @@
-/* Seidr v2.0.15 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.17 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.15";
+  Seidr.VERSION = "2.0.17";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -14110,7 +14110,7 @@
       if (!onProgress) return;
       onProgress({ phase, added, pending, total, message });
     }
-    report("scan", 0, total, "Scanning inventory (BCC-style)\u2026");
+    report("scan", 0, total, "Scanning inventory\u2026");
     await seidrCheatYield();
     const ids = [];
     const YIELD_EVERY = 200;
@@ -16575,7 +16575,7 @@
       "</details>",
       '<details class="seidr-settings-sec">',
       "<summary>Cheats</summary>",
-      '<p class="seidr-settings-hint">Self only. Same approach as BCC Get All Items (AssetFemale3DCG + InventoryAdd, then one sync).</p>',
+      '<p class="seidr-settings-hint">Self only. Adds every missing Club inventory item, then syncs once.</p>',
       '<div class="seidr-settings-row">',
       '<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
       "</div>",
@@ -17097,7 +17097,7 @@
     if (cheatAll) {
       cheatAll.addEventListener("click", function() {
         if (cheatAll.disabled) return;
-        if (!window.confirm("Add all Club items to your inventory? (Same method as BCC Get All Items.)")) return;
+        if (!window.confirm("Add all Club items to your inventory?")) return;
         cheatAll.disabled = true;
         if (cheatMsg) cheatMsg.textContent = "Scanning inventory\u2026";
         seidrRunGiveAllItems(function(p) {

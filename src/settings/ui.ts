@@ -346,7 +346,7 @@ function seidrBuildGeneralHtml(): string {
 		"</details>",
 		'<details class="seidr-settings-sec">',
 		"<summary>Cheats</summary>",
-		'<p class="seidr-settings-hint">Self only. Same approach as BCC Get All Items (AssetFemale3DCG + InventoryAdd, then one sync).</p>',
+		'<p class="seidr-settings-hint">Self only. Adds every missing Club inventory item, then syncs once.</p>',
 		'<div class="seidr-settings-row">',
 		'<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
 		"</div>",
@@ -917,7 +917,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (cheatAll) {
 		cheatAll.addEventListener("click", function () {
 			if (cheatAll.disabled) return;
-			if (!window.confirm("Add all Club items to your inventory? (Same method as BCC Get All Items.)")) return;
+			if (!window.confirm("Add all Club items to your inventory?")) return;
 			cheatAll.disabled = true;
 			if (cheatMsg) cheatMsg.textContent = "Scanning inventory…";
 			seidrRunGiveAllItems(function (p) {

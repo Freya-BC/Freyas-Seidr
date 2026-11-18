@@ -99,7 +99,7 @@ export async function seidrCheatAddAllItems(
 		onProgress({ phase: phase, added: added, pending: pending, total: total, message: message });
 	}
 
-	report("scan", 0, total, "Scanning inventory (BCC-style)…");
+	report("scan", 0, total, "Scanning inventory…");
 	await seidrCheatYield();
 
 	const ids: number[] = [];
