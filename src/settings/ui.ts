@@ -346,7 +346,7 @@ function seidrBuildGeneralHtml(): string {
 		"</details>",
 		'<details class="seidr-settings-sec">',
 		"<summary>Cheats</summary>",
-		'<p class="seidr-settings-hint">Self only. Restores missing Club inventory items (confirm first).</p>',
+		'<p class="seidr-settings-hint">Self only. Diffs missing InventoryIDs, adds in chunks, syncs with delays (confirm first; can take a minute).</p>',
 		'<div class="seidr-settings-row">',
 		'<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
 		"</div>",
@@ -916,14 +916,26 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const cheatMsg = $("seidr-set-cheat-all-items-msg");
 	if (cheatAll) {
 		cheatAll.addEventListener("click", function () {
-			if (!window.confirm("Add all Club items to your inventory? This can be large.")) return;
-			const r = seidrRunGiveAllItems();
-			if (cheatMsg) {
-				cheatMsg.textContent = r && r.ok
-					? "Added items" + (r.count != null ? " (" + r.count + ")" : "") +
-						(r.via ? " via " + r.via : "") + "."
-					: (r && r.error) || "Failed.";
-			}
+			if (cheatAll.disabled) return;
+			if (!window.confirm(
+				"Add all missing Club items to your inventory? This scans what you lack, then syncs in chunks (can take a minute).",
+			)) return;
+			cheatAll.disabled = true;
+			if (cheatMsg) cheatMsg.textContent = "Scanning inventory…";
+			seidrRunGiveAllItems(function (p) {
+				if (cheatMsg) cheatMsg.textContent = p.message;
+			}).then(function (r) {
+				cheatAll.disabled = false;
+				if (!cheatMsg) return;
+				if (r && r.ok) {
+					cheatMsg.textContent = "Done. Added " + (r.added != null ? r.added : 0) +
+						" (catalog " + (r.total != null ? r.total : "?") +
+						", " + (r.chunks != null ? r.chunks : 0) + " syncs).";
+				} else {
+					cheatMsg.textContent = ((r && r.error) || "Failed.") +
+						(r && r.added != null ? " Added " + r.added + " before stopping." : "");
+				}
+			});
 		});
 	}
 
