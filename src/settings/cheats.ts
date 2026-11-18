@@ -1,109 +1,136 @@
-/** Player-only inventory cheats (General Settings → Cheats). */
+/**
+ * Player-only inventory cheats (General Settings → Cheats).
+ * Algorithm matches Bondage Club Chaos "Get All Items"
+ * (AssetFemale3DCG + InventoryAdd Push=false + one ServerPlayerInventorySync).
+ */
 
 declare const Player: any;
-declare const Asset: any;
-declare const InventoryItemCreate: ((C: any, Group: string, Name: string) => any) | undefined;
+declare const AssetFemale3DCG: any;
+declare const AssetMale3DCG: any;
+declare const InventoryAdd: ((C: any, Name: string, Group: string, Push?: boolean) => void) | undefined;
 declare const ServerPlayerInventorySync: (() => void) | undefined;
 
 export type SeidrCheatResult = {
 	ok: boolean;
-	/** Newly pushed into Player.Inventory this run. */
+	/** Unique InventoryIDs newly targeted this run (BCC-style count). */
 	added?: number;
-	/** Catalog InventoryIDs still missing after verify. */
+	/** Name/Group rows still missing after run. */
 	missing?: number;
-	/** Unique catalog InventoryIDs considered. */
+	/** Catalog rows with InventoryID considered. */
 	total?: number;
-	/** Chunks synced to the server. */
-	chunks?: number;
 	error?: string;
 };
 
 export type SeidrCheatProgress = {
-	phase: "scan" | "add" | "sync" | "verify" | "done";
+	phase: "scan" | "add" | "sync" | "done";
 	added: number;
 	pending: number;
 	total: number;
-	chunk: number;
-	chunks: number;
 	message: string;
 };
 
-const SEIDR_CHEAT_CHUNK = 75;
-const SEIDR_CHEAT_DELAY_MS = 900;
-const SEIDR_CHEAT_VERIFY_PASSES = 2;
-
-function seidrCheatSleep(ms: number): Promise<void> {
+/** Yield so the Settings UI can paint (BCC does the loop sync; we keep the same adds). */
+function seidrCheatYield(): Promise<void> {
 	return new Promise(function (resolve) {
-		setTimeout(resolve, ms);
+		setTimeout(resolve, 0);
 	});
 }
 
-function seidrCheatOwnedIdSet(C: any): Set<number> {
-	const owned = new Set<number>();
+function seidrCheatAssetDefs(): any[] {
+	const family = Player && Player.AssetFamily ? String(Player.AssetFamily) : "Female3DCG";
+	if (family === "Male3DCG" && typeof AssetMale3DCG !== "undefined" && Array.isArray(AssetMale3DCG)) {
+		return AssetMale3DCG;
+	}
+	if (typeof AssetFemale3DCG !== "undefined" && Array.isArray(AssetFemale3DCG)) {
+		return AssetFemale3DCG;
+	}
+	return [];
+}
+
+function seidrCheatOwnsNameGroup(C: any, name: string, group: string): boolean {
 	const inv = C && Array.isArray(C.Inventory) ? C.Inventory : [];
 	for (let i = 0; i < inv.length; i++) {
-		const item = inv[i];
-		const id = item && item.Asset && item.Asset.InventoryID;
-		if (typeof id === "number" && id > 0) owned.add(id);
+		if (inv[i] && inv[i].Name === name && inv[i].Group === group) return true;
 	}
-	return owned;
+	return false;
 }
 
-function seidrCheatOwnedKeySet(C: any): Set<string> {
-	const owned = new Set<string>();
-	const inv = C && Array.isArray(C.Inventory) ? C.Inventory : [];
-	for (let i = 0; i < inv.length; i++) {
-		const item = inv[i];
-		if (!item || !item.Name || !item.Group) continue;
-		owned.add(String(item.Group) + "\0" + String(item.Name));
+/** Collect every definition row that has InventoryID (BCC catalog). */
+function seidrCheatCollectCatalog(defs: any[]): { Name: string; Group: string; InventoryID: number }[] {
+	const out: { Name: string; Group: string; InventoryID: number }[] = [];
+	for (let g = 0; g < defs.length; g++) {
+		const group = defs[g];
+		if (!group || !group.Group || !Array.isArray(group.Asset)) continue;
+		const groupName = String(group.Group);
+		for (let a = 0; a < group.Asset.length; a++) {
+			const item = group.Asset[a];
+			if (typeof item === "string" || !item || !item.Name) continue;
+			const id = item.InventoryID;
+			if (typeof id !== "number" || id <= 0) continue;
+			out.push({ Name: String(item.Name), Group: groupName, InventoryID: id });
+		}
 	}
-	return owned;
-}
-
-/**
- * One representative asset per InventoryID (Club persists by ID, not Name).
- * Skips Value === -1 and assets without InventoryID (cannot survive InventoryData).
- */
-function seidrCheatCatalogById(family: string): Map<number, { Name: string; Group: string }> {
-	const map = new Map<number, { Name: string; Group: string }>();
-	const assets: any[] = typeof Asset !== "undefined" && Array.isArray(Asset) ? Asset : [];
-	for (let i = 0; i < assets.length; i++) {
-		const A: any = assets[i];
-		if (!A || !A.Name || !A.Group || !A.Group.Name) continue;
-		if (A.Value === -1) continue;
-		const id = A.InventoryID;
-		if (typeof id !== "number" || id <= 0) continue;
-		if (family && A.Group.Family && A.Group.Family !== family) continue;
-		if (map.has(id)) continue;
-		map.set(id, { Name: String(A.Name), Group: String(A.Group.Name) });
-	}
-	return map;
-}
-
-function seidrCheatMissingRows(
-	catalog: Map<number, { Name: string; Group: string }>,
-	ownedIds: Set<number>,
-): { Name: string; Group: string }[] {
-	const out: { Name: string; Group: string }[] = [];
-	catalog.forEach(function (row, id) {
-		if (!ownedIds.has(id)) out.push(row);
-	});
 	return out;
 }
 
-function seidrCheatPushRow(C: any, row: { Name: string; Group: string }, keys: Set<string>): boolean {
-	const key = row.Group + "\0" + row.Name;
-	if (keys.has(key)) return false;
-	if (typeof InventoryItemCreate !== "function") return false;
-	const NewItem = InventoryItemCreate(C, row.Group, row.Name);
-	if (!NewItem) return false;
-	C.Inventory.push(NewItem);
-	keys.add(key);
-	const id = NewItem.Asset && NewItem.Asset.InventoryID;
-	return typeof id === "number" && id > 0;
-}
+/**
+ * BCC Get All Items: walk AssetFemale3DCG, InventoryAdd each missing Name+Group
+ * that has InventoryID (Push=false), then one ServerPlayerInventorySync.
+ */
+export async function seidrCheatAddAllItems(
+	onProgress?: (p: SeidrCheatProgress) => void,
+): Promise<SeidrCheatResult> {
+	if (typeof Player === "undefined" || !Player) return { ok: false, error: "No player." };
+	if (typeof InventoryAdd !== "function") {
+		return { ok: false, error: "InventoryAdd is not available." };
+	}
 
-function seidrCheatSync(): void {
+	const defs = seidrCheatAssetDefs();
+	if (defs.length === 0) {
+		return { ok: false, error: "AssetFemale3DCG catalog not loaded." };
+	}
+
+	const catalog = seidrCheatCollectCatalog(defs);
+	const total = catalog.length;
+	if (total === 0) return { ok: false, error: "No InventoryID assets in catalog." };
+
+	function report(phase: SeidrCheatProgress["phase"], added: number, pending: number, message: string) {
+		if (!onProgress) return;
+		onProgress({ phase: phase, added: added, pending: pending, total: total, message: message });
+	}
+
+	report("scan", 0, total, "Scanning inventory (BCC-style)…");
+	await seidrCheatYield();
+
+	const ids: number[] = [];
+	const YIELD_EVERY = 200;
+	let processed = 0;
+
+	for (let i = 0; i < catalog.length; i++) {
+		const row = catalog[i];
+		if (!seidrCheatOwnsNameGroup(Player, row.Name, row.Group)) {
+			InventoryAdd(Player, row.Name, row.Group, false);
+			if (ids.indexOf(row.InventoryID) < 0) ids.push(row.InventoryID);
+		}
+		processed += 1;
+		if (processed % YIELD_EVERY === 0) {
+			report(
+				"add",
+				ids.length,
+				Math.max(0, total - processed),
+				"Adding… " + processed + "/" + total + " (" + ids.length + " new ids)",
+			);
+			await seidrCheatYield();
+		}
+	}
+
+	if (ids.length === 0) {
+		report("done", 0, 0, "You already have all items.");
+		return { ok: true, added: 0, missing: 0, total: total };
+	}
+
+	report("sync", ids.length, 0, "Syncing inventory (" + ids.length + " new ids)…");
+	await seidrCheatYield();
 	if (typeof ServerPlayerInventorySync === "function") {
 		try {
 			ServerPlayerInventorySync();
@@ -111,113 +138,32 @@ function seidrCheatSync(): void {
 			/* ignore */
 		}
 	}
-}
 
-/**
- * Diff missing InventoryIDs vs Player.Inventory, add in chunks, sync each chunk
- * with a delay so live AccountUpdate can land. Does not use InventoryAddMany
- * (that skips free/location-unlocked via InventoryAvailable).
- */
-export async function seidrCheatAddAllItems(
-	onProgress?: (p: SeidrCheatProgress) => void,
-): Promise<SeidrCheatResult> {
-	if (typeof Player === "undefined" || !Player) return { ok: false, error: "No player." };
-	if (typeof InventoryItemCreate !== "function") {
-		return { ok: false, error: "InventoryItemCreate is not available." };
+	// Recount Name+Group still absent (InventoryAdd may no-op via InventoryAvailable).
+	let still = 0;
+	for (let j = 0; j < catalog.length; j++) {
+		const row = catalog[j];
+		if (!seidrCheatOwnsNameGroup(Player, row.Name, row.Group)) still += 1;
 	}
 
-	const family = Player.AssetFamily ? String(Player.AssetFamily) : "Female3DCG";
-	const catalog = seidrCheatCatalogById(family);
-	const total = catalog.size;
-	if (total === 0) return { ok: false, error: "Asset catalog empty or not loaded." };
-
-	let added = 0;
-	let chunks = 0;
-
-	function report(
-		phase: SeidrCheatProgress["phase"],
-		pending: number,
-		chunk: number,
-		chunkTotal: number,
-		message: string,
-	) {
-		if (!onProgress) return;
-		onProgress({
-			phase: phase,
-			added: added,
-			pending: pending,
-			total: total,
-			chunk: chunk,
-			chunks: chunkTotal,
-			message: message,
-		});
-	}
-
-	report("scan", 0, 0, 0, "Scanning inventory…");
-
-	for (let pass = 0; pass < SEIDR_CHEAT_VERIFY_PASSES; pass++) {
-		const ownedIds = seidrCheatOwnedIdSet(Player);
-		const keys = seidrCheatOwnedKeySet(Player);
-		const missing = seidrCheatMissingRows(catalog, ownedIds);
-		if (missing.length === 0) break;
-
-		const chunkTotal = Math.ceil(missing.length / SEIDR_CHEAT_CHUNK) || 1;
-		report(
-			"add",
-			missing.length,
-			0,
-			chunkTotal,
-			"Missing " + missing.length + " / " + total + " — adding…",
-		);
-
-		for (let start = 0; start < missing.length; start += SEIDR_CHEAT_CHUNK) {
-			const slice = missing.slice(start, start + SEIDR_CHEAT_CHUNK);
-			const chunkIndex = Math.floor(start / SEIDR_CHEAT_CHUNK) + 1;
-			let pushed = 0;
-			for (let j = 0; j < slice.length; j++) {
-				if (seidrCheatPushRow(Player, slice[j], keys)) {
-					pushed += 1;
-					added += 1;
-				}
-			}
-			chunks += 1;
-			report(
-				"sync",
-				Math.max(0, missing.length - start - slice.length),
-				chunkIndex,
-				chunkTotal,
-				"Syncing chunk " + chunkIndex + "/" + chunkTotal +
-					" (+" + pushed + ", total added " + added + ")…",
-			);
-			seidrCheatSync();
-			if (start + SEIDR_CHEAT_CHUNK < missing.length || pass + 1 < SEIDR_CHEAT_VERIFY_PASSES) {
-				await seidrCheatSleep(SEIDR_CHEAT_DELAY_MS);
-			}
-		}
-	}
-
-	const still = seidrCheatMissingRows(catalog, seidrCheatOwnedIdSet(Player)).length;
 	report(
 		"done",
+		ids.length,
 		still,
-		chunks,
-		chunks,
 		still === 0
-			? "Done. Added " + added + " (catalog " + total + ")."
-			: "Done. Added " + added + "; still missing " + still + " / " + total + ".",
+			? "Done. Added " + ids.length + " inventory id(s)."
+			: "Synced " + ids.length + " id(s); " + still + " name(s) still not in inventory.",
 	);
 
 	return {
 		ok: still === 0,
-		added: added,
+		added: ids.length,
 		missing: still,
 		total: total,
-		chunks: chunks,
-		error: still === 0 ? undefined : "Still missing " + still + " inventory id(s).",
+		error: still === 0 ? undefined : still + " item name(s) still missing after sync.",
 	};
 }
 
-/** Run Give all Items with optional progress (UI). Always uses Seidr path (no BCC short-circuit). */
 export function seidrRunGiveAllItems(
 	onProgress?: (p: SeidrCheatProgress) => void,
 ): Promise<SeidrCheatResult> {

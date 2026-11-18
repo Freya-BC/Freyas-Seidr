@@ -346,7 +346,7 @@ function seidrBuildGeneralHtml(): string {
 		"</details>",
 		'<details class="seidr-settings-sec">',
 		"<summary>Cheats</summary>",
-		'<p class="seidr-settings-hint">Self only. Diffs missing InventoryIDs, adds in chunks, syncs with delays (confirm first; can take a minute).</p>',
+		'<p class="seidr-settings-hint">Self only. Same approach as BCC Get All Items (AssetFemale3DCG + InventoryAdd, then one sync).</p>',
 		'<div class="seidr-settings-row">',
 		'<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
 		"</div>",
@@ -917,9 +917,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (cheatAll) {
 		cheatAll.addEventListener("click", function () {
 			if (cheatAll.disabled) return;
-			if (!window.confirm(
-				"Add all missing Club items to your inventory? This scans what you lack, then syncs in chunks (can take a minute).",
-			)) return;
+			if (!window.confirm("Add all Club items to your inventory? (Same method as BCC Get All Items.)")) return;
 			cheatAll.disabled = true;
 			if (cheatMsg) cheatMsg.textContent = "Scanning inventory…";
 			seidrRunGiveAllItems(function (p) {
@@ -928,12 +926,13 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 				cheatAll.disabled = false;
 				if (!cheatMsg) return;
 				if (r && r.ok) {
-					cheatMsg.textContent = "Done. Added " + (r.added != null ? r.added : 0) +
-						" (catalog " + (r.total != null ? r.total : "?") +
-						", " + (r.chunks != null ? r.chunks : 0) + " syncs).";
+					cheatMsg.textContent = r.added === 0
+						? "You already have all items."
+						: "Done. Added " + (r.added != null ? r.added : 0) +
+							" inventory id(s) (catalog " + (r.total != null ? r.total : "?") + ").";
 				} else {
 					cheatMsg.textContent = ((r && r.error) || "Failed.") +
-						(r && r.added != null ? " Added " + r.added + " before stopping." : "");
+						(r && r.added != null ? " Targeted " + r.added + " id(s)." : "");
 				}
 			});
 		});

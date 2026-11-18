@@ -172,7 +172,7 @@ Collapsible **Cheats** block on General (self only):
 
 | Action | Meaning |
 |--------|---------|
-| **Give all Items** | Confirm, then **diff** your owned Club `InventoryID`s against the catalog, push only what is missing (via `InventoryItemCreate`, not `InventoryAddMany` / `InventoryAvailable`), and **sync in chunks** with delays so live `AccountUpdate` can land. Progress text shows scan / chunk sync / verify. Free (`Value === 0`) and unbuyable (`Value === -1`) assets without an `InventoryID` are skipped — they cannot persist in `InventoryData`. Does not wear anything. |
+| **Give all Items** | Confirm, then run the same path as BCC **Get All Items**: walk `AssetFemale3DCG` (or Male catalog), `InventoryAdd` every missing `Name`+`Group` that has an `InventoryID` (`Push=false`), then one `ServerPlayerInventorySync`. Progress text updates while scanning. Does not wear anything. |
 
 ### Storage
 
