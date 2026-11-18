@@ -1,5 +1,6 @@
 /** Play a Seidr animation clip on the local Player */
 import { seidrPublishActionText } from "../chat/actionText";
+import { seidrSyncPose } from "../poses/apply";
 import type { SeidrAnimStep, SeidrAnimation } from "./model";
 import { seidrFindAnimationById, seidrFindAnimationByName } from "./store";
 
@@ -18,12 +19,7 @@ function applyPose(C: any, pose: string): void {
 		if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
 		else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
 	} catch (e) { /* ignore */ }
-	try {
-		if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
-		else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
-			ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
-		}
-	} catch (e2) { /* ignore */ }
+	seidrSyncPose(C);
 }
 
 function applyFace(C: any, step: Extract<SeidrAnimStep, { kind: "face" }>): void {

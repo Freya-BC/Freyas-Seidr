@@ -1,73 +1,125 @@
-/** Club DrawButton on ChatAdmin — next to BCX (Room Manager plugin style), smaller to clear Language */
+/** R134+ ChatAdmin menubar — Seidr logo left of Export Room Code (RTL append) */
 import { Seidr } from "../seidr";
 import { seidrGetSettings } from "../settings/storage";
 import { rmIsShown } from "./model";
 import { rmOpenPanel } from "./shell";
+import { rmInjectStyles } from "./styles";
 
-function hasBcx(): boolean {
+declare function ElementWrap(elementOrId: string | HTMLElement | null | undefined): HTMLElement | null;
+declare const ElementButton: {
+	Create: (
+		id: string | null,
+		onClick: () => void,
+		options?: Record<string, unknown>,
+		htmlOptions?: Record<string, unknown>,
+	) => HTMLButtonElement;
+};
+
+const BTN_ID = "seidr-chat-admin-rm";
+const MENU_ID = "chat-admin-screen-menu";
+const EXPORT_ID = "chat-admin-room-export";
+const SCREEN_ID = "chat-admin-screen";
+
+function wrap(id: string): HTMLElement | null {
 	try {
-		return typeof (window as any).bcx !== "undefined" && (window as any).bcx != null;
-	} catch (e) {
-		return false;
-	}
-}
-
-/** Entry rect: right of BCX when present; else BCX’s slot. Smaller than BCX (90) so Language is not clipped. */
-function getEntryButtonRect(): { x: number; y: number; w: number; h: number } {
-	const size = 64;
-	const y = 132 + Math.floor((90 - size) / 2);
-	if (hasBcx()) return { x: 222, y: y, w: size, h: size };
-	return { x: 124, y: y, w: size, h: size };
-}
-
-function nativeChatAdminVisible(): boolean {
-	try {
-		if (typeof CurrentScreen !== "undefined" && CurrentScreen !== "ChatAdmin") return false;
-		if (typeof ChatAdminPreviewBackgroundMode !== "undefined" && ChatAdminPreviewBackgroundMode) {
-			return false;
-		}
-	} catch (e) {
-		return false;
-	}
-	const el = document.getElementById("InputName");
-	if (!el) return false;
-	if (el.hasAttribute("hidden")) return false;
-	if (el.style && el.style.display === "none") return false;
-	return true;
+		if (typeof ElementWrap === "function") return ElementWrap(id);
+	} catch (e) { /* ignore */ }
+	return document.getElementById(id);
 }
 
 function rmChatAdminBtnAllowed(): boolean {
 	if (!rmIsShown()) return false;
 	if (seidrGetSettings().roomManagerEnabled === false) return false;
-	return nativeChatAdminVisible();
+	// Prefer DOM presence over CurrentScreen — Load/Run timing can disagree briefly.
+	if (wrap(SCREEN_ID) || wrap(MENU_ID) || wrap(EXPORT_ID)) return true;
+	try {
+		return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatAdmin";
+	} catch (e) {
+		return false;
+	}
 }
 
-/** Draw after Club's ChatAdminRun (and BCX “More” button). */
-export function rmChatAdminDrawButton() {
+function logoUrl(): string {
+	return Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
+}
+
+function findMenubar(): HTMLElement | null {
+	const menu = wrap(MENU_ID);
+	if (menu) return menu;
+
+	const exportBtn = wrap(EXPORT_ID);
+	if (exportBtn && exportBtn.parentElement) return exportBtn.parentElement;
+
+	const screen = wrap(SCREEN_ID);
+	if (screen) {
+		const bar = screen.querySelector('[role="menubar"]');
+		if (bar instanceof HTMLElement) return bar;
+		const header = screen.querySelector(".screen-header, header");
+		const headerBar = header && header.querySelector('[role="menubar"], .menubar');
+		if (headerBar instanceof HTMLElement) return headerBar;
+	}
+
+	const loose = document.querySelector(`#${EXPORT_ID}`);
+	if (loose && loose.parentElement) return loose.parentElement;
+
+	return null;
+}
+
+/** Mount Room Manager into the DOM ChatAdmin menubar (left of Export via RTL append). */
+export function rmChatAdminMountButton() {
 	if (!rmChatAdminBtnAllowed()) return;
-	if (typeof DrawButton !== "function") return;
-	const r = getEntryButtonRect();
-	DrawButton(r.x, r.y, r.w, r.h, "", "White", "Icons/Preference.png");
+	if (document.getElementById(BTN_ID)) return;
+
+	const host = findMenubar();
+	if (!host) return;
+	try { rmInjectStyles(); } catch (e) { /* ignore */ }
+
+	if (typeof ElementButton === "undefined" || !ElementButton || typeof ElementButton.Create !== "function") {
+		return;
+	}
+
+	let button: HTMLButtonElement;
 	try {
-		if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h)
-			&& typeof DrawButtonHover === "function") {
-			DrawButtonHover(r.x, r.y, r.w, r.h, "Room Manager");
-		}
-	} catch (e) { /* ignore */ }
+		button = ElementButton.Create(
+			BTN_ID,
+			function () {
+				rmOpenPanel();
+			},
+			{
+				image: logoUrl(),
+				tooltip: "Room Manager",
+			},
+		);
+	} catch (e) {
+		console.warn("[Seidr] ChatAdmin RM button create failed", e);
+		return;
+	}
+
+	// Dev-recommended pattern; RTL menubar → visually left of Export.
+	const menu = wrap(MENU_ID);
+	if (menu) {
+		ElementWrap(MENU_ID)?.append(button);
+	} else {
+		host.append(button);
+	}
 }
 
-/** Handle click before Club processes the screen. Returns true if consumed. */
-export function rmChatAdminClickButton(): boolean {
-	if (!rmChatAdminBtnAllowed()) return false;
-	try {
-		const r = getEntryButtonRect();
-		if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h)) {
-			rmOpenPanel();
-			return true;
-		}
-	} catch (e) { /* ignore */ }
-	return false;
+/** After Load (and delayed retries) — menubar may appear a tick later. */
+export function rmChatAdminMountButtonSoon() {
+	rmChatAdminMountButton();
+	queueMicrotask(function () {
+		rmChatAdminMountButton();
+	});
+	setTimeout(function () {
+		rmChatAdminMountButton();
+	}, 0);
+	setTimeout(function () {
+		rmChatAdminMountButton();
+	}, 50);
+	setTimeout(function () {
+		rmChatAdminMountButton();
+	}, 200);
 }
 
-Seidr.rmChatAdminDrawButton = rmChatAdminDrawButton;
-Seidr.rmChatAdminClickButton = rmChatAdminClickButton;
+Seidr.rmChatAdminMountButton = rmChatAdminMountButton;
+Seidr.rmChatAdminMountButtonSoon = rmChatAdminMountButtonSoon;

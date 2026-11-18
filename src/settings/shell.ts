@@ -5,6 +5,7 @@ import {
 	seidrBindSettingsUi,
 	seidrBuildSettingsBody,
 	seidrDiscardDrawDraft,
+	seidrDiscardMapDrawDraft,
 	seidrRefreshSettingsUi,
 } from "./ui";
 
@@ -107,6 +108,7 @@ export function seidrOpenSettings() {
 export function seidrCloseSettings() {
 	if (!panel) return;
 	try { seidrDiscardDrawDraft(); } catch (e) { /* ignore */ }
+	try { seidrDiscardMapDrawDraft(); } catch (e) { /* ignore */ }
 	panel.classList.remove("seidr-settings-open");
 	panel.setAttribute("hidden", "true");
 	if (
@@ -149,7 +151,7 @@ export function seidrRegisterPreference() {
 	PreferenceRegisterExtensionSetting({
 		Identifier: "Seidr",
 		ButtonText: "Seidr",
-		Image: Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png",
+		Image: Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png",
 		load: function () {
 			seidrOpenSettings();
 			seidrLeavePreferenceToGame();

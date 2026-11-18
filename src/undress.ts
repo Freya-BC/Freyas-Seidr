@@ -454,7 +454,10 @@ function seidrUndressStrip(acted, clothGroupOrGroups) {
 		if (typeof CharacterLoadCanvas === "function") {
 			try { CharacterLoadCanvas(acted); } catch (eCanvas) { /* ignore */ }
 		}
-		if (typeof ChatRoomCharacterItemUpdate === "function") {
+		// Many per-slot item updates cost more than one full appearance update.
+		if (removed.length >= 4 && typeof ChatRoomCharacterUpdate === "function") {
+			ChatRoomCharacterUpdate(acted);
+		} else if (typeof ChatRoomCharacterItemUpdate === "function") {
 			for (var r = 0; r < removed.length; r++) {
 				ChatRoomCharacterItemUpdate(acted, removed[r]);
 			}

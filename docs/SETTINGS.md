@@ -1,6 +1,6 @@
 # Settings
 
-Seidr’s settings panel is the home for almost every option: Fast Open, Drawing, command toggles, custom Activity Menu actions, chat command bindings, animations, maps, and About.
+Seidr’s settings panel is the home for almost every option: Fast Open, Drawing, Map Cuddle, command toggles, custom Activity Menu actions, chat command bindings, animations, maps, and About.
 
 Open it with:
 
@@ -25,11 +25,11 @@ Jump into Club **Activity View** without hunting through the character menu.
 
 | Option | Default | Meaning |
 |--------|---------|---------|
-| Enable | On | Modifier-click a room character opens Activity View |
+| Enable | On | Modifier-click a room or map character opens Activity View |
 | Modifier | Shift | Shift / Ctrl / Alt / Cmd (Meta) |
 | Slot | ItemTorso | Preferred Item\* zone before switching to Activities mode |
 
-Hold the modifier, click someone in the room. If Freyas Action Manager is also loaded and uses Shift-click, FAM’s handler wins when both bind Shift — pick another modifier here if that happens.
+Hold the modifier, click someone in the room or on the map. If Freyas Action Manager is also loaded and uses Shift-click, FAM’s handler wins on lineup when both bind Shift — pick another modifier here if that happens.
 
 ### Room Manager
 
@@ -69,13 +69,26 @@ Echo-style **model** spacing for holds (hitboxes do not move):
 | Pull X | Half-gap from center (hub shifts on one-side pull) |
 | Pull Y | Raises both sides |
 | Cuddle X / Y | Moves the holder |
-| **Names** | Cluster nicknames only (see below) |
+| **Names** / **Who** | Nickname modes + who they apply to (see below) |
 
 Range −400…400 (Pull X stored as non-negative magnitude). Use the up/down steppers or type values to preview; click **Save Drawing** to persist.
 
-#### Names (cluster nicknames)
+#### Advanced Mode + Sync (expert)
 
-Only Club **nickname** text for people in a Seidr hold is affected — not status icons, badges, or body art.
+**Advanced Mode** and **Allow Sync** are expert tools for private rooms, screenshots, and posed scenes. Do **not** use them in public rooms — they will look wrong or confusing to others.
+
+| Control | Role |
+|---------|------|
+| **Advanced Mode** | When on, free-draw **Left / Right / Cuddle / Hub** X·Y from the shared center; normal Pull/Cuddle are greyed out and ignored. When off, normal Drawing is active again. |
+| Left / Right / Cuddle / Hub | Independent signed offsets (−400…400). Saved with **Save Drawing**. |
+| **Allow Sync** | Listen for hub `drawSync` overlays while you are in that cuddle. As hub, also auto-broadcast your layout whenever the hold changes. Off clears all session overlays. |
+| **Sync** | Hub-only: push your current layout (Advanced free-draw if Advanced is on, otherwise a snapshot of normal Pull/Cuddle for this cluster). |
+
+Synced layouts are **session-only** for that hub’s cuddle — they never overwrite your saved Drawing. Leave that hub (or turn Allow Sync off) and you are back to your own normal or Advanced settings. Only messages from the real hub MemberNumber are accepted; spoofed draw commands are ignored.
+
+#### Names (nicknames)
+
+Only Club **nickname** text is affected — not status icons, badges, or body art.
 
 | Mode | Behaviour |
 |------|-----------|
@@ -84,7 +97,20 @@ Only Club **nickname** text for people in a Seidr hold is affected — not statu
 | **Hide** | Do not draw the nickname |
 | **Hover** | Show the name only while the cursor is over that natural seat |
 
-**Names** saves immediately when you change the dropdown. Hitbox and Hover use the raised/centered placement.
+| Who | Behaviour |
+|-----|-----------|
+| **Seidr holds** (default) | Hub, pull left/right, or cuddle only |
+| **Everyone** | All character-view seats, including Echo pairs and people not in a Seidr hold |
+
+**Names** and **Who** save immediately when you change either dropdown. Hitbox and Hover use the raised/centered placement.
+
+### Map Cuddle
+
+![Map Cuddle](../assets/docs/settings-general-map-cuddle.png)
+
+Map-room hold pose only (independent of lineup **Drawing**). Pull X/Y and Cuddle X/Y (−400…400; defaults Pull **100**, Cuddle Y **−250**). Values are scaled by map zoom so walking the camera and changing perception range stay stable. The **hub never moves** on the map. No Advanced Mode and no Sync on this section. Activity and restraint menu portraits are unchanged. Preview live; click **Save Map Cuddle** to persist.
+
+Seat tiles, walk-back grace, and form/join rules: [HOLDS.md](HOLDS.md#map-rooms).
 
 ### Commands (enable toggles + Fast Select)
 
@@ -95,6 +121,10 @@ Collapsible **Commands** block on General:
 1. **Enable toggles** — turn each slash tag on or off (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored. Keep `/seidr` on so you can always reopen Settings.
 2. **Fast Select** (when shown) — type a letter then **Tab** to jump into a command (`a` → `/action `, `s` → `/strip `, …). Empty Tab is configurable. Per-letter checkboxes gate individual shortcuts.
 3. **Last target** — after a successful `/a` / `/strip` / `/poses`, member autocomplete prefers that person next time (while they are still in the room).
+4. **Club chat assist** (default on):
+   - **Autocompletion /whisper** — Tab lists other people in the current room as `Name (ID)` (Club still sends the whisper).
+   - **Autocompletion /beep** — Tab lists online friends as `Name (ID)` (Club still sends the beep).
+   - **Activate Reply to Beep** — hover **Reply** on Club beep rows (in addition to Club’s ↩); prefills `/beep {id}` and shows the reply bar. Does **not** control Freyas Better Maps float-chat ↩.
 
 Full chat guide: [COMMANDS.md](COMMANDS.md).
 
@@ -119,13 +149,30 @@ Controls Club / BCTweaks on-character thermometers and orgasm tracks.
 
 “Seidr holds” means hub, pull left/right, or cuddle involvement.
 
+### Chat font
+
+![Chat font settings](../assets/docs/settings-general-chat-font.png)
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Font | (empty) | Typeface for Club chat log and compose box |
+| Size | `0` / empty | Club-base size override (Small **28** / Medium **36** / Large **44**) |
+
+Empty **Font** uses **Preference → Graphics → Font**. Enter an installed system font name (e.g. `Comic Code`, `Georgia`). If that face is missing on this device, Club’s Graphics font is used instead.
+
+**Size** `0` or empty uses **Preference → Chat → Font Size**. Non-zero values use the same canvas scaling as Club (`base × min(canvasW, canvasH) / 1000`) on the **log and compose text only** — chat buttons and chrome keep Club sizing. Does not change canvas nicknames or menus.
+
+Example with a custom face applied to action lines, chat, and emotes:
+
+![Chat font in Club chat](../assets/docs/settings-general-chat-font-result.png)
+
 ### Storage
 
 ![Storage](../assets/docs/settings-general-storage.png)
 
-Read-only usage for the synced ExtensionSettings bag:
+Read-only usage for the synced ExtensionSettings data (all Seidr keys together):
 
-- Total compressed size vs ~180 KB soft cap (+ thin progress bar)  
+- Total stored size vs ~180 KB soft cap (+ thin progress bar)  
 - Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Commands**, **Animations**, **Settings**, **UI**  
 - Maps **75%** budget line (+ local maps note when present)  
 
@@ -220,8 +267,8 @@ First load in a chat room also posts a one-time sticky **Welcome** line in local
 
 ## Where settings are stored
 
-All of the above (except background preview thumbs and **local-only** map versions) persist in:
+All of the above (except background preview thumbs, **local-only** map versions and panel position/size) persist in:
 
-`Player.ExtensionSettings.SeidrRoomManager`
+`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`
 
-Synced with your BC account via Club ExtensionSettings. Preview thumbnails for Room Manager backgrounds and local-only map versions use **localStorage**.
+Synced with your BC account via Club ExtensionSettings; changes are uploaded after a short delay and only for the part that changed. Preview thumbnails, local-only map versions and the Room Manager panel position/size use **localStorage**.

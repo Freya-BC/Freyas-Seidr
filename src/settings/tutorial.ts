@@ -164,7 +164,7 @@ function buildSteps(): TourStep[] {
 			blocks: [
 				"Fast Open jumps straight into Club Activity View without hunting the character menu.",
 				"Enable it, pick a keyboard modifier (Shift/Ctrl/Alt/Cmd) and a default Item* slot (e.g. Item Torso).",
-				"Hold that modifier and click someone in the room. If FAM also uses Shift-click, pick a different modifier here.",
+				"Hold that modifier and click someone in the room or on the map. If FAM also uses Shift-click, pick a different modifier here.",
 			],
 			prepare: function () {
 				seidrOpenSettings();

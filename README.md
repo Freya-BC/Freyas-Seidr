@@ -1,12 +1,12 @@
 # Seidr
 
-![Seidr](assets/freyas-seidr-logo.png)
+![Seidr](assets/SEIDR-Logo-Transparent.png)
 
 **Seidr** is a Bondage Club plugin for holds, undress, custom Activity Menu actions, chat slash commands, pose/face animations, room admin tools (including map versions), and related quality-of-life settings. Hold poses sync between Seidr peers; activity chat lines stay readable for everyone in the room, including clients without the mod.
 
 | | |
 |---|---|
-| **Version** | 1.0.82 |
+| **Version** | 1.0.122 |
 | **Author** | Freya |
 | **Pages** | https://freya-bc.github.io/Freyas-Seidr/ |
 | **FUSAM loader** | https://freya-bc.github.io/Freyas-Seidr/loader.js |
@@ -66,17 +66,18 @@ The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab co
 | Area | What it does |
 |------|----------------|
 | **Welcome / Tutorial** | One-time chat welcome; About → Tutorial walks Settings + autocomplete |
-| **Holds** | Pull / Cuddle (you hub) or Go Left/Right / Cuddle Into (they hub); Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace) |
+| **Holds** | Pull / Cuddle (you hub) or Go Left/Right / Cuddle Into (they hub); Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace; map rooms use seat tiles + 60s walk-back) |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
 | **Animations** | Pose/face clips on you; play with `/animation` / `/ani` |
-| **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` + Tab AC / Fast Select |
-| **Fast Open** | Modifier-click a character to open Activity View on a chosen Item\* slot |
+| **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` + Tab AC / Fast Select; Club `/beep` / `/whisper` Tab assist + beep Reply |
+| **Fast Open** | Modifier-click a room or map character to open Activity View on a chosen Item\* slot |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, map series + versions |
 | **Maps (Settings)** | Library of map versions; Default can sync; other versions stay local |
-| **Drawing / Names** | Pull / cuddle visual spacing; cluster nickname modes (Default / Hitbox / Hide / Hover) |
+| **Drawing / Names / Map Cuddle** | Lineup pull/cuddle spacing (+ Advanced / Sync); nickname modes + Who; map-room Map Cuddle offsets (zoom-scaled) |
+| **Chat font** | Optional system font + size for Club chat log / compose only |
 | **Arousal bars** | Hide / relocate Club (and BCTweaks) arousal meters |
-| **Storage** | Compressed ExtensionSettings bag with usage breakdown |
+| **Storage** | Compressed synced data with usage breakdown |
 
 ---
 
@@ -100,6 +101,9 @@ Open another character → **Item Torso** → **Activities**:
 - **Both people need Seidr** for the shared pose. Without Seidr you still see chat lines and the normal lineup.
 - Hitboxes and status stay on natural seats; only the drawn models use pull/cuddle offsets.
 - **Void disconnect:** seats are kept ~**45 seconds** so a quick rejoin restores the pile. A normal room leave (or intentional Remove/Leave) clears immediately.
+- **Map rooms:** seats are tiles next to the hub (left / right / cuddle-below). **Always** hides form/join off-seat; **Hybrid** keeps buttons visible and blocks on click with a local map-conditions message. Stepping one tile away keeps the hold for ~**60 seconds** (walk-back); two or more tiles clears. Pose offsets come from **Settings → Map Cuddle** (hub stays on its tile).
+
+![Map cuddle / pull cluster](assets/docs/holds-map.png)
 
 More detail: [`docs/HOLDS.md`](docs/HOLDS.md).
 
@@ -178,6 +182,7 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 | **Commands → Actions** | Call name → slot + Club/Seidr/mod activity for `/a` |
 | **Enable toggles** | Settings → General → Commands — turn each slash tag on/off |
 | **Fast Select** | Letter + Tab (e.g. `a` then Tab → `/action `) when enabled |
+| **Club assists** | Tab AC for `/beep` (online friends) and `/whisper` (room); hover **Reply** on beep rows |
 
 | | |
 |---|---|
@@ -186,7 +191,7 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 | **`/strip` slot** | Clothing group (`Shoes`, `Cloth`, …) or `all:Cloth` for a family bundle. |
 | **Pose / animation** | Shared pose catalog / your Animations list. |
 
-**Tab** opens Seidr autocomplete (W/S or arrows, E/Enter, Esc). After `/poses`, Seidr posts a public Action line with unique Self/Other text.
+**Tab** opens Seidr autocomplete (W/S or arrows, E/Enter, Esc) for Seidr commands and Club `/beep` / `/whisper`. After `/poses`, Seidr posts a public Action line with unique Self/Other text.
 
 More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
@@ -196,7 +201,7 @@ More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
 **Settings → General → Fast Open Actions** (on by default):
 
-- Hold a modifier (**Shift** / Ctrl / Alt / Cmd) and click a character in the room.
+- Hold a modifier (**Shift** / Ctrl / Alt / Cmd) and click a character in the room or on the map.
 - Opens Club Activity View on a preferred Item\* slot (default **ItemTorso**), then Activities mode.
 - If Freyas Action Manager also uses Shift-click, FAM wins when both are loaded — change the modifier in Seidr if needed.
 
@@ -210,8 +215,8 @@ For **room admins** (and on ChatAdmin create/edit):
 
 | Entry | |
 |-------|--|
-| Chat room | Floating **⌂** (position from Settings; drag for this session) |
-| ChatAdmin | Icon button near Club Save / BCX “More” |
+| Chat room | Floating **⌂** (position from Settings; drag for this session). Hidden while Freyas Better Maps float chat is open (Manager is on that toolbar). |
+| ChatAdmin | Seidr logo in the menubar, left of Export Room Code |
 | Settings | **Open Room Manager** · **`/roommanager`** |
 
 **Areas:**
@@ -246,9 +251,11 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 | **Fast Open Actions** | Enable, modifier, default Item\* slot |
 | **Room Manager** | Activate master switch, show quickmenu ⌂, open panel |
 | **Launcher position** | Top/Bottom/Middle × Left/Right, Chat Left / Top / Bottom |
-| **Drawing** | Pull X/Y and Cuddle X/Y offsets (−400…400). **Names**: Default / Hitbox / Hide / Hover. Save Drawing to keep offsets |
-| **Commands** | Per-slash enable toggles; Fast Select (letter + Tab); last-target memory |
+| **Drawing** | Pull X/Y and Cuddle X/Y (−400…400). Optional **Advanced Mode** + **Allow Sync** (private rooms). **Names** / **Who**. Save Drawing to keep offsets |
+| **Map Cuddle** | Pull/Cuddle offsets for map rooms (zoom-scaled; hub fixed; no Advanced / Sync). Save Map Cuddle to keep |
+| **Commands** | Per-slash enable toggles; Fast Select; last-target; `/beep` / `/whisper` AC; Reply to Beep |
 | **Arousal bars** | Mode: Club default / Always hide / Show on change (1s) / Bottom bar. Scope: Self / Seidr holds / Everyone |
+| **Chat font** | Optional system font name + Club-base size for chat log / compose only |
 | **Storage** | Live KB usage vs ~180 KB cap; per-slice breakdown |
 
 ### About
@@ -266,25 +273,26 @@ Per-section screenshots and full option tables: [`docs/SETTINGS.md`](docs/SETTIN
 - Echo cuddle / pull tokens hide Seidr hold activities while those tokens are present.
 - If Echo takes you (or someone you hold), Seidr **yields**: that hold clears and peers snap back.
 - Bed and other Echo poses are left alone. Drawing offsets are Echo-style pair spacing only.
+- **Names → Who: Everyone** applies Hitbox / Hover / Hide to Echo pairs as well (local viewer only).
 
 ---
 
 ## Storage
 
-Almost all Seidr data lives in one synced bag:
+Seidr data is synced to your account in a few compressed keys (only the part you changed is uploaded, shortly after you change it):
 
-`Player.ExtensionSettings.SeidrRoomManager` (LZ-compressed)
+`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`
 
 | Soft limits | |
 |-------------|--|
-| Total bag | ~180 KB compressed |
+| Total | ~180 KB (per stored value) |
 | Maps share | at most **75%** of that budget (remote Default maps) |
 | Named map series | soft-capped in UI; versions split remote Default vs local |
 | Custom Activity Menu actions | ≤ 50 |
 | Animations | ≤ 50 |
 | Chat command people / actions | ≤ 50 each |
 
-Background **preview thumbnails** and **local-only map versions** use browser localStorage (not the synced bag).
+Background **preview thumbnails**, **local-only map versions** and the Room Manager **panel position/size** use browser localStorage (not synced).
 
 Room Manager footer and **Settings → Storage** show usage. Saving when full is refused with an error; delete or shrink data, then try again.
 

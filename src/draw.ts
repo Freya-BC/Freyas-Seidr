@@ -1,11 +1,12 @@
 /** Echo-style pose offsets and drawlist reorder. */
 import { Seidr } from "./seidr";
 import { seidrGetSettings } from "./settings/storage";
-import type { SeidrClusterNameMode } from "./settings/model";
+import type { SeidrClusterNameMode, SeidrClusterNameScope } from "./settings/model";
 import { SeidrState } from "./state";
-import { seidrFindChar, seidrInEcho, seidrReconcileEcho } from "./room";
+import { seidrFindChar, seidrInEcho, seidrPresentMap, seidrReconcileEcho } from "./room";
 
 declare const CharacterNickname: ((C: any) => string) | undefined;
+declare const Player: any;
 declare var ChatRoomCharacter: any;
 declare var ChatRoomCharacterDrawlist: any;
 declare var ChatRoomCharacterViewCharacterCount: number;
@@ -43,6 +44,14 @@ function seidrClusterNameMode(): SeidrClusterNameMode {
 		if (m === "default" || m === "hitbox" || m === "hide" || m === "hover") return m;
 	} catch (e) { /* ignore */ }
 	return "hitbox";
+}
+
+function seidrClusterNameScope(): SeidrClusterNameScope {
+	try {
+		const s = seidrGetSettings().clusterNameScope;
+		if (s === "seidrCluster" || s === "all") return s;
+	} catch (e) { /* ignore */ }
+	return "seidrCluster";
 }
 
 function seidrNameOffset(): number {
@@ -103,6 +112,13 @@ function seidrInCluster(character) {
 	if (!character || typeof character.MemberNumber !== "number") return false;
 	if (seidrInEcho(character)) return false;
 	return !!SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
+}
+
+/** Whether Names mode should rewrite this character’s nickname DrawText. */
+function seidrNameApplies(character: any): boolean {
+	if (!character || typeof character.MemberNumber !== "number") return false;
+	if (seidrClusterNameScope() === "all") return true;
+	return seidrInCluster(character);
 }
 
 /** Left → hub → cuddle → right, matching Echo seat order for hitboxes. */
@@ -375,31 +391,169 @@ function seidrLiveOffsets() {
 	return { pull: pull, cuddle: cuddle };
 }
 
-function seidrDrawPose(character, x, y, zoom) {
+function seidrPairOr(raw, fallback) {
+	if (raw && typeof raw === "object") {
+		var x = typeof raw.x === "number" && isFinite(raw.x) ? raw.x : fallback.x;
+		var y = typeof raw.y === "number" && isFinite(raw.y) ? raw.y : fallback.y;
+		return { x: x, y: y };
+	}
+	return { x: fallback.x, y: fallback.y };
+}
+
+function seidrLiveAdvancedOffsets() {
+	var fallback = {
+		left: { x: -150, y: 0 },
+		right: { x: 150, y: 0 },
+		cuddle: { x: 0, y: 0 },
+		hub: { x: 0, y: -50 },
+	};
+	var o = Seidr.drawAdvancedOffsets;
+	if (!o || typeof o !== "object") return fallback;
+	return {
+		left: seidrPairOr(o.left, fallback.left),
+		right: seidrPairOr(o.right, fallback.right),
+		cuddle: seidrPairOr(o.cuddle, fallback.cuddle),
+		hub: seidrPairOr(o.hub, fallback.hub),
+	};
+}
+
+/** Session overlay for a hub (Allow Sync); null if missing / sync off. */
+function seidrDrawSyncOverlay(hubId) {
+	if (!Seidr.drawAllowSync) return null;
+	if (typeof hubId !== "number") return null;
+	var map = Seidr._drawSyncByHub;
+	if (!map || typeof map !== "object") return null;
+	var o = map[hubId];
+	if (!o || typeof o !== "object") return null;
+	return {
+		left: seidrPairOr(o.left, { x: 0, y: 0 }),
+		right: seidrPairOr(o.right, { x: 0, y: 0 }),
+		cuddle: seidrPairOr(o.cuddle, { x: 0, y: 0 }),
+		hub: seidrPairOr(o.hub, { x: 0, y: 0 }),
+	};
+}
+
+function seidrClearDrawSyncOverlays() {
+	Seidr._drawSyncByHub = {};
+}
+
+function seidrSetDrawSyncOverlay(hubId, offsets) {
+	if (typeof hubId !== "number") return;
+	if (!Seidr._drawSyncByHub || typeof Seidr._drawSyncByHub !== "object") {
+		Seidr._drawSyncByHub = {};
+	}
+	var next = {
+		left: seidrPairOr(offsets && offsets.left, { x: 0, y: 0 }),
+		right: seidrPairOr(offsets && offsets.right, { x: 0, y: 0 }),
+		cuddle: seidrPairOr(offsets && offsets.cuddle, { x: 0, y: 0 }),
+		hub: seidrPairOr(offsets && offsets.hub, { x: 0, y: 0 }),
+	};
+	Seidr._drawSyncByHub[hubId] = next;
+}
+
+function seidrDropDrawSyncOverlay(hubId) {
+	if (typeof hubId !== "number") return;
+	var map = Seidr._drawSyncByHub;
+	if (!map || typeof map !== "object") return;
+	delete map[hubId];
+}
+
+/** Drop overlays for hubs the local player is no longer in; prune gone hubs. */
+function seidrPruneDrawSyncOverlays() {
+	var map = Seidr._drawSyncByHub;
+	if (!map || typeof map !== "object") return;
+	var me = typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number"
+		? Player.MemberNumber
+		: null;
+	var hubs = Seidr.getHubs ? Seidr.getHubs() : {};
+	var selfCluster = me != null && SeidrState.clusterOf
+		? SeidrState.clusterOf(hubs, me)
+		: null;
+	Object.keys(map).forEach(function (key) {
+		var hubId = Number(key);
+		if (!Number.isFinite(hubId)) {
+			delete map[key];
+			return;
+		}
+		if (!hubs[hubId]) {
+			delete map[hubId];
+			return;
+		}
+		if (selfCluster && selfCluster.hub === hubId) return;
+		delete map[hubId];
+	});
+}
+
+/**
+ * Free-draw: each role is sharedCenter + roleOffset * zoom.
+ * offsets: { left, right, cuddle, hub } pairs.
+ */
+function seidrFreeDrawPose(cluster, member, offsets, zoom) {
 	var z = typeof zoom === "number" ? zoom : 1;
-	if (!character || typeof character.MemberNumber !== "number") return null;
-	if (seidrInEcho(character)) return null;
-	var cluster = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
-	if (!cluster) return null;
+	if (!cluster || typeof member !== "number" || !offsets) return null;
 	var center = seidrSharedCenter(cluster, z);
 	if (!center) return null;
+	var pair = null;
+	if (member === cluster.left) pair = offsets.left;
+	else if (member === cluster.right) pair = offsets.right;
+	else if (member === cluster.cuddle) pair = offsets.cuddle;
+	else if (member === cluster.hub) pair = offsets.hub;
+	if (!pair) return null;
+	var ox = typeof pair.x === "number" && isFinite(pair.x) ? pair.x : 0;
+	var oy = typeof pair.y === "number" && isFinite(pair.y) ? pair.y : 0;
+	return { X: center.X + ox * z, Y: center.Y + oy * z, Zoom: z };
+}
+
+/**
+ * Synthesize free-draw role offsets from normal pull/cuddle for the given cluster
+ * shape (relative to origin — receivers add sharedCenter).
+ */
+function seidrSynthesizeFreeFromNormal(cluster, pullCuddle) {
+	var o = pullCuddle || seidrLiveOffsets();
+	var ox = o.pull.x;
+	var oy = o.pull.y;
+	var hubOnCenterX = !!(cluster && (
+		cluster.cuddle != null
+		|| (cluster.left != null && cluster.right != null)
+	));
+	var sideOx = hubOnCenterX ? ox * 2 : ox;
+	var hub = { x: 0, y: 0 };
+	if (cluster && cluster.cuddle != null) {
+		hub = { x: o.cuddle.x, y: o.cuddle.y };
+	} else if (cluster && cluster.left != null && cluster.right == null) {
+		hub = { x: ox, y: 0 };
+	} else if (cluster && cluster.right != null && cluster.left == null) {
+		hub = { x: -ox, y: 0 };
+	}
+	return {
+		left: { x: -sideOx, y: oy },
+		right: { x: sideOx, y: oy },
+		cuddle: { x: 0, y: 0 },
+		hub: hub,
+	};
+}
+
+/** Effective free-draw map for Sync publish (advanced if on, else synthesize). */
+function seidrEffectiveFreeDrawForSync(cluster) {
+	if (Seidr.drawAdvancedMode) return seidrLiveAdvancedOffsets();
+	return seidrSynthesizeFreeFromNormal(cluster, seidrLiveOffsets());
+}
+
+function seidrNormalDrawPose(cluster, member, center, z) {
 	var o = seidrLiveOffsets();
 	var ox = o.pull.x * z;
 	var oy = o.pull.y * z;
-	// When hub sits on center X (both sides, or cuddle), double side X so
-	// hub-to-side gap stays 2× Pull X — same as one-side pull with hub opposite.
 	var hubOnCenterX = cluster.cuddle != null
 		|| (cluster.left != null && cluster.right != null);
 	var sideOx = hubOnCenterX ? ox * 2 : ox;
-	var n = character.MemberNumber;
-	if (n === cluster.left) {
+	if (member === cluster.left) {
 		return { X: center.X - sideOx, Y: center.Y + oy, Zoom: z };
 	}
-	if (n === cluster.right) {
+	if (member === cluster.right) {
 		return { X: center.X + sideOx, Y: center.Y + oy, Zoom: z };
 	}
-	if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
-	if (n === cluster.hub) {
+	if (member === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
+	if (member === cluster.hub) {
 		if (cluster.cuddle != null) {
 			return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
 		}
@@ -413,6 +567,60 @@ function seidrDrawPose(character, x, y, zoom) {
 	}
 	return null;
 }
+
+/**
+ * Pose occupancy ignores void-grace ghosts: seats stay in hub state for 45s,
+ * but draw treats absent left/right/cuddle as empty so the hub snaps natural
+ * (map cuddle parity) until they rejoin.
+ */
+function seidrClusterForPose(cluster) {
+	if (!cluster) return null;
+	var present = seidrPresentMap();
+	function slot(id) {
+		return typeof id === "number" && present[id] ? id : null;
+	}
+	return {
+		hub: cluster.hub,
+		left: slot(cluster.left),
+		right: slot(cluster.right),
+		cuddle: slot(cluster.cuddle),
+	};
+}
+
+function seidrDrawPose(character, x, y, zoom) {
+	var z = typeof zoom === "number" ? zoom : 1;
+	if (!character || typeof character.MemberNumber !== "number") return null;
+	if (seidrInEcho(character)) return null;
+	var raw = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
+	if (!raw) return null;
+	var cluster = seidrClusterForPose(raw);
+	if (!cluster) return null;
+	var center = seidrSharedCenter(cluster, z);
+	if (!center) return null;
+	var n = character.MemberNumber;
+
+	// 1) Session sync overlay for this hub (Allow Sync + in cluster).
+	var sync = seidrDrawSyncOverlay(cluster.hub);
+	if (sync) {
+		var synced = seidrFreeDrawPose(cluster, n, sync, z);
+		if (synced) return synced;
+	}
+
+	// 2) Advanced Mode free-draw.
+	if (Seidr.drawAdvancedMode) {
+		var adv = seidrFreeDrawPose(cluster, n, seidrLiveAdvancedOffsets(), z);
+		if (adv) return adv;
+	}
+
+	// 3) Normal Pull / Cuddle.
+	return seidrNormalDrawPose(cluster, n, center, z);
+}
+
+Seidr.clearDrawSyncOverlays = seidrClearDrawSyncOverlays;
+Seidr.setDrawSyncOverlay = seidrSetDrawSyncOverlay;
+Seidr.dropDrawSyncOverlay = seidrDropDrawSyncOverlay;
+Seidr.pruneDrawSyncOverlays = seidrPruneDrawSyncOverlays;
+Seidr.effectiveFreeDrawForSync = seidrEffectiveFreeDrawForSync;
 
 /**
  * Echo drawOffset: LoopCharacters keeps natural seats (hitboxes + status/overlay).
@@ -521,7 +729,7 @@ Seidr.installDraw = function () {
 		const C = args[0];
 		const mode = seidrClusterNameMode();
 		const prevCtx = seidrNameDrawCtx;
-		if (mode !== "default" && seidrInCluster(C) && typeof C.MemberNumber === "number") {
+		if (mode !== "default" && seidrNameApplies(C)) {
 			const stored = seidrNatural[C.MemberNumber];
 			if (stored && typeof stored.X === "number" && typeof stored.Y === "number") {
 				const fallbackZ = typeof args[3] === "number" && args[3] > 0 ? args[3] : 1;
@@ -632,6 +840,15 @@ Seidr._draw = {
 	natural: seidrNatural,
 	sharedCenter: seidrSharedCenter,
 	drawPose: seidrDrawPose,
+	freeDrawPose: seidrFreeDrawPose,
+	normalDrawPose: seidrNormalDrawPose,
+	synthesizeFreeFromNormal: seidrSynthesizeFreeFromNormal,
+	effectiveFreeDrawForSync: seidrEffectiveFreeDrawForSync,
+	drawSyncOverlay: seidrDrawSyncOverlay,
+	setDrawSyncOverlay: seidrSetDrawSyncOverlay,
+	clearDrawSyncOverlays: seidrClearDrawSyncOverlays,
+	dropDrawSyncOverlay: seidrDropDrawSyncOverlay,
+	pruneDrawSyncOverlays: seidrPruneDrawSyncOverlays,
 	statusCoords: seidrStatusCoords,
 	clusterOrder: seidrClusterOrder,
 	reorder: seidrReorderDrawlist,

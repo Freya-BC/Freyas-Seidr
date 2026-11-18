@@ -1,7 +1,19 @@
-/** Background library + apply Custom.ImageURL */
+/** Background library + apply Custom.ImageURL / SizeMode */
 import { rmGetStore, rmSaveStore } from "./storage";
-import { rmNewId, type RmBackgroundEntry } from "./model";
-import { rmInLiveRoom, rmOnChatAdmin, rmUpdateLiveRoom } from "./roomApply";
+import {
+	rmNewId,
+	rmNormalizeBgFillMode,
+	rmNormalizeBackgroundEntry,
+	rmResolveSizeMode,
+	type RmBackgroundEntry,
+	type RmBgFillMode,
+} from "./model";
+import {
+	rmApplyCustomPatch,
+	rmGetLastRoomPreset,
+	rmInLiveRoom,
+	rmOnChatAdmin,
+} from "./roomApply";
 
 export function rmListBackgrounds(): RmBackgroundEntry[] {
 	return rmGetStore().backgrounds.slice();
@@ -51,20 +63,26 @@ export function rmValidateBackgroundUrl(url: string): Promise<{ ok: boolean; err
 	});
 }
 
-export function rmSaveBackground(name: string, url: string, existingId?: string): Promise<{ ok: boolean; error?: string; entry?: RmBackgroundEntry }> {
+export function rmSaveBackground(
+	name: string,
+	url: string,
+	existingId?: string,
+	fillMode?: RmBgFillMode,
+): Promise<{ ok: boolean; error?: string; entry?: RmBackgroundEntry }> {
 	return rmValidateBackgroundUrl(url).then(function (v) {
 		if (!v.ok || !v.url) return { ok: false, error: v.error || "Invalid URL" };
 		const n = (name || "").trim().slice(0, 64);
 		if (!n) return { ok: false, error: "Name required" };
+		const mode = rmNormalizeBgFillMode(fillMode);
 		const store = rmGetStore();
 		let entry: RmBackgroundEntry;
 		if (existingId) {
 			const idx = store.backgrounds.findIndex(function (b) { return b.id === existingId; });
 			if (idx < 0) return { ok: false, error: "Background not found" };
-			entry = { id: existingId, name: n, url: v.url };
+			entry = { id: existingId, name: n, url: v.url, fillMode: mode };
 			store.backgrounds[idx] = entry;
 		} else {
-			entry = { id: rmNewId("bg"), name: n, url: v.url };
+			entry = { id: rmNewId("bg"), name: n, url: v.url, fillMode: mode };
 			store.backgrounds.push(entry);
 		}
 		const saved = rmSaveStore();
@@ -81,18 +99,46 @@ export function rmDeleteBackground(id: string): boolean {
 	return rmSaveStore().ok;
 }
 
-export function rmApplyBackgroundUrl(url: string): { ok: boolean; error?: string } {
+function resolveRoomDefaultSizeMode(explicit?: number): number {
+	if (typeof explicit === "number" && Number.isFinite(explicit)) {
+		return explicit;
+	}
+	const last = rmGetLastRoomPreset();
+	if (last && typeof last.customSizeMode === "number") return last.customSizeMode;
+	try {
+		if (rmOnChatAdmin() && ChatAdminData && ChatAdminData.Custom
+			&& typeof ChatAdminData.Custom.SizeMode === "number") {
+			return ChatAdminData.Custom.SizeMode;
+		}
+	} catch (e) { /* ignore */ }
+	try {
+		if (rmInLiveRoom() && ChatRoomData && ChatRoomData.Custom
+			&& typeof (ChatRoomData.Custom as { SizeMode?: number }).SizeMode === "number") {
+			return (ChatRoomData.Custom as { SizeMode: number }).SizeMode;
+		}
+	} catch (e) { /* ignore */ }
+	return rmResolveSizeMode("fill");
+}
+
+/** Apply a library entry (URL + fillMode resolution). */
+export function rmApplyBackgroundEntry(
+	entry: RmBackgroundEntry,
+	roomDefault?: number,
+): { ok: boolean; error?: string } {
+	const normalized = rmNormalizeBackgroundEntry(entry);
+	if (!normalized) return { ok: false, error: "Invalid background" };
+	const sizeMode = rmResolveSizeMode(normalized.fillMode, resolveRoomDefaultSizeMode(roomDefault));
+	return rmApplyBackgroundUrl(normalized.url, { sizeMode: sizeMode });
+}
+
+export function rmApplyBackgroundUrl(
+	url: string,
+	opts?: { sizeMode?: number },
+): { ok: boolean; error?: string } {
 	const trimmed = (url || "").trim();
 	if (!trimmed) return { ok: false, error: "No URL" };
-	if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
-		if (!ChatAdminData.Custom || typeof ChatAdminData.Custom !== "object") ChatAdminData.Custom = {};
-		ChatAdminData.Custom.ImageURL = trimmed;
-		return { ok: true };
-	}
-	if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
-		if (!ChatRoomData.Custom || typeof ChatRoomData.Custom !== "object") ChatRoomData.Custom = {};
-		ChatRoomData.Custom.ImageURL = trimmed;
-		return rmUpdateLiveRoom();
-	}
-	return { ok: false, error: "Open ChatAdmin or join a room as admin" };
+	const sizeMode = typeof opts?.sizeMode === "number" && Number.isFinite(opts.sizeMode)
+		? opts.sizeMode
+		: resolveRoomDefaultSizeMode();
+	return rmApplyCustomPatch({ ImageURL: trimmed, SizeMode: sizeMode });
 }

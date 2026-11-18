@@ -2,6 +2,15 @@
 import { Seidr } from "../seidr";
 import { seidrDefaultSettings, seidrNormalizeSettings, type SeidrSettings } from "../settings/model";
 
+declare const DrawingResizeMode: {
+	Fill: number;
+	FillOriginalRatio: number;
+	ShowFullOriginalRatio: number;
+} | undefined;
+
+/** Per-background fill vs room default (maps to DrawingResizeMode when not default). */
+export type RmBgFillMode = "default" | "fill" | "fillOriginalRatio" | "showFullOriginalRatio";
+
 export type RmRoomPreset = {
 	Name?: string;
 	Language?: string;
@@ -12,6 +21,12 @@ export type RmRoomPreset = {
 	Visibility?: string[];
 	Access?: string[];
 	MapData?: { Type?: string; [k: string]: unknown };
+	/** Club builtin background name. */
+	Background?: string;
+	/** Room default Custom.SizeMode (DrawingResizeMode). */
+	customSizeMode?: number;
+	/** Room default Custom.ImageFilter (Club Background Filter). */
+	customImageFilter?: string;
 };
 
 export type RmAccessPreset = {
@@ -24,6 +39,8 @@ export type RmBackgroundEntry = {
 	id: string;
 	name: string;
 	url: string;
+	/** When default, Load uses Room Definition customSizeMode. */
+	fillMode?: RmBgFillMode;
 };
 
 export type RmMapLocation = "remote" | "local";
@@ -98,6 +115,96 @@ function clampName(raw: unknown, fallback: string, max: number): string {
 	return s || fallback;
 }
 
+/** Club DrawingResizeMode.Fill, or 1. */
+export function rmDefaultDrawingResizeMode(): number {
+	try {
+		if (typeof DrawingResizeMode !== "undefined" && DrawingResizeMode
+			&& typeof DrawingResizeMode.Fill === "number") {
+			return DrawingResizeMode.Fill;
+		}
+	} catch (e) { /* ignore */ }
+	return 1;
+}
+
+export function rmNormalizeBgFillMode(raw: unknown): RmBgFillMode {
+	const s = String(raw == null ? "" : raw);
+	if (s === "fill" || s === "fillOriginalRatio" || s === "showFullOriginalRatio" || s === "default") {
+		return s;
+	}
+	return "default";
+}
+
+export function rmNormalizeBackgroundEntry(raw: unknown): RmBackgroundEntry | null {
+	if (!raw || typeof raw !== "object") return null;
+	const d = raw as Partial<RmBackgroundEntry>;
+	if (typeof d.url !== "string" || !d.url.trim()) return null;
+	return {
+		id: typeof d.id === "string" && d.id ? d.id : rmNewId("bg"),
+		name: clampName(d.name, "Background", 64),
+		url: d.url.trim(),
+		fillMode: rmNormalizeBgFillMode(d.fillMode),
+	};
+}
+
+export function rmNormalizeRoomPreset(raw: unknown): RmRoomPreset {
+	if (!raw || typeof raw !== "object") return {};
+	const d = raw as Partial<RmRoomPreset> & { Custom?: { SizeMode?: number; ImageFilter?: string } };
+	const out: RmRoomPreset = {};
+	if (typeof d.Name === "string") out.Name = d.Name;
+	if (typeof d.Language === "string") out.Language = d.Language;
+	if (typeof d.Description === "string") out.Description = d.Description;
+	if (typeof d.Limit === "number" && Number.isFinite(d.Limit)) out.Limit = d.Limit;
+	if (Array.isArray(d.BlockCategory)) out.BlockCategory = d.BlockCategory.slice() as string[];
+	if (typeof d.Game === "string") out.Game = d.Game;
+	if (Array.isArray(d.Visibility)) out.Visibility = d.Visibility.slice() as string[];
+	if (Array.isArray(d.Access)) out.Access = d.Access.slice() as string[];
+	if (d.MapData && typeof d.MapData === "object") out.MapData = d.MapData as RmRoomPreset["MapData"];
+	if (typeof d.Background === "string") out.Background = d.Background;
+	if (typeof d.customSizeMode === "number" && Number.isFinite(d.customSizeMode)) {
+		out.customSizeMode = d.customSizeMode;
+	} else if (d.Custom && typeof d.Custom.SizeMode === "number") {
+		out.customSizeMode = d.Custom.SizeMode;
+	}
+	if (typeof d.customImageFilter === "string") {
+		out.customImageFilter = d.customImageFilter;
+	} else if (d.Custom && typeof d.Custom.ImageFilter === "string") {
+		out.customImageFilter = d.Custom.ImageFilter;
+	}
+	if (out.customSizeMode == null) out.customSizeMode = rmDefaultDrawingResizeMode();
+	if (out.customImageFilter == null) out.customImageFilter = "";
+	return out;
+}
+
+/** Map library fillMode → DrawingResizeMode number (default uses roomDefault). */
+export function rmResolveSizeMode(fillMode: RmBgFillMode | undefined, roomDefault?: number): number {
+	const mode = rmNormalizeBgFillMode(fillMode);
+	if (mode === "default") {
+		return typeof roomDefault === "number" && Number.isFinite(roomDefault)
+			? roomDefault
+			: rmDefaultDrawingResizeMode();
+	}
+	try {
+		if (typeof DrawingResizeMode !== "undefined" && DrawingResizeMode) {
+			if (mode === "fill") return DrawingResizeMode.Fill;
+			if (mode === "fillOriginalRatio") return DrawingResizeMode.FillOriginalRatio;
+			if (mode === "showFullOriginalRatio") return DrawingResizeMode.ShowFullOriginalRatio;
+		}
+	} catch (e) { /* ignore */ }
+	if (mode === "fill") return 1;
+	if (mode === "fillOriginalRatio") return 2;
+	if (mode === "showFullOriginalRatio") return 3;
+	return rmDefaultDrawingResizeMode();
+}
+
+export function rmFillModeLabel(mode: RmBgFillMode): string {
+	switch (mode) {
+		case "fill": return "Fill the Room";
+		case "fillOriginalRatio": return "Fill Original Aspect";
+		case "showFullOriginalRatio": return "Full Image Original Aspect";
+		default: return "Default";
+	}
+}
+
 export function rmNormalizeMapVersion(raw: unknown, fallbackName?: string): RmMapVersion | null {
 	if (!raw || typeof raw !== "object") return null;
 	const d = raw as Partial<RmMapVersion>;
@@ -167,12 +274,26 @@ export function rmNormalizeStore(data: unknown): RmStore {
 	if (!data || typeof data !== "object") return base;
 	const d = data as Partial<RmStore> & { background?: Record<string, unknown> };
 	base.version = typeof d.version === "number" ? d.version : base.version;
-	base.room = d.room && typeof d.room === "object" ? d.room : {};
-	base.access = d.access && typeof d.access === "object" ? d.access : {};
-	if (Array.isArray(d.backgrounds)) base.backgrounds = d.backgrounds;
-	else if (d.background && typeof d.background === "object") {
-		base.backgrounds = [];
+
+	const room: Record<string, RmRoomPreset> = {};
+	if (d.room && typeof d.room === "object") {
+		Object.keys(d.room).forEach(function (key) {
+			room[key] = rmNormalizeRoomPreset((d.room as Record<string, unknown>)[key]);
+		});
 	}
+	base.room = room;
+
+	base.access = d.access && typeof d.access === "object" ? d.access : {};
+
+	const backgrounds: RmBackgroundEntry[] = [];
+	if (Array.isArray(d.backgrounds)) {
+		for (let i = 0; i < d.backgrounds.length; i++) {
+			const entry = rmNormalizeBackgroundEntry(d.backgrounds[i]);
+			if (entry) backgrounds.push(entry);
+		}
+	}
+	base.backgrounds = backgrounds;
+
 	const maps: RmMapSeries[] = [];
 	if (Array.isArray(d.maps)) {
 		for (let i = 0; i < d.maps.length; i++) {

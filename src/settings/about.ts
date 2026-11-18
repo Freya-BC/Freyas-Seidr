@@ -12,7 +12,7 @@ const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Holds",
 		blurb:
-			"Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso — shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
+			"Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso — shared poses when both of you run Seidr. Void disconnect keeps seats about 45s; map rooms use seat tiles plus a 60s walk-back grace.",
 		docPath: "/docs/view.html#HOLDS",
 	},
 	{
@@ -36,13 +36,13 @@ const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Chat Commands",
 		blurb:
-			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete and optional Fast Select (letter + Tab) speed things up.",
+			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
 		docPath: "/docs/view.html#COMMANDS",
 	},
 	{
 		title: "Fast Open",
 		blurb:
-			"Hold a modifier and click a room character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
+			"Hold a modifier and click a room or map character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
 		docPath: "/docs/view.html#SETTINGS",
 	},
 	{
@@ -60,7 +60,7 @@ const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Drawing, Arousal & Storage",
 		blurb:
-			"Pull/cuddle drawing offsets, cluster Names modes (Hitbox/Hover/Hide), arousal bar modes, and ExtensionSettings usage vs the soft cap.",
+			"Pull/cuddle Drawing (+ Advanced/Sync), Map Cuddle for map rooms, Names/Who, optional chat font, arousal bar modes, and ExtensionSettings usage vs the soft cap.",
 		docPath: "/docs/view.html#SETTINGS",
 	},
 ];

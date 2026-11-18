@@ -7,23 +7,44 @@ declare const AssetGroup: any;
 declare const ActivityFemale3DCG: any;
 declare const ActivityAllowedForGroup: any;
 declare const ActivityDictionaryLoad: any;
-declare const ActivityBuildChatTag: any;
-declare const ActivityDictionaryText: any;
 declare const ChatRoomCharacter: any;
 declare const Player: any;
 
+/**
+ * Resolve a display label without ActivityDictionaryText / TextCache.get.
+ * Club logs console.debug(Error) for every unknown key; Commands UI lists many
+ * Target-only activities under ChatSelf tags that do not exist (e.g. Rub on
+ * ItemTorso is Label-ChatOther-… only).
+ */
+function activityDictLookup(key: string): string | null {
+	try {
+		if (typeof ActivityDictionaryLoad !== "function") return null;
+		const tc = ActivityDictionaryLoad();
+		if (!tc) return null;
+		let t: unknown;
+		if (typeof tc.getOptional === "function") t = tc.getOptional(key);
+		else if (tc.cache) t = tc.cache[key];
+		if (typeof t !== "string" || !t) return null;
+		if (String(t).indexOf("MISSING") >= 0) return null;
+		return String(t);
+	} catch (e) {
+		return null;
+	}
+}
+
 function activityLabel(name: string, group?: string): string {
-	try {
-		if (typeof ActivityBuildChatTag === "function" && typeof ActivityDictionaryText === "function" && group) {
-			const key = ActivityBuildChatTag(Player, { Name: group }, { Name: name }, true);
-			const t = ActivityDictionaryText(key);
-			if (t && String(t).indexOf("MISSING") < 0) return String(t);
+	if (group) {
+		const keys = [
+			"Label-ChatSelf-" + group + "-" + name,
+			"Label-ChatOther-" + group + "-" + name,
+		];
+		for (let i = 0; i < keys.length; i++) {
+			const t = activityDictLookup(keys[i]);
+			if (t) return t;
 		}
-	} catch (e) { /* ignore */ }
-	try {
-		const cache = typeof ActivityDictionaryLoad === "function" && ActivityDictionaryLoad().cache;
-		if (cache && cache["Activity" + name]) return String(cache["Activity" + name]);
-	} catch (e2) { /* ignore */ }
+	}
+	const generic = activityDictLookup("Activity" + name);
+	if (generic) return generic;
 	return name;
 }
 

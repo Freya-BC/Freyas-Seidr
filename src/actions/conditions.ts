@@ -1,20 +1,51 @@
 /** Evaluate Seidr Action availability conditions (OR of AND groups). */
 import type { SeidrAction, SeidrActionItemRef, SeidrCondRule } from "./model";
 
-/** True if acted wears at least one allowlisted restraint (empty list = pass). */
-export function seidrActionItemsOk(action: SeidrAction, acted: any): boolean {
-	const items = action && action.items;
-	if (!items || !items.length) return true;
-	if (!acted || typeof InventoryGet !== "function") return false;
+/** Slots to probe for a listed asset: its catalog slot plus the action's activity zones. */
+function slotsForItemRef(ref: SeidrActionItemRef, actionSlots: string[]): string[] {
+	const out: string[] = [];
+	if (ref.slot) out.push(ref.slot);
+	const zones = actionSlots || [];
+	for (let i = 0; i < zones.length; i++) {
+		const s = zones[i];
+		if (s && out.indexOf(s) < 0) out.push(s);
+	}
+	return out;
+}
+
+/** True if character wears the asset on the ref slot or any of the action's slots. */
+function charWearsListedItem(C: any, items: SeidrActionItemRef[], actionSlots: string[]): boolean {
+	if (!C || typeof InventoryGet !== "function") return false;
 	for (let i = 0; i < items.length; i++) {
-		const ref = items[i] as SeidrActionItemRef;
-		if (!ref || !ref.slot || !ref.name) continue;
-		try {
-			const worn = InventoryGet(acted, ref.slot as any);
-			if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
-		} catch (e) { /* ignore */ }
+		const ref = items[i];
+		if (!ref || !ref.name) continue;
+		const slots = slotsForItemRef(ref, actionSlots);
+		for (let j = 0; j < slots.length; j++) {
+			try {
+				const worn = InventoryGet(C, slots[j] as any);
+				if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
+			} catch (e) { /* ignore */ }
+		}
 	}
 	return false;
+}
+
+/**
+ * True if checked side(s) wear at least one allowlisted restraint (empty list = pass).
+ * Asset may sit on the listed catalog slot or any of the action's activity slots
+ * (e.g. DildoGag added under ItemMouth still matches when worn on ItemMouth2).
+ * Defaults: target on, source off. If both flags off with a non-empty list, treat as target-only.
+ */
+export function seidrActionItemsOk(action: SeidrAction, source: any, target: any): boolean {
+	const items = action && action.items;
+	if (!items || !items.length) return true;
+	let onTarget = action.itemsOnTarget !== false;
+	let onSource = !!action.itemsOnSource;
+	if (!onTarget && !onSource) onTarget = true;
+	const zones = action.slots || [];
+	if (onTarget && !charWearsListedItem(target, items, zones)) return false;
+	if (onSource && !charWearsListedItem(source, items, zones)) return false;
+	return true;
 }
 
 function charOf(who: "source" | "target", source: any, target: any): any {
@@ -111,6 +142,6 @@ export function seidrActionAudienceOk(action: SeidrAction, source: any, target: 
 /** Audience + items allowlist + condition groups. */
 export function seidrActionAvailable(action: SeidrAction, source: any, target: any): boolean {
 	if (!seidrActionAudienceOk(action, source, target)) return false;
-	if (!seidrActionItemsOk(action, target)) return false;
+	if (!seidrActionItemsOk(action, source, target)) return false;
 	return seidrActionConditionsOk(action, source, target);
 }

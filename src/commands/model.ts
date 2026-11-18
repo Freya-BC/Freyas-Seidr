@@ -114,6 +114,12 @@ export type SeidrCommandsBag = {
 	fastSelectKeys: SeidrFastSelectKeys;
 	/** Empty InputChat + Tab target (default disabled = Club Tab). */
 	fastSelectEmpty: SeidrFastSelectEmpty;
+	/** Tab AC for Club /whisper (room members). Default true. */
+	acWhisper: boolean;
+	/** Tab AC for Club /beep (online friends). Default true. */
+	acBeep: boolean;
+	/** Hover Reply on Club beep chat rows. Default true. Does not affect FBM float chat. */
+	beepReply: boolean;
 };
 
 const FAST_SELECT_EMPTY_IDS: SeidrFastSelectEmpty[] = [
@@ -171,6 +177,9 @@ export function seidrDefaultCommandsBag(): SeidrCommandsBag {
 		fastSelectEnabled: true,
 		fastSelectKeys: seidrDefaultFastSelectKeys(),
 		fastSelectEmpty: "disabled",
+		acWhisper: true,
+		acBeep: true,
+		beepReply: true,
 	};
 }
 
@@ -255,6 +264,14 @@ export function seidrNormalizeCommandsBag(raw: unknown): SeidrCommandsBag {
 	base.fastSelectEmpty = seidrNormalizeFastSelectEmpty(
 		(d as { fastSelectEmpty?: unknown }).fastSelectEmpty
 	);
+	const assist = d as {
+		acWhisper?: unknown;
+		acBeep?: unknown;
+		beepReply?: unknown;
+	};
+	if (typeof assist.acWhisper === "boolean") base.acWhisper = assist.acWhisper;
+	if (typeof assist.acBeep === "boolean") base.acBeep = assist.acBeep;
+	if (typeof assist.beepReply === "boolean") base.beepReply = assist.beepReply;
 	return base;
 }
 

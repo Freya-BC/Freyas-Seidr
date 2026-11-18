@@ -1,6 +1,7 @@
 /** Register user Actions as Club activities + ActivityRun side effects. */
 import { Seidr } from "../seidr";
 import { seidrActionAvailable } from "./conditions";
+import { seidrSyncPose } from "../poses/apply";
 import {
 	SEIDR_ACTION_SOUNDS,
 	seidrActionActivityName,
@@ -71,6 +72,13 @@ function arousalTemplate(action: SeidrAction): string | null {
 	const name = action.effects.arousal.activity;
 	return typeof name === "string" && name ? name : "Caress";
 }
+
+function arousalReverse(action: SeidrAction): boolean {
+	return !!(action.effects && action.effects.arousal && action.effects.arousal.reverse);
+}
+
+/** While true, PreferenceGetActivityFactor flips Self/Other (give/receive). */
+let seidrArousalReverseFlip = false;
 
 function activityNameFromArgs(A: unknown): string {
 	if (typeof A === "string") return A;
@@ -333,13 +341,7 @@ function applyPose(C: any, pose: string) {
 		if (typeof PoseSetActive === "function") PoseSetActive(C, pose as any, false);
 		else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose as any);
 	} catch (e) { /* ignore */ }
-	try {
-		if (typeof ChatRoomCharacterUpdate === "function") {
-			ChatRoomCharacterUpdate(C);
-		} else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
-			ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
-		}
-	} catch (e2) { /* ignore */ }
+	seidrSyncPose(C);
 }
 
 function canPoseTarget(actor: any, acted: any): boolean {
@@ -387,16 +389,27 @@ export function seidrInstallUserActions() {
 	seidrSyncUserActions();
 
 	// Remap Seidr_Act_* preference factor → chosen BC activity (Caress, …).
+	// Club Self=true = receiving, Self=false = giving; reverse flips that column.
 	Seidr.hookFunction("PreferenceGetActivityFactor", 1, function (args, next) {
 		const type = args[1];
 		const id = typeof type === "string" ? seidrParseActionActivityName(type) : null;
-		if (id == null) return next(args);
+		if (id == null) {
+			if (seidrArousalReverseFlip && typeof args[2] === "boolean") {
+				const nextArgs = args.slice();
+				nextArgs[2] = !args[2];
+				return next(nextArgs);
+			}
+			return next(args);
+		}
 		const action = seidrGetActionById(id);
 		if (!action) return 0;
 		const template = arousalTemplate(action);
 		if (template) {
 			const nextArgs = args.slice();
 			nextArgs[1] = template;
+			if (arousalReverse(action) && typeof args[2] === "boolean") {
+				nextArgs[2] = !args[2];
+			}
 			return next(nextArgs);
 		}
 		return 2;
@@ -413,7 +426,13 @@ export function seidrInstallUserActions() {
 		if (!template) return;
 		const nextArgs = args.slice();
 		nextArgs[2] = template;
-		return next(nextArgs);
+		const flip = arousalReverse(action);
+		if (flip) seidrArousalReverseFlip = true;
+		try {
+			return next(nextArgs);
+		} finally {
+			if (flip) seidrArousalReverseFlip = false;
+		}
 	});
 
 	// Embed SeidrSound + rewrite ActivityName for Club arousal on peers.

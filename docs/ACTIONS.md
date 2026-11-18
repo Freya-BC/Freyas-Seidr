@@ -81,9 +81,12 @@ Example: `SourceCharacter kisses TargetCharacter's lips.`
 Optional list of restraints `{ slot, name }` on Item\* groups (gags, binders, etc. — not clothing/hair).
 
 - **Empty** = no filter (action can appear whenever Club would show activities).
-- **Non-empty** = the **acted** character must wear at least one listed restraint.
+- **Non-empty** = checked side(s) must wear at least one listed restraint.
+  - **Them** (default on) — the acted character (who you clicked).
+  - **Me** — you (the actor). Both can be on; both must then pass.
+- The asset may sit on the **catalog slot you picked** or on **any of the action’s activity zones** (so a Dildo Gag added under Mouth still matches when worn on Mouth2 / Mouth3 if those zones are selected).
 
-**Add restraint** opens a searchable Club catalog for Item\* slots.
+**Add restraint** opens a searchable Club catalog for Item\* slots. Leave **Me** unchecked unless *you* must also wear the item.
 
 ## Conditions
 
@@ -104,12 +107,13 @@ Tip: start with Audience **both** and add conditions only when you need them; ov
 | Effect | Behaviour |
 |--------|-----------|
 | **Add arousal** | Off by default. When on, pick a Club **TEMPLATE** activity (e.g. Caress) so vanilla arousal prefs still apply |
+| **Reverse give/receive** | Optional. Flips Club’s Self (receiving) / Other (giving) columns for this action — e.g. riding a strap-on with Penetrate template |
 | **Sound** | Seidr peers play via a dictionary cue; SpankSkin also appends a `-Spank` style cue for vanilla |
 | **Pose** | Applies a Club pose and updates the character |
 
 Seidr remaps the custom action to the template for partners. The acted character needs Hybrid/Automatic as usual for Club arousal. There is **no** separate Hidden peer arousal protocol — delivery uses Club Type Activity behaviour.
 
-Chat text stays your action name; the template is for prefs / arousal only.
+Chat text stays your action name; the template is for prefs / arousal only. You do not need a second “reverse” Club activity — use **Reverse give/receive** on the same template.
 
 ## Export / Import
 
@@ -126,7 +130,7 @@ Handy for moving a set of actions between characters or sharing with a friend.
 
 ## Storage
 
-Actions live in `ExtensionSettings.SeidrRoomManager` → `settings.actions` (same LZ bag as Room Manager). See [SETTINGS.md](SETTINGS.md) / README Storage.
+Actions live in their own synced key `ExtensionSettings.SeidrActions`. See [SETTINGS.md](SETTINGS.md) / README Storage.
 
 ## Related
 

@@ -1,13 +1,21 @@
-/** Modifier-click a room character → Club Activity View (Fast Open Actions). */
+/** Modifier-click a room or map character → Club Activity View (Fast Open Actions). */
 import { Seidr } from "./seidr";
 import type { SeidrFastOpenModifier } from "./settings/model";
 import { seidrGetSettings } from "./settings/storage";
+
+declare var ChatRoomMapViewFocusedCharacter: any;
+declare var ChatRoomMapViewEditMode: string | undefined;
+declare var ChatRoomMapViewEditStarted: boolean | undefined;
+declare var MouseX: number;
+declare const MouseIn: ((x: number, y: number, w: number, h: number) => boolean) | undefined;
+declare const ChatRoomPlayerIsAdmin: (() => boolean) | undefined;
 
 let clickShift = false;
 let clickCtrl = false;
 let clickAlt = false;
 let clickMeta = false;
 let installed = false;
+let mapClickHooked = false;
 
 /** Prefer zones that usually have Club activities. */
 const PREFERRED_ACTIVITY_GROUPS = [
@@ -35,7 +43,25 @@ function clearClickMods() {
 	clickMeta = false;
 }
 
-function modifierHeld(mod: SeidrFastOpenModifier): boolean {
+function modifierFromEvent(mod: SeidrFastOpenModifier, e: any): boolean | null {
+	if (!e || typeof e !== "object") return null;
+	if (typeof e.shiftKey !== "boolean" && typeof e.ctrlKey !== "boolean") return null;
+	switch (mod) {
+		case "Ctrl":
+			return !!e.ctrlKey;
+		case "Alt":
+			return !!e.altKey;
+		case "Meta":
+			return !!e.metaKey;
+		case "Shift":
+		default:
+			return !!e.shiftKey;
+	}
+}
+
+function modifierHeld(mod: SeidrFastOpenModifier, e?: any): boolean {
+	const fromEvent = modifierFromEvent(mod, e);
+	if (fromEvent != null) return fromEvent;
 	switch (mod) {
 		case "Ctrl":
 			return clickCtrl;
@@ -122,6 +148,62 @@ function openActivitiesOn(C: any): boolean {
 	}
 }
 
+/** Club map UI buttons handled before character focus in ChatRoomMapViewClick. */
+function mapClickHitsChrome(): boolean {
+	if (typeof MouseIn !== "function") return false;
+	if (typeof ChatRoomPlayerIsAdmin === "function" && ChatRoomPlayerIsAdmin() && MouseIn(790, 860, 60, 60)) {
+		return true;
+	}
+	if (MouseIn(930, 860, 60, 60) || MouseIn(860, 860, 60, 60) || MouseIn(790, 930, 60, 60) ||
+		MouseIn(860, 930, 60, 60) || MouseIn(930, 930, 60, 60)) {
+		return true;
+	}
+	return false;
+}
+
+/** Same guards Club uses before ChatRoomFocusCharacter on the map. */
+function mapWouldFocusCharacter(): boolean {
+	if (typeof MouseX === "undefined" || MouseX > 1000) return false;
+	if (ChatRoomMapViewFocusedCharacter == null) return false;
+	if (ChatRoomMapViewEditMode === "Tile" || ChatRoomMapViewEditMode === "Object") return false;
+	if (ChatRoomMapViewEditStarted) return false;
+	if (mapClickHitsChrome()) return false;
+	return true;
+}
+
+function tryFastOpenFromSettings(C: any, e?: any): boolean {
+	const s = seidrGetSettings();
+	const enabled = s.fastOpenActionsEnabled !== false;
+	const mod = (s.fastOpenActionsModifier || "Shift") as SeidrFastOpenModifier;
+	if (!enabled || !modifierHeld(mod, e)) return false;
+	return openActivitiesOn(C);
+}
+
+/**
+ * Club routes map clicks through ChatRoomViews.Map.Click (a captured reference),
+ * not the global ChatRoomMapViewClick name — same as FBM.
+ */
+function installMapClickHook(): boolean {
+	if (mapClickHooked) return true;
+	const ok = Seidr.tryHook(
+		"fastOpenMapClick",
+		"ChatRoomViews.Map.Click",
+		12,
+		function (args, next) {
+			const ev = args && args[0];
+			if (ev && typeof ev === "object") rememberClickMods(ev as MouseEvent);
+			if (mapWouldFocusCharacter() && tryFastOpenFromSettings(ChatRoomMapViewFocusedCharacter, ev)) {
+				clearClickMods();
+				return;
+			}
+			clearClickMods();
+			return next(args);
+		},
+	);
+	if (ok) mapClickHooked = true;
+	return ok;
+}
+
 export function seidrInstallFastOpen() {
 	if (installed) return;
 	installed = true;
@@ -130,14 +212,21 @@ export function seidrInstallFastOpen() {
 		document.addEventListener("pointerdown", rememberClickMods, true);
 	}
 	Seidr.hookFunction("ChatRoomCharacterViewClickCharacter", 12, function (args, next) {
-		const s = seidrGetSettings();
-		const enabled = s.fastOpenActionsEnabled !== false;
-		const mod = (s.fastOpenActionsModifier || "Shift") as SeidrFastOpenModifier;
-		if (enabled && modifierHeld(mod)) {
+		if (tryFastOpenFromSettings(args[0])) {
 			clearClickMods();
-			if (openActivitiesOn(args[0])) return;
+			return;
 		}
 		clearClickMods();
+		return next(args);
+	});
+	installMapClickHook();
+	// ChatRoomViews may not exist until room scripts settle — retry like FBM.
+	Seidr.tryHook("fastOpenMapClickRetryLoad", "ChatRoomLoad", 0, function (args, next) {
+		installMapClickHook();
+		return next(args);
+	});
+	Seidr.tryHook("fastOpenMapClickRetrySync", "ChatRoomSync", 0, function (args, next) {
+		installMapClickHook();
 		return next(args);
 	});
 }

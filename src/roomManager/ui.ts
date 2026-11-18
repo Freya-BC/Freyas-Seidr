@@ -11,11 +11,12 @@ import {
 	rmInLiveRoom,
 	rmMapModeActive,
 	rmCanApplyToRoom,
+	rmSetLastRoomPreset,
 } from "./roomApply";
 import {
 	rmListBackgrounds,
 	rmSaveBackground,
-	rmApplyBackgroundUrl,
+	rmApplyBackgroundEntry,
 	rmDeleteBackground,
 	rmReorderBackgrounds,
 } from "./backgrounds";
@@ -31,8 +32,18 @@ import {
 	rmSaveNewMap,
 	rmSaveNewVersion,
 } from "./maps";
-import { RM_MAP_DEFAULT_NAME, rmIsDefaultVersionName } from "./model";
+import {
+	RM_MAP_DEFAULT_NAME,
+	rmFillModeLabel,
+	rmIsDefaultVersionName,
+	rmNormalizeBgFillMode,
+	rmNormalizeRoomPreset,
+	type RmBgFillMode,
+	type RmBackgroundEntry,
+	type RmRoomPreset,
+} from "./model";
 import { rmEnsurePreview } from "./preview";
+import { rmConfirm, rmPrompt } from "./dialogs";
 
 let msgTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -73,17 +84,6 @@ function fillSelect(sel: HTMLSelectElement | null, names: string[], selected?: s
 	if (cur && names.indexOf(cur) >= 0) sel.value = cur;
 }
 
-function promptName(title: string, initial?: string): string | null {
-	const v = window.prompt(title, initial || "");
-	if (v == null) return null;
-	const t = v.trim();
-	return t || null;
-}
-
-function confirmAct(msg: string): boolean {
-	return window.confirm(msg);
-}
-
 /** Disable Load controls when not in ChatRoom / ChatAdmin; keep panel open. */
 export function rmUpdateApplyUi() {
 	const can = rmCanApplyToRoom();
@@ -101,14 +101,42 @@ export function rmUpdateApplyUi() {
 	});
 }
 
-function openBgDialog(existing?: { id: string; name: string; url: string }) {
+function fillModeOptionsHtml(selected?: RmBgFillMode): string {
+	const modes: RmBgFillMode[] = ["default", "fill", "fillOriginalRatio", "showFullOriginalRatio"];
+	const cur = rmNormalizeBgFillMode(selected);
+	return modes.map(function (m) {
+		return '<option value="' + m + '"' + (m === cur ? " selected" : "") + ">"
+			+ rmFillModeLabel(m) + "</option>";
+	}).join("");
+}
+
+function selectedRoomPreset(): RmRoomPreset | null {
+	const sel = $("seidr-rm-room-sel") as HTMLSelectElement | null;
+	if (!sel || !sel.value) return null;
+	const store = rmGetStore();
+	return store.room[sel.value] ? rmNormalizeRoomPreset(store.room[sel.value]) : null;
+}
+
+function openBgDialog(existing?: RmBackgroundEntry) {
 	const overlay = document.createElement("div");
 	overlay.className = "seidr-rm-overlay";
 	overlay.innerHTML = [
 		'<div class="seidr-rm-dialog">',
 		"<h4>" + (existing ? "Edit background" : "Add background") + "</h4>",
-		'<label>Name<input type="text" id="seidr-rm-bg-name" maxlength="64" /></label>',
-		'<label>URL<input type="url" id="seidr-rm-bg-url" /></label>',
+		'<div class="seidr-settings-field-row">',
+		'<span class="seidr-settings-field-label">Name</span>',
+		'<input type="text" id="seidr-rm-bg-name" maxlength="64" />',
+		"</div>",
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">URL</span>',
+		'<input type="url" id="seidr-rm-bg-url" />',
+		"</div>",
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">Fill Mode</span>',
+		'<select id="seidr-rm-bg-fillmode">'
+		+ fillModeOptionsHtml(existing ? existing.fillMode : "default") + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Default uses the room’s Custom SizeMode from Club (saved with Room Definition). Other modes override for this image.</p>',
 		'<div class="seidr-rm-msg" id="seidr-rm-bg-err"></div>',
 		'<div class="seidr-rm-dialog-actions">',
 		'<button type="button" data-act="cancel">Cancel</button>',
@@ -118,10 +146,12 @@ function openBgDialog(existing?: { id: string; name: string; url: string }) {
 	document.body.appendChild(overlay);
 	const nameIn = overlay.querySelector("#seidr-rm-bg-name") as HTMLInputElement;
 	const urlIn = overlay.querySelector("#seidr-rm-bg-url") as HTMLInputElement;
+	const fillSel = overlay.querySelector("#seidr-rm-bg-fillmode") as HTMLSelectElement;
 	const err = overlay.querySelector("#seidr-rm-bg-err") as HTMLElement;
 	if (existing) {
 		nameIn.value = existing.name;
 		urlIn.value = existing.url;
+		fillSel.value = rmNormalizeBgFillMode(existing.fillMode);
 	}
 	function close() {
 		if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -132,7 +162,8 @@ function openBgDialog(existing?: { id: string; name: string; url: string }) {
 	overlay.querySelector('[data-act="cancel"]')!.addEventListener("click", close);
 	overlay.querySelector('[data-act="save"]')!.addEventListener("click", function () {
 		err.textContent = "Checking…";
-		rmSaveBackground(nameIn.value, urlIn.value, existing && existing.id).then(function (res) {
+		const mode = rmNormalizeBgFillMode(fillSel.value);
+		rmSaveBackground(nameIn.value, urlIn.value, existing && existing.id, mode).then(function (res) {
 			if (!res.ok) {
 				err.textContent = res.error || "Save failed";
 				return;
@@ -243,9 +274,11 @@ function renderBgGrid() {
 		card.className = "seidr-rm-card";
 		card.dataset.id = b.id;
 		if (canDrag) card.draggable = true;
+		const mode = rmNormalizeBgFillMode(b.fillMode);
 		card.innerHTML = [
 			'<img class="seidr-rm-card-thumb" alt="" draggable="false" />',
 			'<div class="seidr-rm-card-name"></div>',
+			mode !== "default" ? '<div class="seidr-rm-card-badge"></div>' : "",
 			'<div class="seidr-rm-card-actions">',
 			'<button type="button" data-act="load" title="Load">⬇</button>',
 			'<button type="button" data-act="edit" title="Edit">✎</button>',
@@ -253,6 +286,8 @@ function renderBgGrid() {
 			"</div>",
 		].join("");
 		(card.querySelector(".seidr-rm-card-name") as HTMLElement).textContent = b.name;
+		const badge = card.querySelector(".seidr-rm-card-badge") as HTMLElement | null;
+		if (badge) badge.textContent = rmFillModeLabel(mode);
 		const img = card.querySelector("img") as HTMLImageElement;
 		img.alt = b.name;
 		rmEnsurePreview(b.url).then(function (src) {
@@ -266,17 +301,25 @@ function renderBgGrid() {
 				setMsg("Open ChatRoom or ChatAdmin to Load");
 				return;
 			}
-			const r = rmApplyBackgroundUrl(b.url);
+			const room = selectedRoomPreset();
+			if (room) rmSetLastRoomPreset(room);
+			const r = rmApplyBackgroundEntry(b, room && room.customSizeMode);
 			setMsg(r.ok ? "Background applied" : (r.error || "Failed"));
 		});
 		card.querySelector('[data-act="edit"]')!.addEventListener("click", function () {
 			openBgDialog(b);
 		});
 		card.querySelector('[data-act="del"]')!.addEventListener("click", function () {
-			if (!confirmAct("Delete background “" + b.name + "”?")) return;
-			const ok = rmDeleteBackground(b.id);
-			setMsg(ok ? "Background deleted" : "Delete failed");
-			rmRefreshUi();
+			void rmConfirm("Delete background “" + b.name + "”?", {
+				title: "Delete background",
+				confirmLabel: "Delete",
+				danger: true,
+			}).then(function (ok) {
+				if (!ok) return;
+				const deleted = rmDeleteBackground(b.id);
+				setMsg(deleted ? "Background deleted" : "Delete failed");
+				rmRefreshUi();
+			});
 		});
 		grid.appendChild(card);
 	});
@@ -389,177 +432,228 @@ export function rmBuildPanelBody() {
 		const t = (ev.target as HTMLElement).closest("[data-rm]") as HTMLElement | null;
 		if (!t) return;
 		const act = t.getAttribute("data-rm");
-		const store = rmGetStore();
-		if (act === "room-save") {
-			const name = promptName("Save room config as:");
-			if (!name) return;
-			if (store.room[name] && !confirmAct("Overwrite “" + name + "”?")) return;
-			const settings = rmReadSettings();
-			if (!settings) { setMsg("No room data"); return; }
-			store.room[name] = rmSliceRoom(settings);
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Room config saved" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "room-overwrite") {
-			const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a config"); return; }
-			if (!confirmAct("Overwrite “" + sel.value + "”?")) return;
-			const settings = rmReadSettings();
-			if (!settings) { setMsg("No room data"); return; }
-			store.room[sel.value] = rmSliceRoom(settings);
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "room-load") {
-			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
-			const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a config"); return; }
-			const preset = store.room[sel.value];
-			if (!preset) { setMsg("Not found"); return; }
-			rmApplyRoomToEditor(preset);
-			if (rmInLiveRoom()) {
-				const u = rmUpdateLiveRoom();
-				setMsg(u.ok ? "Room config loaded + updated" : (u.error || "Applied to editor"));
-			} else {
-				setMsg("Filled ChatAdmin fields");
-			}
-		} else if (act === "room-delete") {
-			const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select a config"); return; }
-			if (!confirmAct("Delete room config “" + sel.value + "”?")) return;
-			delete store.room[sel.value];
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "access-save") {
-			const name = promptName("Save access list as:");
-			if (!name) return;
-			if (store.access[name] && !confirmAct("Overwrite “" + name + "”?")) return;
-			const settings = rmReadSettings();
-			if (!settings) { setMsg("No room data"); return; }
-			store.access[name] = rmSliceAccess(settings);
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Access saved" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "access-overwrite") {
-			const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select access"); return; }
-			if (!confirmAct("Overwrite “" + sel.value + "”?")) return;
-			const settings = rmReadSettings();
-			if (!settings) { setMsg("No room data"); return; }
-			store.access[sel.value] = rmSliceAccess(settings);
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "access-load") {
-			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
-			const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select access"); return; }
-			const preset = store.access[sel.value];
-			if (!preset) { setMsg("Not found"); return; }
-			rmApplyAccessToEditor(preset);
-			if (rmInLiveRoom()) {
-				const u = rmUpdateLiveRoom();
-				setMsg(u.ok ? "Access loaded + room updated" : (u.error || "Applied"));
-			} else {
-				setMsg("Filled access lists in ChatAdmin");
-			}
-		} else if (act === "access-delete") {
-			const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
-			if (!sel || !sel.value) { setMsg("Select access"); return; }
-			if (!confirmAct("Delete access list “" + sel.value + "”?")) return;
-			delete store.access[sel.value];
-			const s = rmSaveStore();
-			setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "bg-add") {
-			openBgDialog();
-		} else if (act === "map-save-as") {
-			const name = promptName("Save map as:");
-			if (!name) return;
-			const maps = rmListAllMaps();
-			const existing = maps.find(function (m) { return m.name === name; });
-			if (existing) {
-				if (!confirmAct("Map “" + name + "” exists — overwrite Default?")) return;
-				const r = rmOverwriteDefault(existing.id);
+		void (async function () {
+			const store = rmGetStore();
+			if (act === "room-save") {
+				const name = await rmPrompt("Save room config as:", { confirmLabel: "Save" });
+				if (!name) return;
+				if (store.room[name]) {
+					const ok = await rmConfirm("Overwrite “" + name + "”?", {
+						title: "Overwrite",
+						confirmLabel: "Overwrite",
+					});
+					if (!ok) return;
+				}
+				const settings = rmReadSettings();
+				if (!settings) { setMsg("No room data"); return; }
+				const preset = rmSliceRoom(settings);
+				store.room[name] = preset;
+				rmSetLastRoomPreset(preset);
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Room config saved" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "room-overwrite") {
+				const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select a config"); return; }
+				if (!(await rmConfirm("Overwrite “" + sel.value + "”?", {
+					title: "Overwrite",
+					confirmLabel: "Overwrite",
+				}))) return;
+				const settings = rmReadSettings();
+				if (!settings) { setMsg("No room data"); return; }
+				const preset = rmSliceRoom(settings);
+				store.room[sel.value] = preset;
+				rmSetLastRoomPreset(preset);
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "room-load") {
+				if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
+				const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select a config"); return; }
+				const preset = store.room[sel.value];
+				if (!preset) { setMsg("Not found"); return; }
+				rmApplyRoomToEditor(preset);
+				if (rmInLiveRoom()) {
+					const u = rmUpdateLiveRoom();
+					setMsg(u.ok ? "Room config loaded + updated" : (u.error || "Applied to editor"));
+				} else {
+					setMsg("Filled ChatAdmin fields");
+				}
+			} else if (act === "room-delete") {
+				const sel = $("seidr-rm-room-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select a config"); return; }
+				if (!(await rmConfirm("Delete room config “" + sel.value + "”?", {
+					title: "Delete",
+					confirmLabel: "Delete",
+					danger: true,
+				}))) return;
+				delete store.room[sel.value];
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "access-save") {
+				const name = await rmPrompt("Save access list as:", { confirmLabel: "Save" });
+				if (!name) return;
+				if (store.access[name]) {
+					const ok = await rmConfirm("Overwrite “" + name + "”?", {
+						title: "Overwrite",
+						confirmLabel: "Overwrite",
+					});
+					if (!ok) return;
+				}
+				const settings = rmReadSettings();
+				if (!settings) { setMsg("No room data"); return; }
+				store.access[name] = rmSliceAccess(settings);
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Access saved" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "access-overwrite") {
+				const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select access"); return; }
+				if (!(await rmConfirm("Overwrite “" + sel.value + "”?", {
+					title: "Overwrite",
+					confirmLabel: "Overwrite",
+				}))) return;
+				const settings = rmReadSettings();
+				if (!settings) { setMsg("No room data"); return; }
+				store.access[sel.value] = rmSliceAccess(settings);
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Overwritten" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "access-load") {
+				if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
+				const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select access"); return; }
+				const preset = store.access[sel.value];
+				if (!preset) { setMsg("Not found"); return; }
+				rmApplyAccessToEditor(preset);
+				if (rmInLiveRoom()) {
+					const u = rmUpdateLiveRoom();
+					setMsg(u.ok ? "Access loaded + room updated" : (u.error || "Applied"));
+				} else {
+					setMsg("Filled access lists in ChatAdmin");
+				}
+			} else if (act === "access-delete") {
+				const sel = $("seidr-rm-access-sel") as HTMLSelectElement;
+				if (!sel || !sel.value) { setMsg("Select access"); return; }
+				if (!(await rmConfirm("Delete access list “" + sel.value + "”?", {
+					title: "Delete",
+					confirmLabel: "Delete",
+					danger: true,
+				}))) return;
+				delete store.access[sel.value];
+				const s = rmSaveStore();
+				setMsg(s.ok ? "Deleted" : (s.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "bg-add") {
+				openBgDialog();
+			} else if (act === "map-save-as") {
+				const name = await rmPrompt("Save map as:", { confirmLabel: "Save" });
+				if (!name) return;
+				const maps = rmListAllMaps();
+				const existing = maps.find(function (m) { return m.name === name; });
+				if (existing) {
+					if (!(await rmConfirm("Map “" + name + "” exists — overwrite Default?", {
+						title: "Overwrite Default",
+						confirmLabel: "Overwrite",
+					}))) return;
+					const r = rmOverwriteDefault(existing.id);
+					setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
+					rmRefreshUi();
+					const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+					if (mapSel) mapSel.value = existing.id;
+					fillVersionSelect(existing.id, r.version && r.version.id);
+					return;
+				}
+				const r = rmSaveNewMap(name);
+				setMsg(r.ok
+					? (r.fellBackLocal ? "Map saved (Local — remote full). Default created." : "Map saved (Default)")
+					: (r.error || "Failed"));
+				rmRefreshUi();
+				if (r.map) {
+					const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
+					if (mapSel) mapSel.value = r.map.id;
+					fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
+				}
+			} else if (act === "map-save-ver") {
+				const mapId = selectedRmMapId();
+				if (!mapId) { setMsg("Select a map"); return; }
+				const verName = await rmPrompt("Save new version", {
+					message: "Local version name (not Default):",
+					initial: "Development",
+					confirmLabel: "Save",
+				});
+				if (!verName) return;
+				if (verName === RM_MAP_DEFAULT_NAME) {
+					setMsg("Use Overwrite Default to update Default");
+					return;
+				}
+				const r = rmSaveNewVersion(mapId, verName);
+				setMsg(r.ok ? "Local version saved" : (r.error || "Failed"));
+				rmRefreshUi();
+				fillVersionSelect(mapId, r.version && r.version.id);
+			} else if (act === "map-overwrite") {
+				const mapId = selectedRmMapId();
+				if (!mapId) { setMsg("Select a map"); return; }
+				if (!(await rmConfirm("Overwrite Default with the current room map?", {
+					title: "Overwrite Default",
+					confirmLabel: "Overwrite",
+				}))) return;
+				const r = rmOverwriteDefault(mapId);
 				setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
 				rmRefreshUi();
-				const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
-				if (mapSel) mapSel.value = existing.id;
-				fillVersionSelect(existing.id, r.version && r.version.id);
-				return;
+				fillVersionSelect(mapId, r.version && r.version.id);
+			} else if (act === "map-load") {
+				if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
+				const mapId = selectedRmMapId();
+				const verId = selectedRmVersionId();
+				if (!mapId || !verId) { setMsg("Select a map and version"); return; }
+				const maps = rmListAllMaps();
+				const map = maps.find(function (m) { return m.id === mapId; });
+				const ver = map && map.versions.find(function (v) { return v.id === verId; });
+				if (!(await rmConfirm(
+					"Load “" + (map ? map.name : "") + "” / “" + (ver ? ver.name : "") + "” into this room?",
+					{ title: "Load map", confirmLabel: "Load" },
+				))) return;
+				const r = rmLoadMapVersion(mapId, verId);
+				setMsg(r.ok ? "Map version loaded" : (r.error || "Failed"));
+			} else if (act === "map-delete-ver") {
+				const mapId = selectedRmMapId();
+				const verId = selectedRmVersionId();
+				if (!mapId || !verId) { setMsg("Select a map and version"); return; }
+				const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
+				const ver = map && map.versions.find(function (v) { return v.id === verId; });
+				const isDef = ver && rmIsDefaultVersionName(ver.name);
+				const only = map && map.versions.length <= 1;
+				if (isDef && !only) {
+					setMsg("Cannot delete Default while other versions exist — use Delete map");
+					return;
+				}
+				if (!(await rmConfirm(only || isDef
+					? "Delete entire map “" + (map ? map.name : "") + "”?"
+					: "Delete this local version?", {
+					title: "Delete",
+					confirmLabel: "Delete",
+					danger: true,
+				}))) return;
+				const r = rmDeleteVersion(mapId, verId);
+				setMsg(r.ok ? (only || isDef ? "Map deleted" : "Version deleted") : (r.error || "Failed"));
+				rmRefreshUi();
+			} else if (act === "map-delete") {
+				const mapId = selectedRmMapId();
+				if (!mapId) { setMsg("Select a map"); return; }
+				const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
+				if (!(await rmConfirm("Delete map “" + (map ? map.name : "") + "” and all versions?", {
+					title: "Delete map",
+					confirmLabel: "Delete",
+					danger: true,
+				}))) return;
+				const r = rmDeleteMap(mapId);
+				setMsg(r.ok ? "Map deleted" : (r.error || "Failed"));
+				rmRefreshUi();
 			}
-			const r = rmSaveNewMap(name);
-			setMsg(r.ok
-				? (r.fellBackLocal ? "Map saved (Local — remote full). Default created." : "Map saved (Default)")
-				: (r.error || "Failed"));
-			rmRefreshUi();
-			if (r.map) {
-				const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
-				if (mapSel) mapSel.value = r.map.id;
-				fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
-			}
-		} else if (act === "map-save-ver") {
-			const mapId = selectedRmMapId();
-			if (!mapId) { setMsg("Select a map"); return; }
-			const verName = promptName("Local version name (not Default):");
-			if (!verName) return;
-			if (verName === RM_MAP_DEFAULT_NAME) {
-				setMsg("Use Overwrite Default to update Default");
-				return;
-			}
-			const r = rmSaveNewVersion(mapId, verName);
-			setMsg(r.ok ? "Local version saved" : (r.error || "Failed"));
-			rmRefreshUi();
-			fillVersionSelect(mapId, r.version && r.version.id);
-		} else if (act === "map-overwrite") {
-			const mapId = selectedRmMapId();
-			if (!mapId) { setMsg("Select a map"); return; }
-			if (!confirmAct("Overwrite Default with the current room map?")) return;
-			const r = rmOverwriteDefault(mapId);
-			setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
-			rmRefreshUi();
-			fillVersionSelect(mapId, r.version && r.version.id);
-		} else if (act === "map-load") {
-			if (!rmCanApplyToRoom()) { setMsg("Open ChatRoom or ChatAdmin to Load"); return; }
-			const mapId = selectedRmMapId();
-			const verId = selectedRmVersionId();
-			if (!mapId || !verId) { setMsg("Select a map and version"); return; }
-			const maps = rmListAllMaps();
-			const map = maps.find(function (m) { return m.id === mapId; });
-			const ver = map && map.versions.find(function (v) { return v.id === verId; });
-			if (!confirmAct(
-				"Load “" + (map ? map.name : "") + "” / “" + (ver ? ver.name : "") + "” into this room?",
-			)) return;
-			const r = rmLoadMapVersion(mapId, verId);
-			setMsg(r.ok ? "Map version loaded" : (r.error || "Failed"));
-		} else if (act === "map-delete-ver") {
-			const mapId = selectedRmMapId();
-			const verId = selectedRmVersionId();
-			if (!mapId || !verId) { setMsg("Select a map and version"); return; }
-			const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
-			const ver = map && map.versions.find(function (v) { return v.id === verId; });
-			const isDef = ver && rmIsDefaultVersionName(ver.name);
-			const only = map && map.versions.length <= 1;
-			if (isDef && !only) {
-				setMsg("Cannot delete Default while other versions exist — use Delete map");
-				return;
-			}
-			if (!confirmAct(only || isDef
-				? "Delete entire map “" + (map ? map.name : "") + "”?"
-				: "Delete this local version?")) return;
-			const r = rmDeleteVersion(mapId, verId);
-			setMsg(r.ok ? (only || isDef ? "Map deleted" : "Version deleted") : (r.error || "Failed"));
-			rmRefreshUi();
-		} else if (act === "map-delete") {
-			const mapId = selectedRmMapId();
-			if (!mapId) { setMsg("Select a map"); return; }
-			const map = rmListAllMaps().find(function (m) { return m.id === mapId; });
-			if (!confirmAct("Delete map “" + (map ? map.name : "") + "” and all versions?")) return;
-			const r = rmDeleteMap(mapId);
-			setMsg(r.ok ? "Map deleted" : (r.error || "Failed"));
-			rmRefreshUi();
-		}
+		})();
 	});
 
 	const mapSel = $("seidr-rm-map-sel") as HTMLSelectElement | null;
@@ -573,12 +667,24 @@ export function rmBuildPanelBody() {
 	if (filter) {
 		filter.addEventListener("input", function () { renderBgGrid(); });
 	}
+
+	const roomSel = $("seidr-rm-room-sel") as HTMLSelectElement | null;
+	if (roomSel) {
+		roomSel.addEventListener("change", function () {
+			const preset = selectedRoomPreset();
+			if (preset) rmSetLastRoomPreset(preset);
+		});
+	}
 }
 
 export function rmRefreshUi() {
 	const store = rmGetStore();
-	fillSelect($("seidr-rm-room-sel") as HTMLSelectElement, Object.keys(store.room).sort());
+	const roomSel = $("seidr-rm-room-sel") as HTMLSelectElement | null;
+	const prevRoom = roomSel ? roomSel.value : "";
+	fillSelect(roomSel, Object.keys(store.room).sort(), prevRoom);
 	fillSelect($("seidr-rm-access-sel") as HTMLSelectElement, Object.keys(store.access).sort());
+	const preset = selectedRoomPreset();
+	if (preset) rmSetLastRoomPreset(preset);
 	renderBgGrid();
 	renderMaps();
 	refreshFooter();

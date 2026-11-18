@@ -45,9 +45,17 @@ const SEIDR_POSE_CHAT: Record<string, Record<SeidrPoseChatSide, string>> = {
 		self: "SourceCharacter pulls PronounPossessive elbows together behind PronounPossessive back.",
 		other: "SourceCharacter pulls TargetCharacter's elbows together behind TargetCharacter's back.",
 	},
+	BackCuffs: {
+		self: "SourceCharacter cuffs PronounPossessive wrists behind PronounPossessive back.",
+		other: "SourceCharacter cuffs TargetCharacter's wrists behind TargetCharacter's back.",
+	},
 	AllFours: {
 		self: "SourceCharacter drops onto all fours.",
 		other: "SourceCharacter puts TargetCharacter down onto all fours.",
+	},
+	Hogtied: {
+		self: "SourceCharacter settles onto PronounPossessive belly.",
+		other: "SourceCharacter lays TargetCharacter down onto TargetPronounPossessive belly.",
 	},
 };
 

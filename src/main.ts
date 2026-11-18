@@ -8,14 +8,18 @@ import "./undress";
 import "./core/sdk";
 import "./activities";
 import "./draw";
+import "./mapHolds";
 import "./arousalBars";
 import "./actions/index";
 import "./commands/index";
 import "./animations/index";
+import "./poses/index";
 import "./fastOpen";
 import "./net";
 import "./roomManager/index";
 import "./settings/index";
+import "./testSurface";
+import "./netStats";
 
 const session = (window.__SeidrSession = window.__SeidrSession || { hubs: {} });
 
@@ -28,19 +32,25 @@ Seidr.setHubs = function (hubs: Record<string, unknown>) {
 };
 
 Seidr.prepareReload = function () {
+	if (typeof Seidr.rmFlushStore === "function") {
+		try { Seidr.rmFlushStore(); } catch (e) { /* ignore */ }
+	}
 	if (typeof Seidr.restoreFallbackHooks === "function") {
 		try { Seidr.restoreFallbackHooks(); } catch (e) { /* ignore */ }
 	}
 	Seidr._booted = false;
 	Seidr._hookState = {};
-	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles"].forEach(function (id) {
+	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
-	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour"].forEach(function (id) {
+	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
+	if (typeof Seidr.poseDestroyUi === "function") {
+		try { Seidr.poseDestroyUi(); } catch (ePose) { /* ignore */ }
+	}
 	window.__SeidrPageLoaded = false;
 };
 
@@ -110,7 +120,19 @@ function installHooks() {
 	if (typeof Seidr.installCommands === "function") {
 		try { Seidr.installCommands(); } catch (e) { console.warn("[Seidr] Commands", e); }
 	}
+	if (typeof Seidr.installPoses === "function") {
+		try { Seidr.installPoses(); } catch (e) { console.warn("[Seidr] Poses", e); }
+	}
 	Seidr.installNet();
+	if (typeof Seidr.installNetStats === "function") {
+		try { Seidr.installNetStats(); } catch (e) { console.warn("[Seidr] NetStats", e); }
+	}
+	if (typeof Seidr.installStorageFlush === "function") {
+		try { Seidr.installStorageFlush(); } catch (e) { console.warn("[Seidr] Storage flush", e); }
+	}
+	if (typeof Seidr.installMapHolds === "function") {
+		try { Seidr.installMapHolds(); } catch (e) { console.warn("[Seidr] Map holds", e); }
+	}
 	if (typeof Seidr.installRoomManager === "function") {
 		try { Seidr.installRoomManager(); } catch (e) { console.warn("[Seidr] Room Manager", e); }
 	}
@@ -133,9 +155,6 @@ function boot() {
 	installHooks();
 	if (typeof ServerPlayerIsInChatRoom === "function" && ServerPlayerIsInChatRoom() && typeof Seidr.hello === "function") {
 		try { Seidr.hello(true); } catch (e) { /* ignore */ }
-		if (typeof Seidr.syncRequest === "function") {
-			try { Seidr.syncRequest(); } catch (eSync) { /* ignore */ }
-		}
 	}
 	try { showLoadedToast(); } catch (eToast) { /* ignore */ }
 	console.log("[Seidr] " + Seidr.VERSION + " ready");

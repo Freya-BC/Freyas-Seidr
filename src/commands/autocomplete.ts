@@ -1,25 +1,39 @@
-/** Floating Seidr-styled autocomplete over #InputChat */
+/** Floating Seidr-styled autocomplete over #InputChat (or setCommandInput override) */
 import { seidrPosesForCharacter } from "../actions/model";
 import { seidrFilterAnimationsByPrefix } from "../animations/store";
-import { seidrCmdActivityAvailable } from "./catalog";
+import { seidrCmdActivityAvailable, seidrCmdRoomPeople } from "./catalog";
+import { seidrFilterOnlineFriends } from "./onlineFriends";
 import {
+	seidrCmdAssistTagFromLine,
+	seidrCmdAssistTokenAtCaret,
+	seidrCmdIsAssistLine,
 	seidrCmdIsCommandLine,
+	seidrCmdPeekAssistLine,
 	seidrCmdPeekLine,
 	seidrCmdReplaceSpan,
+	seidrCmdStartsWithAssistTag,
 	seidrCmdStartsWithTag,
 	seidrCmdTagFromLine,
 	seidrCmdTokenAtCaret,
+	type SeidrCmdAssistTag,
 	type SeidrCmdTokenFocus,
 } from "./parse";
 import { seidrFastSelectApply } from "./fastSelect";
 import { seidrCmdPreferMemberIndex } from "./lastActor";
 import { seidrCmdFilterPeople, seidrCmdResolveMember } from "./resolve";
 import { seidrCmdIsEnabled } from "./run";
-import { seidrListCmdActions } from "./store";
+import {
+	seidrCmdAcBeepEnabled,
+	seidrCmdAcWhisperEnabled,
+	seidrListCmdActions,
+} from "./store";
 import { seidrCmdFilterStripOptions, seidrCmdListStripOptions } from "./stripCatalog";
 import { seidrCmdCss } from "./styles";
 
 declare const Player: any;
+
+/** Optional compose field (e.g. FBM #fbm-fc-input) while focused. */
+let commandInputOverride: HTMLTextAreaElement | HTMLInputElement | null = null;
 
 export type SeidrCmdAcItem = {
 	/** Inserted into the chat input. */
@@ -40,6 +54,8 @@ type AcState = {
 	spanStart: number;
 	spanEnd: number;
 	quoted: boolean;
+	/** When set, member AC is for Club /beep or /whisper (assist-only). */
+	assistTag: SeidrCmdAssistTag | null;
 };
 
 const state: AcState = {
@@ -50,6 +66,7 @@ const state: AcState = {
 	spanStart: 0,
 	spanEnd: 0,
 	quoted: false,
+	assistTag: null,
 };
 
 function ensureStyles() {
@@ -63,10 +80,41 @@ function ensureStyles() {
 }
 
 function getInput(): HTMLTextAreaElement | HTMLInputElement | null {
+	if (
+		commandInputOverride &&
+		commandInputOverride.isConnected &&
+		(commandInputOverride instanceof HTMLTextAreaElement ||
+			commandInputOverride instanceof HTMLInputElement)
+	) {
+		return commandInputOverride;
+	}
 	const el = document.getElementById("InputChat");
 	if (!el) return null;
 	if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) return el;
 	return null;
+}
+
+/** Active compose field: override if set, else #InputChat. */
+export function seidrGetCommandInput(): HTMLTextAreaElement | HTMLInputElement | null {
+	return getInput();
+}
+
+/**
+ * Redirect Tab / Fast Select AC to another textarea (e.g. FBM float chat).
+ * Pass null to restore #InputChat.
+ */
+export function seidrSetCommandInput(
+	el: HTMLTextAreaElement | HTMLInputElement | null
+): void {
+	if (
+		el &&
+		(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)
+	) {
+		commandInputOverride = el;
+	} else {
+		commandInputOverride = null;
+		seidrCmdAcClose();
+	}
 }
 
 function ensureRoot(): HTMLElement {
@@ -91,6 +139,7 @@ export function seidrCmdAcClose(): void {
 	state.kind = null;
 	state.items = [];
 	state.index = 0;
+	state.assistTag = null;
 	const root = document.getElementById("seidr-cmd-ac");
 	if (root) {
 		root.hidden = true;
@@ -170,6 +219,56 @@ function buildMemberItems(prefix: string): SeidrCmdAcItem[] {
 	});
 }
 
+function nameIdLabel(name: string, memberNumber: number): string {
+	const n = String(name || "").trim() || String(memberNumber);
+	return n + " (" + memberNumber + ")";
+}
+
+function selfMemberNumber(): number {
+	try {
+		if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number") {
+			return Player.MemberNumber;
+		}
+	} catch (e) { /* ignore */ }
+	return NaN;
+}
+
+function assistTagEnabled(tag: SeidrCmdAssistTag): boolean {
+	if (tag === "beep") return seidrCmdAcBeepEnabled();
+	return seidrCmdAcWhisperEnabled();
+}
+
+function buildAssistMemberItems(tag: SeidrCmdAssistTag, prefix: string): SeidrCmdAcItem[] {
+	if (tag === "beep") {
+		return seidrFilterOnlineFriends(prefix).map(function (f) {
+			return {
+				insert: String(f.memberNumber),
+				label: nameIdLabel(f.memberName, f.memberNumber),
+				hint: "#" + f.memberNumber,
+			};
+		});
+	}
+	const self = selfMemberNumber();
+	const pfx = String(prefix || "").trim().toLowerCase();
+	const room = seidrCmdRoomPeople();
+	const out: SeidrCmdAcItem[] = [];
+	for (let i = 0; i < room.length; i++) {
+		const p = room[i];
+		if (Number.isFinite(self) && p.memberNumber === self) continue;
+		const display = (p.nickname || p.name || String(p.memberNumber)).trim();
+		const search = (p.nickname + " " + p.name + " " + p.memberNumber).toLowerCase();
+		if (pfx && search.indexOf(pfx) < 0 && String(p.memberNumber).indexOf(pfx) !== 0) {
+			continue;
+		}
+		out.push({
+			insert: String(p.memberNumber),
+			label: nameIdLabel(display, p.memberNumber),
+			hint: "#" + p.memberNumber,
+		});
+	}
+	return out;
+}
+
 function buildActionItems(prefix: string, memberRaw: string): SeidrCmdAcItem[] {
 	const pfx = String(prefix || "").trim().toLowerCase();
 	let target: any = null;
@@ -241,6 +340,36 @@ function buildAnimationItems(prefix: string): SeidrCmdAcItem[] {
 	});
 }
 
+function openForAssistFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
+	if (focus.kind !== "member") {
+		seidrCmdAcClose();
+		return false;
+	}
+	const peek = seidrCmdPeekAssistLine(value);
+	const tag =
+		(peek && peek.tag) ||
+		seidrCmdAssistTagFromLine(value);
+	if (!tag || !assistTagEnabled(tag)) {
+		seidrCmdAcClose();
+		return false;
+	}
+	const items = buildAssistMemberItems(tag, focus.prefix);
+	if (!items.length) {
+		seidrCmdAcClose();
+		return false;
+	}
+	state.open = true;
+	state.kind = "member";
+	state.items = items;
+	state.index = 0;
+	state.spanStart = focus.start;
+	state.spanEnd = focus.end;
+	state.quoted = focus.quoted;
+	state.assistTag = tag;
+	render();
+	return true;
+}
+
 function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
 	const kind = focus.kind;
 	if (
@@ -294,6 +423,7 @@ function openForFocus(focus: SeidrCmdTokenFocus, value: string): boolean {
 	state.spanStart = focus.start;
 	state.spanEnd = focus.end;
 	state.quoted = kind === "member" ? focus.quoted : false;
+	state.assistTag = null;
 	render();
 	return true;
 }
@@ -303,10 +433,51 @@ export function seidrCmdAcOnTab(): boolean {
 	const input = getInput();
 	if (!input) return false;
 	let value = input.value || "";
-	if (!seidrCmdIsCommandLine(value) && !seidrCmdStartsWithTag(value)) {
+	const isAssist =
+		seidrCmdIsAssistLine(value) || seidrCmdStartsWithAssistTag(value);
+	const isSeidr =
+		seidrCmdIsCommandLine(value) || seidrCmdStartsWithTag(value);
+	if (!isAssist && !isSeidr) {
 		return false;
 	}
 	const caret = input.selectionStart != null ? input.selectionStart : value.length;
+
+	if (isAssist) {
+		const assistTag = seidrCmdAssistTagFromLine(value) || seidrCmdPeekAssistLine(value)?.tag;
+		if (assistTag && !assistTagEnabled(assistTag)) return false;
+		let focus = seidrCmdAssistTokenAtCaret(value, caret);
+		if (focus.kind === "tag") {
+			const bare = value.match(/^\s*\/(whisper|beep)\s*$/i);
+			if (!bare) return false;
+			const tag = bare[1].toLowerCase() as SeidrCmdAssistTag;
+			if (!assistTagEnabled(tag)) return false;
+			const spaced = "/" + tag + " ";
+			input.value = spaced;
+			try {
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			} catch (e) { /* ignore */ }
+			if (typeof input.setSelectionRange === "function") {
+				input.setSelectionRange(spaced.length, spaced.length);
+			}
+			value = spaced;
+			focus = {
+				kind: "member",
+				prefix: "",
+				quoted: false,
+				start: spaced.length,
+				end: spaced.length,
+			};
+		}
+		if (focus.kind === "none") return false;
+		try {
+			return openForAssistFocus(focus, value);
+		} catch (e) {
+			console.warn("[Seidr Cmd] assist autocomplete failed", e);
+			seidrCmdAcClose();
+			return false;
+		}
+	}
+
 	let focus = seidrCmdTokenAtCaret(value, caret);
 	// Bare tag — insert trailing space so next token is real
 	if (focus.kind === "tag") {
@@ -374,9 +545,17 @@ export function seidrCmdAcAccept(): boolean {
 
 	if (state.kind === "member") {
 		// Rebuild so Tab never yields `/strip12345` — always `/tag NUMBER …`
-		const peek = seidrCmdPeekLine(value);
-		const tag = (peek && peek.tag) || seidrCmdTagFromLine(value) || "a";
-		const second = peek && peek.secondRaw ? peek.secondRaw : "";
+		let tag: string;
+		let second = "";
+		if (state.assistTag) {
+			const peekA = seidrCmdPeekAssistLine(value);
+			tag = state.assistTag || (peekA && peekA.tag) || seidrCmdAssistTagFromLine(value) || "beep";
+			second = peekA && peekA.secondRaw ? peekA.secondRaw : "";
+		} else {
+			const peek = seidrCmdPeekLine(value);
+			tag = (peek && peek.tag) || seidrCmdTagFromLine(value) || "a";
+			second = peek && peek.secondRaw ? peek.secondRaw : "";
+		}
 		const head = "/" + tag + " " + insert + " ";
 		nextValue = head + second;
 		nextCaret = head.length;
@@ -406,7 +585,11 @@ export function seidrCmdAcAccept(): boolean {
 /** Keydown while InputChat focused — returns true if consumed. */
 export function seidrCmdAcHandleKeyDown(ev: KeyboardEvent): boolean {
 	const input = getInput();
-	if (!input || document.activeElement !== input) {
+	/* Hosts may call from document-capture; accept target === input as focused. */
+	const focused =
+		!!input &&
+		(document.activeElement === input || ev.target === input);
+	if (!focused) {
 		if (state.open) seidrCmdAcClose();
 		return false;
 	}
@@ -424,7 +607,9 @@ export function seidrCmdAcHandleKeyDown(ev: KeyboardEvent): boolean {
 		const onSeidrCmd =
 			state.open ||
 			seidrCmdIsCommandLine(value) ||
-			seidrCmdStartsWithTag(value);
+			seidrCmdStartsWithTag(value) ||
+			seidrCmdIsAssistLine(value) ||
+			seidrCmdStartsWithAssistTag(value);
 		if (!onSeidrCmd) return false;
 		if (state.open) {
 			ev.preventDefault();

@@ -2,6 +2,7 @@
  * One-time local chat welcome — only in a live ChatRoom.
  * If Seidr boots outside a room, wait until the next ChatRoom enter/sync.
  */
+import { seidrLocalChatHtml } from "../chat/localHtml";
 import { Seidr } from "../seidr";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
 
@@ -11,14 +12,6 @@ const WELCOME_DEFER_MS = 400;
 
 var seidrWelcomeHooked = false;
 var seidrWelcomeTimer: ReturnType<typeof setTimeout> | null = null;
-
-function escapeHtml(s: string): string {
-	return String(s)
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
-}
 
 /** True when the player is in ChatRoom with a chat log we can write to. */
 function seidrInLiveChatRoom(): boolean {
@@ -45,10 +38,7 @@ function seidrWelcomeHtml(): string {
 	const text =
 		"Welcome to Seidr. Holds (pull/cuddle), undress, custom actions, animations, and chat commands live here. " +
 		"Open settings with /seidr. For a guided walkthrough, open About → Tutorial.";
-	return (
-		'<span style="color:#d4a017;">[Seidr]</span> ' +
-		'<span style="color:#f0e6d4;">' + escapeHtml(text) + "</span>"
-	);
+	return seidrLocalChatHtml(text);
 }
 
 /** Attempt send now; no-op if not in a live room or already seen. */

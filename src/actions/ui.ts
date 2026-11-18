@@ -46,6 +46,8 @@ import {
 } from "./store";
 import { seidrGetSettings, seidrSaveSettings } from "../settings/storage";
 
+// ===== SECTION: Editor state and small helpers =====
+
 let editId: number | null = null;
 let draft: SeidrAction | null = null;
 let lastChatArea: HTMLTextAreaElement | null = null;
@@ -83,6 +85,8 @@ function stringOpts(list: string[], selected: string): string {
 			escapeHtml(o) + "</option>";
 	}).join("");
 }
+
+// ===== SECTION: Arousal and items picker HTML =====
 
 function arousalResultsHtml(selected: string, filter: string): string {
 	const q = (filter || "").trim().toLowerCase();
@@ -208,7 +212,11 @@ function itemsResultsHtml(slot: string, filter: string, selected: SeidrActionIte
 	}).join("");
 }
 
-function itemsBlockHtml(items: SeidrActionItemRef[]): string {
+function itemsBlockHtml(
+	items: SeidrActionItemRef[],
+	itemsOnTarget: boolean,
+	itemsOnSource: boolean,
+): string {
 	const list = items || [];
 	const slots = seidrRestraintSlots();
 	if (!slots.some(function (s) { return s.id === itemsPickerSlot; })) {
@@ -221,8 +229,17 @@ function itemsBlockHtml(items: SeidrActionItemRef[]): string {
 		}).join("")
 		: '<span class="seidr-settings-hint">None — action shows without a specific restraint.</span>';
 	const open = itemsPickerOpen;
+	const onTarget = itemsOnTarget !== false;
+	const onSource = !!itemsOnSource;
 	return [
-		'<p class="seidr-settings-hint" style="margin-top:10px;">Items (optional — acted must wear one listed restraint)</p>',
+		'<p class="seidr-settings-hint" style="margin-top:10px;">Items (optional)</p>',
+		'<div class="seidr-settings-row" style="gap:12px;flex-wrap:wrap;margin-bottom:6px;">',
+		'<label><input type="checkbox" id="seidr-act-items-on-target"' + (onTarget ? " checked" : "") +
+		' /> Them <span class="seidr-settings-hint">(acted)</span></label>',
+		'<label><input type="checkbox" id="seidr-act-items-on-source"' + (onSource ? " checked" : "") +
+		' /> Me <span class="seidr-settings-hint">(you)</span></label>',
+		"</div>",
+		'<p class="seidr-settings-hint">Listed asset must be worn on checked side(s) — catalog slot or any of this action\u2019s zones (e.g. Mouth / Mouth2 / Mouth3).</p>',
 		'<div class="seidr-act-items" id="seidr-act-items">' + chips + "</div>",
 		'<div class="seidr-act-items-picker' + (open ? " seidr-act-items-open" : "") + '">',
 		'<button type="button" class="seidr-act-btn" id="seidr-act-items-toggle" title="Browse Club restraints">',
@@ -239,6 +256,8 @@ function itemsBlockHtml(items: SeidrActionItemRef[]): string {
 		"</div>",
 	].join("");
 }
+
+// ===== SECTION: Condition rules and chat token HTML =====
 
 function slotChips(selected: string[]): string {
 	return SEIDR_ACTION_SLOTS.map(function (s) {
@@ -336,6 +355,8 @@ function updateCapHint(root: HTMLElement) {
 	el.textContent = n + "/" + SEIDR_ACTIONS_MAX + " Actions";
 }
 
+// ===== SECTION: Render list/editor and read draft =====
+
 function renderList(root: HTMLElement) {
 	const list = seidrListActions();
 	const box = root.querySelector("#seidr-act-list");
@@ -365,12 +386,14 @@ function renderEditor(root: HTMLElement) {
 		return;
 	}
 	const a = draft;
-	const arousal = a.effects.arousal || { enabled: false, activity: "Caress" };
+	const arousal = a.effects.arousal || { enabled: false, activity: "Caress", reverse: false };
 	const sound = a.effects.sound || { enabled: false, sound: SEIDR_ACTION_SOUNDS[0] };
 	const pose = a.effects.pose || { enabled: false, pose: "Kneel" };
 	const chatOther = a.chatOther || seidrDefaultChatOther(a.name);
 	const chatSelf = a.chatSelf || seidrDefaultChatSelf(a.name);
 	if (!a.icon) a.icon = seidrDefaultActionIcon();
+	if (a.itemsOnTarget == null) a.itemsOnTarget = true;
+	if (a.itemsOnSource == null) a.itemsOnSource = false;
 	const icon = seidrNormalizeActionIcon(a.icon);
 	const iconUrl = seidrResolveIconRef(icon);
 	const iconLab = seidrIconLabel(icon);
@@ -393,7 +416,7 @@ function renderEditor(root: HTMLElement) {
 		"</div>",
 		'<p class="seidr-settings-hint" style="margin-top:10px;">Slots (Activity Menu zones)</p>',
 		'<div class="seidr-act-slots" id="seidr-act-slots">' + slotChips(a.slots) + "</div>",
-		itemsBlockHtml(a.items || []),
+		itemsBlockHtml(a.items || [], a.itemsOnTarget !== false, !!a.itemsOnSource),
 		'<p class="seidr-settings-hint" style="margin-top:10px;">When visible</p>',
 		'<div id="seidr-act-conds">' + groupsHtml(a.conditions.groups) + "</div>",
 		'<div class="seidr-settings-row" style="margin-top:8px;">',
@@ -419,7 +442,11 @@ function renderEditor(root: HTMLElement) {
 		" /> Add arousal</label>",
 		"</div>",
 		arousalPickerHtml(arousal.activity || "Caress"),
-		'<p class="seidr-settings-hint">Click Template to search Club activities. Chat text stays your action name.</p>',
+		'<div class="seidr-settings-row" style="margin-top:6px;">',
+		'<label><input type="checkbox" id="seidr-act-arousal-reverse"' + (arousal.reverse ? " checked" : "") +
+		" /> Reverse give/receive</label>",
+		"</div>",
+		'<p class="seidr-settings-hint">Click Template to search Club activities. Chat text stays your action name. Reverse flips Club Self (receiving) / Other (giving) for this action.</p>',
 		'<div class="seidr-settings-row" style="margin-top:8px;">',
 		'<label><input type="checkbox" id="seidr-act-sound-on"' + (sound.enabled ? " checked" : "") +
 		" /> Play sound</label>",
@@ -445,6 +472,8 @@ function readDraftFromDom(root: HTMLElement): SeidrAction | null {
 	const chatOtherEl = root.querySelector("#seidr-act-chat-other") as HTMLTextAreaElement | null;
 	const chatSelfEl = root.querySelector("#seidr-act-chat-self") as HTMLTextAreaElement | null;
 	const name = nameEl && nameEl.value.trim() ? nameEl.value.trim() : draft.name;
+	const itemsOnTargetEl = root.querySelector("#seidr-act-items-on-target") as HTMLInputElement | null;
+	const itemsOnSourceEl = root.querySelector("#seidr-act-items-on-source") as HTMLInputElement | null;
 	const next: SeidrAction = {
 		id: draft.id,
 		name: name,
@@ -458,6 +487,8 @@ function readDraftFromDom(root: HTMLElement): SeidrAction | null {
 			: seidrDefaultChatSelf(name),
 		icon: seidrNormalizeActionIcon(draft.icon || seidrDefaultActionIcon()),
 		items: (draft.items || []).slice(),
+		itemsOnTarget: itemsOnTargetEl ? !!itemsOnTargetEl.checked : draft.itemsOnTarget !== false,
+		itemsOnSource: itemsOnSourceEl ? !!itemsOnSourceEl.checked : !!draft.itemsOnSource,
 		conditions: { groups: [] },
 		effects: {},
 	};
@@ -495,10 +526,12 @@ function readDraftFromDom(root: HTMLElement): SeidrAction | null {
 
 	const aOn = root.querySelector("#seidr-act-arousal-on") as HTMLInputElement | null;
 	const aAct = root.querySelector("#seidr-act-arousal-act") as HTMLInputElement | null;
+	const aRev = root.querySelector("#seidr-act-arousal-reverse") as HTMLInputElement | null;
 	const actVal = (aAct && aAct.value) || "Caress";
 	next.effects.arousal = {
 		enabled: !!(aOn && aOn.checked),
 		activity: SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(actVal) >= 0 ? actVal : "Caress",
+		reverse: !!(aRev && aRev.checked),
 	};
 	const sOn = root.querySelector("#seidr-act-sound-on") as HTMLInputElement | null;
 	const sSel = root.querySelector("#seidr-act-sound") as HTMLSelectElement | null;
@@ -526,6 +559,8 @@ function afterSave() {
 		try { Seidr.syncUserActions(); } catch (e) { /* ignore */ }
 	}
 }
+
+// ===== SECTION: Arousal and items picker binding =====
 
 function bindArousalPicker(root: HTMLElement) {
 	const picker = root.querySelector(".seidr-act-arousal-picker") as HTMLElement | null;
@@ -584,8 +619,11 @@ function bindArousalPicker(root: HTMLElement) {
 			if (labelEl) labelEl.textContent = seidrArousalActivityLabel(id);
 			if (draft) {
 				if (!draft.effects) draft.effects = {};
-				if (!draft.effects.arousal) draft.effects.arousal = { enabled: false, activity: id };
-				else draft.effects.arousal.activity = id;
+				if (!draft.effects.arousal) {
+					draft.effects.arousal = { enabled: false, activity: id, reverse: false };
+				} else {
+					draft.effects.arousal.activity = id;
+				}
 			}
 			setOpen(false);
 		});
@@ -699,6 +737,8 @@ function syncChatCount(root: HTMLElement, which: "other" | "self") {
 	);
 	if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
 }
+
+// ===== SECTION: Icon modal and Activity Menu icon refresh =====
 
 function closeIconModal() {
 	const modal = document.getElementById("seidr-act-icon-modal");
@@ -831,6 +871,8 @@ function openIconModal(root: HTMLElement) {
 
 	paintGrid("");
 }
+
+// ===== SECTION: Editor and list binding =====
 
 function bindEditor(root: HTMLElement) {
 	bindArousalPicker(root);
@@ -997,6 +1039,8 @@ function bindList(root: HTMLElement) {
 		selectActionById(root, id);
 	});
 }
+
+// ===== SECTION: Import / export panel =====
 
 function setIoMsg(container: HTMLElement, text: string) {
 	const el = container.querySelector("#seidr-act-io-msg");

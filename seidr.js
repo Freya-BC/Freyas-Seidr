@@ -1,4 +1,4 @@
-/* Seidr v1.0.91 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.6 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "1.0.91";
+  Seidr.VERSION = "2.0.6";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -18,11 +18,31 @@
     pull: { x: 75, y: 0 },
     cuddle: { x: 0, y: -50 }
   };
+  Seidr.drawAdvancedMode = false;
+  Seidr.drawAllowSync = false;
+  Seidr.drawAdvancedOffsets = {
+    left: { x: -150, y: 0 },
+    right: { x: 150, y: 0 },
+    cuddle: { x: 0, y: 0 },
+    hub: { x: 0, y: -50 }
+  };
+  Seidr.mapDrawOffsets = {
+    pull: { x: 100, y: 0 },
+    cuddle: { x: 0, y: -250 }
+  };
+  Seidr.mapDrawAdvancedMode = false;
+  Seidr.mapDrawAdvancedOffsets = {
+    left: { x: -150, y: 0 },
+    right: { x: 150, y: 0 },
+    cuddle: { x: 0, y: 0 },
+    hub: { x: 0, y: -50 }
+  };
+  Seidr._drawSyncByHub = {};
   Seidr.BOOKMARK_GIST_ID = "aaf3ff1d74aec0d971e2739b27a08b96";
   Seidr.REPO_URL = "https://github.com/Freya-BC/Freyas-Seidr";
   Seidr.RAW_SCRIPT_URL = "https://freya-bc.github.io/Freyas-Seidr/seidr.js";
   Seidr.RAW_LOADER_URL = "https://freya-bc.github.io/Freyas-Seidr/loader.js";
-  Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png";
+  Seidr.LOGO_URL = "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
   Seidr.ASSETS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr/assets";
   Seidr.DOCS_BASE_URL = "https://freya-bc.github.io/Freyas-Seidr";
   Seidr.SHOW_ROOM_MANAGER = true;
@@ -31,7 +51,11 @@
   Seidr.SHOW_CMD_FAST_SELECT = true;
   Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
   Seidr.RM_DATA_VERSION = 1;
-  Seidr.RM_MAX_COMPRESSED = 18e4;
+  Seidr.RM_MAX_BYTES = 18e4;
+  Seidr.RM_KEY_SETTINGS = "SeidrSettings";
+  Seidr.RM_KEY_ACTIONS = "SeidrActions";
+  Seidr.RM_KEY_COMMANDS = "SeidrCommands";
+  Seidr.RM_KEY_ANIMATIONS = "SeidrAnimations";
   Seidr.RM_MAP_BUDGET_RATIO = 0.75;
   Seidr.RM_MAP_MAX = 10;
   Seidr.RM_MAP_VERSIONS_REMOTE_MAX = 10;
@@ -40,6 +64,7 @@
   Seidr.RM_MAPS_LOCAL_KEY_PREFIX = "SeidrMapsLocal_";
   Seidr.RM_MAPS_LOCAL_LZ_PREFIX = "SeidrMapsLocal1:";
   Seidr.RM_LZ_PREFIX = "SeidrRm1:";
+  Seidr.RM_B64_PREFIX = "SeidrRm2:";
   Seidr.ACT_LZ_PREFIX = "SeidrAct1:";
 
   // src/state.ts
@@ -812,11 +837,11 @@
   function seidrUndressWriteDialogCache(act2, selfRun, text) {
     if (!act2 || !text || typeof ActivityDictionaryLoad !== "function") return;
     try {
-      const cache = ActivityDictionaryLoad();
-      if (!cache || !cache.cache) return;
+      const cache2 = ActivityDictionaryLoad();
+      if (!cache2 || !cache2.cache) return;
       const zone = act2.zone || "ItemTorso";
       const key = (selfRun ? "ChatSelf-" : "ChatOther-") + zone + "-" + act2.name;
-      cache.cache[key] = text;
+      cache2.cache[key] = text;
     } catch (e) {
     }
   }
@@ -857,7 +882,9 @@
         } catch (eCanvas) {
         }
       }
-      if (typeof ChatRoomCharacterItemUpdate === "function") {
+      if (removed.length >= 4 && typeof ChatRoomCharacterUpdate === "function") {
+        ChatRoomCharacterUpdate(acted);
+      } else if (typeof ChatRoomCharacterItemUpdate === "function") {
         for (var r = 0; r < removed.length; r++) {
           ChatRoomCharacterItemUpdate(acted, removed[r]);
         }
@@ -884,16 +911,16 @@
       }
     }, 0);
   }
-  function seidrUndressWriteLabels(cache, character) {
-    if (!cache || !cache.cache) return;
+  function seidrUndressWriteLabels(cache2, character) {
+    if (!cache2 || !cache2.cache) return;
     seidrBuildUndressActivities().forEach(function(act2) {
       var label = seidrUndressDynamicLabel(act2, character);
-      cache.cache["Activity" + act2.name] = label;
+      cache2.cache["Activity" + act2.name] = label;
       var zone = act2.zone;
-      cache.cache["Label-ChatOther-" + zone + "-" + act2.name] = label;
-      cache.cache["Label-ChatSelf-" + zone + "-" + act2.name] = label;
-      delete cache.cache["ChatOther-" + zone + "-" + act2.name];
-      delete cache.cache["ChatSelf-" + zone + "-" + act2.name];
+      cache2.cache["Label-ChatOther-" + zone + "-" + act2.name] = label;
+      cache2.cache["Label-ChatSelf-" + zone + "-" + act2.name] = label;
+      delete cache2.cache["ChatOther-" + zone + "-" + act2.name];
+      delete cache2.cache["ChatSelf-" + zone + "-" + act2.name];
     });
   }
   function seidrUndressRefreshLabels() {
@@ -1029,13 +1056,254 @@
     return ok;
   };
 
+  // src/chat/localHtml.ts
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function seidrChatThemeIsLight() {
+    try {
+      const theme = String(Player?.ChatSettings?.ColorTheme || "");
+      return /^light/i.test(theme);
+    } catch (e) {
+      return false;
+    }
+  }
+  function seidrLocalChatHtml(text) {
+    const light = seidrChatThemeIsLight();
+    const tag = light ? "#8a6a00" : "#d4a017";
+    const body = light ? "#3a3428" : "#f0e6d4";
+    return `<span style="color:${tag};">[Seidr]</span> <span style="color:${body};">${escapeHtml(text)}</span>`;
+  }
+
+  // src/commands/model.ts
+  var SEIDR_CMD_PEOPLE_MAX = 50;
+  var SEIDR_CMD_ACTIONS_MAX = 50;
+  var SEIDR_CMD_ALIAS_MAX = 48;
+  var SEIDR_CMD_NAME_MAX = 48;
+  var SEIDR_CMD_WARN_MS = 8e3;
+  var SEIDR_CMD_ERROR_MS = 3e4;
+  var SEIDR_CMD_ENABLE_KEYS = [
+    "a",
+    "action",
+    "strip",
+    "stripe",
+    "poses",
+    "p",
+    "animation",
+    "ani",
+    "seidr",
+    "roommanager"
+  ];
+  var SEIDR_CMD_ENABLE_LABELS = [
+    { key: "a", label: "/a" },
+    { key: "action", label: "/action" },
+    { key: "strip", label: "/strip" },
+    { key: "stripe", label: "/stripe" },
+    { key: "poses", label: "/poses" },
+    { key: "p", label: "/p" },
+    { key: "animation", label: "/animation" },
+    { key: "ani", label: "/ani" },
+    { key: "seidr", label: "/seidr" },
+    { key: "roommanager", label: "/roommanager" }
+  ];
+  var SEIDR_FAST_SELECT_EMPTY_OPTS = [
+    { id: "disabled", label: "Disabled (normal Tab)" },
+    { id: "action", label: "Action (/action)" },
+    { id: "poses", label: "Poses (/poses)" },
+    { id: "animation", label: "Animation (/animation)" },
+    { id: "strip", label: "Strip (/strip)" }
+  ];
+  var SEIDR_FAST_SELECT_KEYS = ["a", "s", "d", "p"];
+  var SEIDR_FAST_SELECT_KEY_LABELS = [
+    { key: "a", label: "a + Tab \u2192 /action" },
+    { key: "s", label: "s + Tab \u2192 /strip" },
+    { key: "d", label: "d + Tab \u2192 /animation" },
+    { key: "p", label: "p + Tab \u2192 /poses" }
+  ];
+  function seidrDefaultFastSelectKeys() {
+    return { a: true, s: true, d: true, p: true };
+  }
+  function seidrNormalizeFastSelectKeys(raw) {
+    const base = seidrDefaultFastSelectKeys();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    for (let i = 0; i < SEIDR_FAST_SELECT_KEYS.length; i++) {
+      const k = SEIDR_FAST_SELECT_KEYS[i];
+      if (typeof d[k] === "boolean") base[k] = d[k];
+    }
+    return base;
+  }
+  var FAST_SELECT_EMPTY_IDS = [
+    "disabled",
+    "action",
+    "poses",
+    "animation",
+    "strip"
+  ];
+  function seidrNormalizeFastSelectEmpty(raw) {
+    const s = String(raw || "").trim().toLowerCase();
+    if (FAST_SELECT_EMPTY_IDS.indexOf(s) >= 0) return s;
+    return "disabled";
+  }
+  function seidrDefaultCmdEnabled() {
+    const out = {};
+    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+      out[SEIDR_CMD_ENABLE_KEYS[i]] = true;
+    }
+    return out;
+  }
+  function seidrNormalizeCmdEnabled(raw) {
+    const base = seidrDefaultCmdEnabled();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
+      const k = SEIDR_CMD_ENABLE_KEYS[i];
+      if (typeof d[k] === "boolean") base[k] = d[k];
+    }
+    return base;
+  }
+  function seidrCmdEnableKeyForTag(tag) {
+    const t = String(tag || "").toLowerCase();
+    if (t === "a") return "a";
+    if (t === "action") return "action";
+    if (t === "strip") return "strip";
+    if (t === "stripe") return "stripe";
+    if (t === "poses") return "poses";
+    if (t === "p") return "p";
+    if (t === "animation") return "animation";
+    if (t === "ani") return "ani";
+    if (t === "seidr") return "seidr";
+    if (t === "roommanager") return "roommanager";
+    return null;
+  }
+  function seidrDefaultCommandsBag() {
+    return {
+      nextPersonId: 1,
+      nextActionId: 1,
+      people: [],
+      actions: [],
+      enabled: seidrDefaultCmdEnabled(),
+      fastSelectEnabled: true,
+      fastSelectKeys: seidrDefaultFastSelectKeys(),
+      fastSelectEmpty: "disabled",
+      acWhisper: true,
+      acBeep: true,
+      beepReply: true
+    };
+  }
+  function cleanAlias(raw) {
+    return String(raw || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_CMD_ALIAS_MAX);
+  }
+  function cleanName(raw) {
+    return String(raw || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_CMD_NAME_MAX);
+  }
+  function seidrNormalizeCmdPerson(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : 0;
+    const alias = cleanAlias(d.alias);
+    const mn = typeof d.memberNumber === "number" ? Math.floor(d.memberNumber) : typeof d.memberNumber === "string" ? parseInt(d.memberNumber, 10) : NaN;
+    if (!id || !alias || !Number.isFinite(mn) || mn < 0) return null;
+    return { id, alias, memberNumber: mn };
+  }
+  function seidrNormalizeCmdAction(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : 0;
+    const name = cleanName(d.name);
+    const slot = String(d.slot || "").trim();
+    const activity = String(d.activity || "").trim();
+    if (!id || !name || !slot) return null;
+    return { id, name, slot, activity };
+  }
+  function seidrNormalizeCommandsBag(raw) {
+    const base = seidrDefaultCommandsBag();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    const people = [];
+    const seenAlias = {};
+    const seenMn = {};
+    if (Array.isArray(d.people)) {
+      for (let i = 0; i < d.people.length && people.length < SEIDR_CMD_PEOPLE_MAX; i++) {
+        const p = seidrNormalizeCmdPerson(d.people[i]);
+        if (!p) continue;
+        const key = p.alias.toLowerCase();
+        if (seenAlias[key]) continue;
+        if (p.memberNumber > 0 && seenMn[p.memberNumber]) continue;
+        seenAlias[key] = true;
+        if (p.memberNumber > 0) seenMn[p.memberNumber] = true;
+        people.push(p);
+        if (p.id >= base.nextPersonId) base.nextPersonId = p.id + 1;
+      }
+    }
+    const actions = [];
+    const seenAct = {};
+    if (Array.isArray(d.actions)) {
+      for (let i = 0; i < d.actions.length && actions.length < SEIDR_CMD_ACTIONS_MAX; i++) {
+        const a = seidrNormalizeCmdAction(d.actions[i]);
+        if (!a) continue;
+        const key = a.name.toLowerCase();
+        if (seenAct[key]) continue;
+        seenAct[key] = true;
+        actions.push(a);
+        if (a.id >= base.nextActionId) base.nextActionId = a.id + 1;
+      }
+    }
+    if (typeof d.nextPersonId === "number" && d.nextPersonId > base.nextPersonId) {
+      base.nextPersonId = Math.floor(d.nextPersonId);
+    }
+    if (typeof d.nextActionId === "number" && d.nextActionId > base.nextActionId) {
+      base.nextActionId = Math.floor(d.nextActionId);
+    }
+    base.people = people;
+    base.actions = actions;
+    base.enabled = seidrNormalizeCmdEnabled(d.enabled);
+    if (typeof d.fastSelectEnabled === "boolean") {
+      base.fastSelectEnabled = d.fastSelectEnabled;
+    }
+    base.fastSelectKeys = seidrNormalizeFastSelectKeys(
+      d.fastSelectKeys
+    );
+    base.fastSelectEmpty = seidrNormalizeFastSelectEmpty(
+      d.fastSelectEmpty
+    );
+    const assist = d;
+    if (typeof assist.acWhisper === "boolean") base.acWhisper = assist.acWhisper;
+    if (typeof assist.acBeep === "boolean") base.acBeep = assist.acBeep;
+    if (typeof assist.beepReply === "boolean") base.beepReply = assist.beepReply;
+    return base;
+  }
+  function seidrDefaultCmdPerson(id) {
+    return { id, alias: "", memberNumber: 0 };
+  }
+  function seidrDefaultCmdAction(id) {
+    return { id, name: "", slot: "ItemTorso", activity: "" };
+  }
+
+  // src/commands/warn.ts
+  function seidrCmdLocal(text, timeoutMs) {
+    if (typeof ChatRoomSendLocal !== "function") return;
+    const ms = typeof timeoutMs === "number" ? timeoutMs : SEIDR_CMD_WARN_MS;
+    try {
+      ChatRoomSendLocal(seidrLocalChatHtml(text), ms);
+    } catch (e) {
+      console.warn("[Seidr Cmd]", text);
+    }
+  }
+  function seidrCmdWarn(text) {
+    seidrCmdLocal(text, SEIDR_CMD_WARN_MS);
+  }
+  function seidrCmdError(text) {
+    seidrCmdLocal(text, SEIDR_CMD_ERROR_MS);
+  }
+
   // src/activities.ts
   var SEIDR_HOLD_ACTIVITIES = [
     {
       name: "Seidr_PullLeft",
       slot: "left",
       prereq: "Seidr_CanPullLeft",
-      needsHands: true,
+      needsHands: false,
       label: "Pull Left",
       chat: "SourceCharacter pulls TargetCharacter to the left."
     },
@@ -1043,7 +1311,7 @@
       name: "Seidr_PullRight",
       slot: "right",
       prereq: "Seidr_CanPullRight",
-      needsHands: true,
+      needsHands: false,
       label: "Pull Right",
       chat: "SourceCharacter pulls TargetCharacter to the right."
     },
@@ -1051,7 +1319,7 @@
       name: "Seidr_Cuddle",
       slot: "cuddle",
       prereq: "Seidr_CanCuddle",
-      needsHands: true,
+      needsHands: false,
       label: "Cuddle",
       chat: "SourceCharacter cuddles TargetCharacter."
     },
@@ -1059,7 +1327,7 @@
       name: "Seidr_JoinLeft",
       joinSlot: "left",
       prereq: "Seidr_CanJoinLeft",
-      needsHands: true,
+      needsHands: false,
       label: "Go Left",
       chat: "SourceCharacter moves to TargetCharacter's left."
     },
@@ -1067,7 +1335,7 @@
       name: "Seidr_JoinRight",
       joinSlot: "right",
       prereq: "Seidr_CanJoinRight",
-      needsHands: true,
+      needsHands: false,
       label: "Go Right",
       chat: "SourceCharacter moves to TargetCharacter's right."
     },
@@ -1075,7 +1343,7 @@
       name: "Seidr_JoinCuddle",
       joinSlot: "cuddle",
       prereq: "Seidr_CanJoinCuddle",
-      needsHands: true,
+      needsHands: false,
       label: "Cuddle Into",
       chat: "SourceCharacter cuddles into TargetCharacter."
     },
@@ -1199,21 +1467,21 @@
     if (act2 && act2.zone) return [act2.zone];
     return Seidr.GROUPS.slice();
   }
-  function seidrWriteLabels(cache) {
-    if (!cache || !cache.cache) return;
+  function seidrWriteLabels(cache2) {
+    if (!cache2 || !cache2.cache) return;
     SEIDR_ACTIVITIES.forEach(function(act2) {
       if (act2.undress) return;
-      cache.cache["Activity" + act2.name] = act2.label;
+      cache2.cache["Activity" + act2.name] = act2.label;
       seidrActZones(act2).forEach(function(group) {
-        cache.cache["Label-ChatOther-" + group + "-" + act2.name] = act2.label;
-        cache.cache["Label-ChatSelf-" + group + "-" + act2.name] = act2.label;
-        cache.cache["ChatOther-" + group + "-" + act2.name] = act2.chat;
-        cache.cache["ChatSelf-" + group + "-" + act2.name] = act2.chatSelf || act2.chat;
+        cache2.cache["Label-ChatOther-" + group + "-" + act2.name] = act2.label;
+        cache2.cache["Label-ChatSelf-" + group + "-" + act2.name] = act2.label;
+        cache2.cache["ChatOther-" + group + "-" + act2.name] = act2.chat;
+        cache2.cache["ChatSelf-" + group + "-" + act2.name] = act2.chatSelf || act2.chat;
       });
     });
     if (typeof Seidr.undressWriteLabels === "function") {
       var focused = typeof CharacterGetCurrent === "function" ? CharacterGetCurrent() : null;
-      Seidr.undressWriteLabels(cache, focused || (typeof Player !== "undefined" ? Player : null));
+      Seidr.undressWriteLabels(cache2, focused || (typeof Player !== "undefined" ? Player : null));
     }
   }
   function seidrBindActivity(act2) {
@@ -1230,11 +1498,11 @@
   }
   function seidrEnsureLabels() {
     if (typeof ActivityDictionaryLoad !== "function") return;
-    var cache = ActivityDictionaryLoad();
-    seidrWriteLabels(cache);
-    if (!seidrLabelsHooked && cache && typeof cache.onRebuild === "function") {
+    var cache2 = ActivityDictionaryLoad();
+    seidrWriteLabels(cache2);
+    if (!seidrLabelsHooked && cache2 && typeof cache2.onRebuild === "function") {
       seidrLabelsHooked = true;
-      cache.onRebuild(function() {
+      cache2.onRebuild(function() {
         seidrWriteLabels(typeof ActivityDictionaryLoad === "function" ? ActivityDictionaryLoad() : null);
       }, false);
     }
@@ -1274,6 +1542,41 @@
   function seidrPeerOk(member) {
     return Seidr.peerHas && Seidr.peerHas(member);
   }
+  function seidrMapFormOk(hubChar, satChar, slot) {
+    if (typeof Seidr.mapSeatFormOk !== "function") return true;
+    if (typeof Seidr.mapIsMapRoom === "function" && !Seidr.mapIsMapRoom()) return true;
+    var hubPos = hubChar && hubChar.MapData && hubChar.MapData.Pos ? { X: hubChar.MapData.Pos.X, Y: hubChar.MapData.Pos.Y } : null;
+    var satPos = satChar && satChar.MapData && satChar.MapData.Pos ? { X: satChar.MapData.Pos.X, Y: satChar.MapData.Pos.Y } : null;
+    return !!Seidr.mapSeatFormOk(hubPos, satPos, slot);
+  }
+  function seidrMapFormHidesForPrereq() {
+    return typeof Seidr.mapFormHidesActivity === "function" && !!Seidr.mapFormHidesActivity();
+  }
+  function seidrMapFailMessage(act2) {
+    var label = act2 && act2.label ? String(act2.label) : "Hold";
+    return label + " not possible \u2014 Map conditions not met";
+  }
+  function seidrMapBlockFormJoin(actor, acted, act2) {
+    if (!act2 || !actor || !acted) return false;
+    if (typeof Seidr.mapIsMapRoom !== "function" || !Seidr.mapIsMapRoom()) return false;
+    var slot = null;
+    var hubChar = null;
+    var satChar = null;
+    if (act2.slot) {
+      slot = act2.slot;
+      hubChar = actor;
+      satChar = acted;
+    } else if (act2.joinSlot) {
+      slot = act2.joinSlot;
+      hubChar = acted;
+      satChar = actor;
+    } else {
+      return false;
+    }
+    if (seidrMapFormOk(hubChar, satChar, slot)) return false;
+    seidrCmdWarn(seidrMapFailMessage(act2));
+    return true;
+  }
   function seidrCanPlace(acting, acted, slot) {
     if (!acting || !acted) return false;
     if (typeof acting.MemberNumber !== "number" || typeof acted.MemberNumber !== "number") return false;
@@ -1281,6 +1584,7 @@
     if (!seidrPeerOk(acted.MemberNumber)) return false;
     if (!seidrAllowAct(acting, acted)) return false;
     if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
+    if (seidrMapFormHidesForPrereq() && !seidrMapFormOk(acting, acted, slot)) return false;
     return SeidrState.canPlace(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
   }
   function seidrCanJoin(acting, acted, slot) {
@@ -1290,6 +1594,7 @@
     if (!seidrPeerOk(acted.MemberNumber)) return false;
     if (!seidrAllowAct(acting, acted)) return false;
     if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
+    if (seidrMapFormHidesForPrereq() && !seidrMapFormOk(acted, acting, slot)) return false;
     return SeidrState.canJoin(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
   }
   function seidrCanRemove(acting, acted) {
@@ -1567,6 +1872,13 @@
         }
         return undressResult;
       }
+      try {
+        if (act2 && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer() && seidrMapBlockFormJoin(actor, acted, act2)) {
+          return;
+        }
+      } catch (eBlock) {
+        console.warn("[Seidr] map form block", eBlock);
+      }
       var result = next(args);
       try {
         if (!actor || !acted || !act2) return result;
@@ -1715,16 +2027,18 @@
     });
   }
   var SEIDR_ACTION_POSES = [
-    { id: "BaseLower", label: "Standing (legs)" },
-    { id: "LegsClosed", label: "Legs closed" },
-    { id: "Kneel", label: "Kneel" },
-    { id: "KneelingSpread", label: "Kneeling spread" },
-    { id: "BaseUpper", label: "Hands relaxed" },
-    { id: "Yoked", label: "Yoked" },
-    { id: "OverTheHead", label: "Hands up" },
-    { id: "BackBoxTie", label: "Back box tie" },
-    { id: "BackElbowTouch", label: "Hands armbinder" },
-    { id: "AllFours", label: "On all fours" }
+    { id: "BaseUpper", label: "Arms Relaxed" },
+    { id: "Yoked", label: "Hands Raised" },
+    { id: "OverTheHead", label: "Over Head" },
+    { id: "BackBoxTie", label: "Box Tie" },
+    { id: "BackElbowTouch", label: "Elbow Touch" },
+    { id: "BackCuffs", label: "Back Cuffs" },
+    { id: "BaseLower", label: "Standing" },
+    { id: "LegsClosed", label: "Legs Closed" },
+    { id: "Kneel", label: "Kneeling" },
+    { id: "KneelingSpread", label: "Kneeling Spread" },
+    { id: "AllFours", label: "All Fours" },
+    { id: "Hogtied", label: "Belly" }
   ];
   function seidrPoseAvailable(C, poseId, opts4) {
     if (!poseId) return false;
@@ -2043,7 +2357,8 @@
       const rawAct = typeof e.arousal.activity === "string" ? e.arousal.activity : "";
       out.arousal = {
         enabled: !!e.arousal.enabled,
-        activity: rawAct && SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(rawAct) >= 0 ? rawAct : "Caress"
+        activity: rawAct && SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(rawAct) >= 0 ? rawAct : "Caress",
+        reverse: !!e.arousal.reverse
       };
     }
     if (e.sound && typeof e.sound === "object") {
@@ -2076,6 +2391,8 @@
     const audience = typeof d.audience === "string" && AUDIENCE_IDS.indexOf(d.audience) >= 0 ? d.audience : "both";
     const chatOther2 = typeof d.chatOther === "string" && d.chatOther.trim() ? d.chatOther.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatOther(name);
     const chatSelf2 = typeof d.chatSelf === "string" && d.chatSelf.trim() ? d.chatSelf.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatSelf(name);
+    const itemsOnTarget = d.itemsOnTarget !== false;
+    const itemsOnSource = !!d.itemsOnSource;
     return {
       id,
       name,
@@ -2085,6 +2402,8 @@
       chatSelf: chatSelf2,
       icon: seidrNormalizeActionIcon(d.icon),
       items: normalizeItems(d.items),
+      itemsOnTarget,
+      itemsOnSource,
       conditions: { groups: normalizeGroups(d.conditions) },
       effects: normalizeEffects(d.effects)
     };
@@ -2122,9 +2441,11 @@
       chatSelf: seidrDefaultChatSelf(name),
       icon: seidrDefaultActionIcon(),
       items: [],
+      itemsOnTarget: true,
+      itemsOnSource: false,
       conditions: { groups: [] },
       effects: {
-        arousal: { enabled: false, activity: "Caress" },
+        arousal: { enabled: false, activity: "Caress", reverse: false },
         sound: { enabled: false, sound: "SpankSkin" },
         pose: { enabled: false, pose: "Kneel" }
       }
@@ -2300,205 +2621,28 @@
     return base;
   }
 
-  // src/commands/model.ts
-  var SEIDR_CMD_PEOPLE_MAX = 50;
-  var SEIDR_CMD_ACTIONS_MAX = 50;
-  var SEIDR_CMD_ALIAS_MAX = 48;
-  var SEIDR_CMD_NAME_MAX = 48;
-  var SEIDR_CMD_WARN_MS = 8e3;
-  var SEIDR_CMD_ERROR_MS = 3e4;
-  var SEIDR_CMD_ENABLE_KEYS = [
-    "a",
-    "action",
-    "strip",
-    "stripe",
-    "poses",
-    "p",
-    "animation",
-    "ani",
-    "seidr",
-    "roommanager"
-  ];
-  var SEIDR_CMD_ENABLE_LABELS = [
-    { key: "a", label: "/a" },
-    { key: "action", label: "/action" },
-    { key: "strip", label: "/strip" },
-    { key: "stripe", label: "/stripe" },
-    { key: "poses", label: "/poses" },
-    { key: "p", label: "/p" },
-    { key: "animation", label: "/animation" },
-    { key: "ani", label: "/ani" },
-    { key: "seidr", label: "/seidr" },
-    { key: "roommanager", label: "/roommanager" }
-  ];
-  var SEIDR_FAST_SELECT_EMPTY_OPTS = [
-    { id: "disabled", label: "Disabled (normal Tab)" },
-    { id: "action", label: "Action (/action)" },
-    { id: "poses", label: "Poses (/poses)" },
-    { id: "animation", label: "Animation (/animation)" },
-    { id: "strip", label: "Strip (/strip)" }
-  ];
-  var SEIDR_FAST_SELECT_KEYS = ["a", "s", "d", "p"];
-  var SEIDR_FAST_SELECT_KEY_LABELS = [
-    { key: "a", label: "a + Tab \u2192 /action" },
-    { key: "s", label: "s + Tab \u2192 /strip" },
-    { key: "d", label: "d + Tab \u2192 /animation" },
-    { key: "p", label: "p + Tab \u2192 /poses" }
-  ];
-  function seidrDefaultFastSelectKeys() {
-    return { a: true, s: true, d: true, p: true };
-  }
-  function seidrNormalizeFastSelectKeys(raw) {
-    const base = seidrDefaultFastSelectKeys();
-    if (!raw || typeof raw !== "object") return base;
-    const d = raw;
-    for (let i = 0; i < SEIDR_FAST_SELECT_KEYS.length; i++) {
-      const k = SEIDR_FAST_SELECT_KEYS[i];
-      if (typeof d[k] === "boolean") base[k] = d[k];
-    }
-    return base;
-  }
-  var FAST_SELECT_EMPTY_IDS = [
-    "disabled",
-    "action",
-    "poses",
-    "animation",
-    "strip"
-  ];
-  function seidrNormalizeFastSelectEmpty(raw) {
-    const s = String(raw || "").trim().toLowerCase();
-    if (FAST_SELECT_EMPTY_IDS.indexOf(s) >= 0) return s;
-    return "disabled";
-  }
-  function seidrDefaultCmdEnabled() {
-    const out = {};
-    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
-      out[SEIDR_CMD_ENABLE_KEYS[i]] = true;
-    }
-    return out;
-  }
-  function seidrNormalizeCmdEnabled(raw) {
-    const base = seidrDefaultCmdEnabled();
-    if (!raw || typeof raw !== "object") return base;
-    const d = raw;
-    for (let i = 0; i < SEIDR_CMD_ENABLE_KEYS.length; i++) {
-      const k = SEIDR_CMD_ENABLE_KEYS[i];
-      if (typeof d[k] === "boolean") base[k] = d[k];
-    }
-    return base;
-  }
-  function seidrCmdEnableKeyForTag(tag) {
-    const t = String(tag || "").toLowerCase();
-    if (t === "a") return "a";
-    if (t === "action") return "action";
-    if (t === "strip") return "strip";
-    if (t === "stripe") return "stripe";
-    if (t === "poses") return "poses";
-    if (t === "p") return "p";
-    if (t === "animation") return "animation";
-    if (t === "ani") return "ani";
-    if (t === "seidr") return "seidr";
-    if (t === "roommanager") return "roommanager";
-    return null;
-  }
-  function seidrDefaultCommandsBag() {
-    return {
-      nextPersonId: 1,
-      nextActionId: 1,
-      people: [],
-      actions: [],
-      enabled: seidrDefaultCmdEnabled(),
-      fastSelectEnabled: true,
-      fastSelectKeys: seidrDefaultFastSelectKeys(),
-      fastSelectEmpty: "disabled"
-    };
-  }
-  function cleanAlias(raw) {
-    return String(raw || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_CMD_ALIAS_MAX);
-  }
-  function cleanName(raw) {
-    return String(raw || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_CMD_NAME_MAX);
-  }
-  function seidrNormalizeCmdPerson(raw) {
-    if (!raw || typeof raw !== "object") return null;
-    const d = raw;
-    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : 0;
-    const alias = cleanAlias(d.alias);
-    const mn = typeof d.memberNumber === "number" ? Math.floor(d.memberNumber) : typeof d.memberNumber === "string" ? parseInt(d.memberNumber, 10) : NaN;
-    if (!id || !alias || !Number.isFinite(mn) || mn < 0) return null;
-    return { id, alias, memberNumber: mn };
-  }
-  function seidrNormalizeCmdAction(raw) {
-    if (!raw || typeof raw !== "object") return null;
-    const d = raw;
-    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : 0;
-    const name = cleanName(d.name);
-    const slot = String(d.slot || "").trim();
-    const activity = String(d.activity || "").trim();
-    if (!id || !name || !slot) return null;
-    return { id, name, slot, activity };
-  }
-  function seidrNormalizeCommandsBag(raw) {
-    const base = seidrDefaultCommandsBag();
-    if (!raw || typeof raw !== "object") return base;
-    const d = raw;
-    const people = [];
-    const seenAlias = {};
-    const seenMn = {};
-    if (Array.isArray(d.people)) {
-      for (let i = 0; i < d.people.length && people.length < SEIDR_CMD_PEOPLE_MAX; i++) {
-        const p = seidrNormalizeCmdPerson(d.people[i]);
-        if (!p) continue;
-        const key = p.alias.toLowerCase();
-        if (seenAlias[key]) continue;
-        if (p.memberNumber > 0 && seenMn[p.memberNumber]) continue;
-        seenAlias[key] = true;
-        if (p.memberNumber > 0) seenMn[p.memberNumber] = true;
-        people.push(p);
-        if (p.id >= base.nextPersonId) base.nextPersonId = p.id + 1;
-      }
-    }
-    const actions = [];
-    const seenAct = {};
-    if (Array.isArray(d.actions)) {
-      for (let i = 0; i < d.actions.length && actions.length < SEIDR_CMD_ACTIONS_MAX; i++) {
-        const a = seidrNormalizeCmdAction(d.actions[i]);
-        if (!a) continue;
-        const key = a.name.toLowerCase();
-        if (seenAct[key]) continue;
-        seenAct[key] = true;
-        actions.push(a);
-        if (a.id >= base.nextActionId) base.nextActionId = a.id + 1;
-      }
-    }
-    if (typeof d.nextPersonId === "number" && d.nextPersonId > base.nextPersonId) {
-      base.nextPersonId = Math.floor(d.nextPersonId);
-    }
-    if (typeof d.nextActionId === "number" && d.nextActionId > base.nextActionId) {
-      base.nextActionId = Math.floor(d.nextActionId);
-    }
-    base.people = people;
-    base.actions = actions;
-    base.enabled = seidrNormalizeCmdEnabled(d.enabled);
-    if (typeof d.fastSelectEnabled === "boolean") {
-      base.fastSelectEnabled = d.fastSelectEnabled;
-    }
-    base.fastSelectKeys = seidrNormalizeFastSelectKeys(
-      d.fastSelectKeys
-    );
-    base.fastSelectEmpty = seidrNormalizeFastSelectEmpty(
-      d.fastSelectEmpty
-    );
-    return base;
-  }
-  function seidrDefaultCmdPerson(id) {
-    return { id, alias: "", memberNumber: 0 };
-  }
-  function seidrDefaultCmdAction(id) {
-    return { id, name: "", slot: "ItemTorso", activity: "" };
-  }
-
   // src/settings/model.ts
+  var SEIDR_CHAT_FONT_MAX = 64;
+  var SEIDR_CHAT_FONT_SIZE_MIN = 16;
+  var SEIDR_CHAT_FONT_SIZE_MAX = 72;
+  function seidrNormalizeChatFont(raw) {
+    if (typeof raw !== "string") return "";
+    let s = raw.trim().replace(/[\r\n\0]/g, "");
+    s = s.replace(/["';{}\\]/g, "");
+    if (s.length > SEIDR_CHAT_FONT_MAX) s = s.slice(0, SEIDR_CHAT_FONT_MAX);
+    s = s.trim();
+    s = s.replace(/[^\w\s.\-+]/g, "");
+    return s.trim();
+  }
+  function seidrNormalizeChatFontSize(raw) {
+    if (raw === "" || raw === null || raw === void 0) return 0;
+    const n = typeof raw === "number" ? raw : typeof raw === "string" ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    const rounded = Math.round(n);
+    if (rounded < SEIDR_CHAT_FONT_SIZE_MIN) return SEIDR_CHAT_FONT_SIZE_MIN;
+    if (rounded > SEIDR_CHAT_FONT_SIZE_MAX) return SEIDR_CHAT_FONT_SIZE_MAX;
+    return rounded;
+  }
   var FAST_OPEN_MODIFIERS = [
     { id: "Shift", label: "Shift" },
     { id: "Ctrl", label: "Ctrl" },
@@ -2525,6 +2669,10 @@
     { id: "hide", label: "Hide" },
     { id: "hover", label: "Hover (on hitbox)" }
   ];
+  var CLUSTER_NAME_SCOPES = [
+    { id: "seidrCluster", label: "Seidr holds" },
+    { id: "all", label: "Everyone" }
+  ];
   var AROUSAL_MODE_IDS = AROUSAL_BAR_MODES.map(function(m) {
     return m.id;
   });
@@ -2533,6 +2681,9 @@
   });
   var CLUSTER_NAME_MODE_IDS = CLUSTER_NAME_MODES.map(function(m) {
     return m.id;
+  });
+  var CLUSTER_NAME_SCOPE_IDS = CLUSTER_NAME_SCOPES.map(function(s) {
+    return s.id;
   });
   var RM_LAUNCHER_POSITIONS = [
     { id: "topLeft", label: "Top Left" },
@@ -2554,6 +2705,20 @@
     return {
       pull: { x: 75, y: 0 },
       cuddle: { x: 0, y: -50 }
+    };
+  }
+  function seidrDefaultMapDrawOffsets() {
+    return {
+      pull: { x: 100, y: 0 },
+      cuddle: { x: 0, y: -250 }
+    };
+  }
+  function seidrDefaultDrawAdvancedOffsets() {
+    return {
+      left: { x: -150, y: 0 },
+      right: { x: 150, y: 0 },
+      cuddle: { x: 0, y: 0 },
+      hub: { x: 0, y: -50 }
     };
   }
   function seidrClampDrawCoord(raw, fallback) {
@@ -2611,6 +2776,25 @@
       cuddle: { x: o.cuddle.x, y: o.cuddle.y }
     };
   }
+  function seidrNormalizeDrawAdvancedOffsets(raw, fallback) {
+    const base = fallback ? seidrCloneDrawAdvancedOffsets(fallback) : seidrDefaultDrawAdvancedOffsets();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    return {
+      left: seidrNormalizeDrawOffsetPair(d.left, base.left),
+      right: seidrNormalizeDrawOffsetPair(d.right, base.right),
+      cuddle: seidrNormalizeDrawOffsetPair(d.cuddle, base.cuddle),
+      hub: seidrNormalizeDrawOffsetPair(d.hub, base.hub)
+    };
+  }
+  function seidrCloneDrawAdvancedOffsets(o) {
+    return {
+      left: { x: o.left.x, y: o.left.y },
+      right: { x: o.right.x, y: o.right.y },
+      cuddle: { x: o.cuddle.x, y: o.cuddle.y },
+      hub: { x: o.hub.x, y: o.hub.y }
+    };
+  }
   function normalizeFastOpenSlot(raw) {
     const slots = seidrRestraintSlots();
     const ids = slots.map(function(s) {
@@ -2626,12 +2810,21 @@
       showQuickmenuButton: true,
       launcherPosition: "chatTop",
       drawOffsets: seidrDefaultDrawOffsets(),
+      drawAdvancedMode: false,
+      drawAdvancedOffsets: seidrDefaultDrawAdvancedOffsets(),
+      drawAllowSync: false,
+      mapDrawOffsets: seidrDefaultMapDrawOffsets(),
+      mapDrawAdvancedMode: false,
+      mapDrawAdvancedOffsets: seidrDefaultDrawAdvancedOffsets(),
       clusterNameMode: "hitbox",
+      clusterNameScope: "seidrCluster",
       arousalBarMode: "off",
       arousalBarScope: "seidrCluster",
       fastOpenActionsEnabled: true,
       fastOpenActionsModifier: "Shift",
       fastOpenActionsSlot: "ItemTorso",
+      chatFont: "",
+      chatFontSize: 0,
       customActionIcons: [],
       actions: { nextId: 1, list: [] },
       commands: seidrNormalizeCommandsBag(null),
@@ -2649,8 +2842,17 @@
       base.launcherPosition = d.launcherPosition;
     }
     base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
+    if (typeof d.drawAdvancedMode === "boolean") base.drawAdvancedMode = d.drawAdvancedMode;
+    base.drawAdvancedOffsets = seidrNormalizeDrawAdvancedOffsets(d.drawAdvancedOffsets);
+    if (typeof d.drawAllowSync === "boolean") base.drawAllowSync = d.drawAllowSync;
+    base.mapDrawOffsets = seidrNormalizeDrawOffsets(d.mapDrawOffsets, seidrDefaultMapDrawOffsets());
+    base.mapDrawAdvancedMode = false;
+    base.mapDrawAdvancedOffsets = seidrDefaultDrawAdvancedOffsets();
     if (typeof d.clusterNameMode === "string" && CLUSTER_NAME_MODE_IDS.indexOf(d.clusterNameMode) >= 0) {
       base.clusterNameMode = d.clusterNameMode;
+    }
+    if (typeof d.clusterNameScope === "string" && CLUSTER_NAME_SCOPE_IDS.indexOf(d.clusterNameScope) >= 0) {
+      base.clusterNameScope = d.clusterNameScope;
     }
     if (typeof d.arousalBarMode === "string" && AROUSAL_MODE_IDS.indexOf(d.arousalBarMode) >= 0) {
       base.arousalBarMode = d.arousalBarMode;
@@ -2665,6 +2867,8 @@
       base.fastOpenActionsModifier = d.fastOpenActionsModifier;
     }
     base.fastOpenActionsSlot = normalizeFastOpenSlot(d.fastOpenActionsSlot);
+    base.chatFont = seidrNormalizeChatFont(d.chatFont);
+    base.chatFontSize = seidrNormalizeChatFontSize(d.chatFontSize);
     base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
     base.actions = seidrNormalizeActionsBag(d.actions);
     base.commands = seidrNormalizeCommandsBag(d.commands);
@@ -2700,6 +2904,91 @@
   function clampName(raw, fallback, max) {
     const s = String(raw == null ? "" : raw).trim().slice(0, max);
     return s || fallback;
+  }
+  function rmDefaultDrawingResizeMode() {
+    try {
+      if (typeof DrawingResizeMode !== "undefined" && DrawingResizeMode && typeof DrawingResizeMode.Fill === "number") {
+        return DrawingResizeMode.Fill;
+      }
+    } catch (e) {
+    }
+    return 1;
+  }
+  function rmNormalizeBgFillMode(raw) {
+    const s = String(raw == null ? "" : raw);
+    if (s === "fill" || s === "fillOriginalRatio" || s === "showFullOriginalRatio" || s === "default") {
+      return s;
+    }
+    return "default";
+  }
+  function rmNormalizeBackgroundEntry(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    if (typeof d.url !== "string" || !d.url.trim()) return null;
+    return {
+      id: typeof d.id === "string" && d.id ? d.id : rmNewId("bg"),
+      name: clampName(d.name, "Background", 64),
+      url: d.url.trim(),
+      fillMode: rmNormalizeBgFillMode(d.fillMode)
+    };
+  }
+  function rmNormalizeRoomPreset(raw) {
+    if (!raw || typeof raw !== "object") return {};
+    const d = raw;
+    const out = {};
+    if (typeof d.Name === "string") out.Name = d.Name;
+    if (typeof d.Language === "string") out.Language = d.Language;
+    if (typeof d.Description === "string") out.Description = d.Description;
+    if (typeof d.Limit === "number" && Number.isFinite(d.Limit)) out.Limit = d.Limit;
+    if (Array.isArray(d.BlockCategory)) out.BlockCategory = d.BlockCategory.slice();
+    if (typeof d.Game === "string") out.Game = d.Game;
+    if (Array.isArray(d.Visibility)) out.Visibility = d.Visibility.slice();
+    if (Array.isArray(d.Access)) out.Access = d.Access.slice();
+    if (d.MapData && typeof d.MapData === "object") out.MapData = d.MapData;
+    if (typeof d.Background === "string") out.Background = d.Background;
+    if (typeof d.customSizeMode === "number" && Number.isFinite(d.customSizeMode)) {
+      out.customSizeMode = d.customSizeMode;
+    } else if (d.Custom && typeof d.Custom.SizeMode === "number") {
+      out.customSizeMode = d.Custom.SizeMode;
+    }
+    if (typeof d.customImageFilter === "string") {
+      out.customImageFilter = d.customImageFilter;
+    } else if (d.Custom && typeof d.Custom.ImageFilter === "string") {
+      out.customImageFilter = d.Custom.ImageFilter;
+    }
+    if (out.customSizeMode == null) out.customSizeMode = rmDefaultDrawingResizeMode();
+    if (out.customImageFilter == null) out.customImageFilter = "";
+    return out;
+  }
+  function rmResolveSizeMode(fillMode, roomDefault) {
+    const mode = rmNormalizeBgFillMode(fillMode);
+    if (mode === "default") {
+      return typeof roomDefault === "number" && Number.isFinite(roomDefault) ? roomDefault : rmDefaultDrawingResizeMode();
+    }
+    try {
+      if (typeof DrawingResizeMode !== "undefined" && DrawingResizeMode) {
+        if (mode === "fill") return DrawingResizeMode.Fill;
+        if (mode === "fillOriginalRatio") return DrawingResizeMode.FillOriginalRatio;
+        if (mode === "showFullOriginalRatio") return DrawingResizeMode.ShowFullOriginalRatio;
+      }
+    } catch (e) {
+    }
+    if (mode === "fill") return 1;
+    if (mode === "fillOriginalRatio") return 2;
+    if (mode === "showFullOriginalRatio") return 3;
+    return rmDefaultDrawingResizeMode();
+  }
+  function rmFillModeLabel(mode) {
+    switch (mode) {
+      case "fill":
+        return "Fill the Room";
+      case "fillOriginalRatio":
+        return "Fill Original Aspect";
+      case "showFullOriginalRatio":
+        return "Full Image Original Aspect";
+      default:
+        return "Default";
+    }
   }
   function rmNormalizeMapVersion(raw, fallbackName) {
     if (!raw || typeof raw !== "object") return null;
@@ -2754,12 +3043,22 @@
     if (!data || typeof data !== "object") return base;
     const d = data;
     base.version = typeof d.version === "number" ? d.version : base.version;
-    base.room = d.room && typeof d.room === "object" ? d.room : {};
-    base.access = d.access && typeof d.access === "object" ? d.access : {};
-    if (Array.isArray(d.backgrounds)) base.backgrounds = d.backgrounds;
-    else if (d.background && typeof d.background === "object") {
-      base.backgrounds = [];
+    const room = {};
+    if (d.room && typeof d.room === "object") {
+      Object.keys(d.room).forEach(function(key) {
+        room[key] = rmNormalizeRoomPreset(d.room[key]);
+      });
     }
+    base.room = room;
+    base.access = d.access && typeof d.access === "object" ? d.access : {};
+    const backgrounds = [];
+    if (Array.isArray(d.backgrounds)) {
+      for (let i = 0; i < d.backgrounds.length; i++) {
+        const entry = rmNormalizeBackgroundEntry(d.backgrounds[i]);
+        if (entry) backgrounds.push(entry);
+      }
+    }
+    base.backgrounds = backgrounds;
     const maps = [];
     if (Array.isArray(d.maps)) {
       for (let i = 0; i < d.maps.length; i++) {
@@ -2780,8 +3079,15 @@
   }
 
   // src/roomManager/storage.ts
+  var SAVE_DEBOUNCE_MS = 1500;
+  var DOMAINS = ["rm", "settings", "actions", "commands", "animations"];
   var _store = null;
   var _lastBytes = 0;
+  var _sent = {};
+  var _memo = {};
+  var _pending = {};
+  var _timer = null;
+  var _flushInstalled = false;
   function lz() {
     try {
       if (typeof LZString !== "undefined" && LZString) return LZString;
@@ -2789,27 +3095,61 @@
     }
     return null;
   }
-  function pack(obj) {
-    const json = JSON.stringify(obj);
-    const L = lz();
-    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
-    if (L && typeof L.compressToUTF16 === "function" && json.length > 400) {
-      return prefix + L.compressToUTF16(json);
+  function keyOf(id) {
+    switch (id) {
+      case "rm":
+        return Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
+      case "settings":
+        return Seidr.RM_KEY_SETTINGS || "SeidrSettings";
+      case "actions":
+        return Seidr.RM_KEY_ACTIONS || "SeidrActions";
+      case "commands":
+        return Seidr.RM_KEY_COMMANDS || "SeidrCommands";
+      default:
+        return Seidr.RM_KEY_ANIMATIONS || "SeidrAnimations";
     }
-    return json;
+  }
+  function maxBytes() {
+    return Seidr.RM_MAX_BYTES || 18e4;
+  }
+  function packJson(json) {
+    const L = lz();
+    if (!L || typeof L.compressToBase64 !== "function" || json.length < 120) return json;
+    const packed = (Seidr.RM_B64_PREFIX || "SeidrRm2:") + L.compressToBase64(json);
+    return packed.length < json.length ? packed : json;
+  }
+  function pack(obj) {
+    return packJson(JSON.stringify(obj));
+  }
+  function packMemo(key, obj) {
+    const json = JSON.stringify(obj);
+    const hit = _memo[key];
+    if (hit && hit.json === json) return hit.packed;
+    const packed = packJson(json);
+    _memo[key] = { json, packed };
+    return packed;
   }
   function unpack(raw) {
     if (raw == null || raw === "") return null;
     if (typeof raw === "object") return raw;
     if (typeof raw !== "string") return null;
-    const prefix = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
+    const p2 = Seidr.RM_B64_PREFIX || "SeidrRm2:";
+    const p1 = Seidr.RM_LZ_PREFIX || "SeidrRm1:";
     try {
-      if (raw.startsWith(prefix)) {
+      if (raw.startsWith(p2)) {
         const L = lz();
-        if (!L || typeof L.decompressFromUTF16 !== "function") return null;
-        const plain = L.decompressFromUTF16(raw.slice(prefix.length));
+        if (!L || typeof L.decompressFromBase64 !== "function") return null;
+        const plain = L.decompressFromBase64(raw.slice(p2.length));
         return plain ? JSON.parse(plain) : null;
       }
+      if (raw.startsWith(p1)) {
+        const L = lz();
+        if (!L || typeof L.decompressFromUTF16 !== "function") return null;
+        const plain = L.decompressFromUTF16(raw.slice(p1.length));
+        return plain ? JSON.parse(plain) : null;
+      }
+      const c = raw.charAt(0);
+      if (c === "{" || c === "[") return JSON.parse(raw);
       if (typeof LZString !== "undefined" && LZString.decompressFromBase64) {
         const plain = LZString.decompressFromBase64(raw);
         if (plain) return JSON.parse(plain);
@@ -2820,42 +3160,184 @@
       return null;
     }
   }
+  function esBag() {
+    try {
+      if (typeof Player !== "undefined" && Player) {
+        if (!Player.ExtensionSettings) Player.ExtensionSettings = {};
+        return Player.ExtensionSettings;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function splitStore(store) {
+    const settings = store.settings || {};
+    const rest = {};
+    Object.keys(settings).forEach(function(k) {
+      if (k === "actions" || k === "commands" || k === "animations") return;
+      rest[k] = settings[k];
+    });
+    return {
+      rm: {
+        migrated: 2,
+        version: store.version,
+        room: store.room,
+        access: store.access,
+        backgrounds: store.backgrounds,
+        maps: store.maps
+      },
+      settings: rest,
+      actions: settings.actions,
+      commands: settings.commands,
+      animations: settings.animations
+    };
+  }
+  function isDefaultBag(id, value) {
+    if (id !== "actions" && id !== "commands" && id !== "animations") return false;
+    try {
+      const def = seidrDefaultSettings();
+      return JSON.stringify(value) === JSON.stringify(def[id]);
+    } catch (e) {
+      return false;
+    }
+  }
+  function packedTotal(parts, memo) {
+    let total = 0;
+    const es = esBag();
+    DOMAINS.forEach(function(id) {
+      const value = parts[id];
+      if (value === void 0) return;
+      const key = keyOf(id);
+      if (isDefaultBag(id, value) && (!es || es[key] === void 0)) return;
+      total += (memo ? packMemo(key, value) : pack(value)).length;
+    });
+    return total;
+  }
+  function composeFromEs(rmObj, es) {
+    const settings = {};
+    const rest = unpack(es[keyOf("settings")]);
+    if (rest && typeof rest === "object") Object.assign(settings, rest);
+    ["actions", "commands", "animations"].forEach(function(id) {
+      const bag = unpack(es[keyOf(id)]);
+      if (bag != null) settings[id] = bag;
+    });
+    return Object.assign({}, rmObj, { settings });
+  }
+  function legacyUiToLocal(ui) {
+    try {
+      const u = ui;
+      if (!u || !u.w || !u.h) return;
+      const id = typeof Player !== "undefined" && Player && Player.MemberNumber != null ? Player.MemberNumber : "0";
+      const k = "SeidrRmUi_" + id;
+      if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify(u));
+    } catch (e) {
+    }
+  }
   function rmGetStore() {
     if (_store) return _store;
     let data = null;
-    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
+    let legacy = false;
+    const es = esBag();
     try {
-      if (Player && Player.ExtensionSettings && Player.ExtensionSettings[key] != null) {
-        const raw = Player.ExtensionSettings[key];
-        if (typeof raw === "string") _lastBytes = raw.length;
-        data = unpack(raw);
+      if (es) {
+        const rmKey = keyOf("rm");
+        const raw = es[rmKey];
+        DOMAINS.forEach(function(id) {
+          const k = keyOf(id);
+          if (typeof es[k] === "string") _sent[k] = es[k];
+        });
+        const obj = unpack(raw);
+        if (obj && typeof obj === "object" && obj.migrated === 2) {
+          data = composeFromEs(obj, es);
+        } else if (obj && typeof obj === "object") {
+          data = obj;
+          legacy = true;
+        }
       }
     } catch (e) {
       console.warn("[Seidr RM] ES read failed", e);
     }
     _store = rmNormalizeStore(data);
+    if (legacy) {
+      legacyUiToLocal(data.ui);
+      _store.ui = {};
+      DOMAINS.forEach(function(id) {
+        delete _sent[keyOf(id)];
+      });
+      saveInternal(true);
+      rmFlushStore();
+    } else if (es) {
+      _lastBytes = packedTotal(splitStore(_store), true);
+    }
     return _store;
   }
+  function rmFlushStore() {
+    if (_timer) {
+      clearTimeout(_timer);
+      _timer = null;
+    }
+    const es = esBag();
+    if (!es) return;
+    Object.keys(_pending).forEach(function(key) {
+      delete _pending[key];
+      const value = es[key];
+      if (typeof value !== "string" || value === _sent[key]) return;
+      try {
+        if (typeof ServerPlayerExtensionSettingsSync === "function") {
+          ServerPlayerExtensionSettingsSync(key);
+          _sent[key] = value;
+        }
+      } catch (e) {
+        console.warn("[Seidr RM] ES sync failed", key, e);
+      }
+    });
+  }
+  function scheduleFlush() {
+    if (_timer) clearTimeout(_timer);
+    _timer = setTimeout(rmFlushStore, SAVE_DEBOUNCE_MS);
+    if (!_flushInstalled) {
+      _flushInstalled = true;
+      try {
+        window.addEventListener("beforeunload", rmFlushStore);
+        window.addEventListener("pagehide", rmFlushStore);
+      } catch (e) {
+      }
+    }
+  }
   function rmSaveStore() {
+    return saveInternal(false);
+  }
+  function saveInternal(force) {
     const store = rmGetStore();
-    const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
-    const packed = pack(store);
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    _lastBytes = packed.length;
-    if (packed.length > max) {
-      return { ok: false, error: "Storage full (" + rmFormatBytes(packed.length) + " / " + rmFormatBytes(max) + ")", bytes: packed.length };
+    const es = esBag();
+    if (!es) return { ok: false, error: "Save failed", bytes: 0 };
+    const parts = splitStore(store);
+    const total = packedTotal(parts, true);
+    if (!force && total > maxBytes() && total > _lastBytes) {
+      return {
+        ok: false,
+        error: "Storage full (" + rmFormatBytes(total) + " / " + rmFormatBytes(maxBytes()) + ")",
+        bytes: total
+      };
     }
     try {
-      if (!Player.ExtensionSettings) Player.ExtensionSettings = {};
-      Player.ExtensionSettings[key] = packed;
-      if (typeof ServerPlayerExtensionSettingsSync === "function") {
-        ServerPlayerExtensionSettingsSync(key);
-      }
+      DOMAINS.forEach(function(id) {
+        const value = parts[id];
+        if (value === void 0) return;
+        const key = keyOf(id);
+        if (isDefaultBag(id, value) && es[key] === void 0) return;
+        const packed = packMemo(key, value);
+        if (es[key] === packed) return;
+        es[key] = packed;
+        _pending[key] = true;
+      });
     } catch (e) {
       console.warn("[Seidr RM] ES write failed", e);
-      return { ok: false, error: "Save failed", bytes: packed.length };
+      return { ok: false, error: "Save failed", bytes: total };
     }
-    return { ok: true, bytes: packed.length };
+    _lastBytes = total;
+    if (Object.keys(_pending).length) scheduleFlush();
+    return { ok: true, bytes: total };
   }
   function rmInvalidateStore() {
     _store = null;
@@ -2863,15 +3345,10 @@
   function rmCompressedBytes() {
     if (_lastBytes) return _lastBytes;
     try {
-      const key = Seidr.RM_STORAGE_KEY || "SeidrRoomManager";
-      const raw = Player && Player.ExtensionSettings && Player.ExtensionSettings[key];
-      if (typeof raw === "string") {
-        _lastBytes = raw.length;
-        return _lastBytes;
-      }
+      rmGetStore();
     } catch (e) {
     }
-    return 0;
+    return _lastBytes;
   }
   function rmMapsBytesEstimate(store) {
     const s = store || rmGetStore();
@@ -2882,9 +3359,8 @@
     }
   }
   function rmMapBudgetBytes() {
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
     const ratio = typeof Seidr.RM_MAP_BUDGET_RATIO === "number" ? Seidr.RM_MAP_BUDGET_RATIO : 0.75;
-    return Math.floor(max * ratio);
+    return Math.floor(maxBytes() * ratio);
   }
   function rmCanSaveMaps(nextMaps) {
     const probe = pack({ maps: nextMaps });
@@ -2893,9 +3369,8 @@
       return { ok: false, error: "Maps would exceed 75% storage budget (" + rmFormatBytes(probe.length) + " / " + rmFormatBytes(budget) + ")" };
     }
     const store = rmGetStore();
-    const full = pack(Object.assign({}, store, { maps: nextMaps }));
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
-    if (full.length > max) {
+    const full = packedTotal(splitStore(Object.assign({}, store, { maps: nextMaps })), false);
+    if (full > maxBytes() && full > _lastBytes) {
       return { ok: false, error: "Total storage full" };
     }
     return { ok: true };
@@ -2928,7 +3403,7 @@
     }
     return {
       total: rmCompressedBytes() || rmSliceBytes(s),
-      max: Seidr.RM_MAX_COMPRESSED || 18e4,
+      max: maxBytes(),
       maps: rmSliceBytes({ maps: s.maps || [] }),
       room: rmSliceBytes({ room: s.room || {} }),
       access: rmSliceBytes({ access: s.access || {} }),
@@ -2941,17 +3416,41 @@
         animations: animations != null ? animations : { nextId: 1, list: [] }
       }),
       settings: rmSliceBytes({ settings: settingsRest }),
-      ui: rmSliceBytes({ ui: s.ui || {} }),
+      ui: 0,
       mapBudget: rmMapBudgetBytes()
     };
   }
   function rmUsageLabel() {
     const used = rmCompressedBytes();
-    const max = Seidr.RM_MAX_COMPRESSED || 18e4;
     const maps = rmMapsBytesEstimate();
     const mapCap = rmMapBudgetBytes();
-    return "Storage: " + rmFormatBytes(used) + " / " + rmFormatBytes(max) + "  (maps " + rmFormatBytes(maps) + " \xB7 75% cap " + rmFormatBytes(mapCap) + ")";
+    return "Storage: " + rmFormatBytes(used) + " / " + rmFormatBytes(maxBytes()) + "  (maps " + rmFormatBytes(maps) + " \xB7 75% cap " + rmFormatBytes(mapCap) + ")";
   }
+  function rmResetStorageCaches() {
+    _store = null;
+    _lastBytes = 0;
+    DOMAINS.forEach(function(id) {
+      const k = keyOf(id);
+      delete _sent[k];
+      delete _memo[k];
+      delete _pending[k];
+    });
+    if (_timer) {
+      clearTimeout(_timer);
+      _timer = null;
+    }
+  }
+  function rmInstallFlushHooks() {
+    Seidr.tryHook("StorageFlush:ChatRoomLeave", "ChatRoomLeave", 8, function(args, next) {
+      try {
+        rmFlushStore();
+      } catch (e) {
+      }
+      return next(args);
+    });
+  }
+  Seidr.rmFlushStore = rmFlushStore;
+  Seidr.installStorageFlush = rmInstallFlushHooks;
 
   // src/settings/storage.ts
   function seidrGetSettings() {
@@ -2982,6 +3481,14 @@
     } catch (e) {
     }
     return "hitbox";
+  }
+  function seidrClusterNameScope() {
+    try {
+      const s = seidrGetSettings().clusterNameScope;
+      if (s === "seidrCluster" || s === "all") return s;
+    } catch (e) {
+    }
+    return "seidrCluster";
   }
   function seidrNameOffset() {
     try {
@@ -3034,6 +3541,11 @@
     if (!character || typeof character.MemberNumber !== "number") return false;
     if (seidrInEcho(character)) return false;
     return !!SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
+  }
+  function seidrNameApplies(character) {
+    if (!character || typeof character.MemberNumber !== "number") return false;
+    if (seidrClusterNameScope() === "all") return true;
+    return seidrInCluster(character);
   }
   function seidrClusterOrder(cluster) {
     var out = [];
@@ -3253,28 +3765,140 @@
     }
     return { pull, cuddle };
   }
-  function seidrDrawPose(character, x, y, zoom) {
+  function seidrPairOr(raw, fallback) {
+    if (raw && typeof raw === "object") {
+      var x = typeof raw.x === "number" && isFinite(raw.x) ? raw.x : fallback.x;
+      var y = typeof raw.y === "number" && isFinite(raw.y) ? raw.y : fallback.y;
+      return { x, y };
+    }
+    return { x: fallback.x, y: fallback.y };
+  }
+  function seidrLiveAdvancedOffsets() {
+    var fallback = {
+      left: { x: -150, y: 0 },
+      right: { x: 150, y: 0 },
+      cuddle: { x: 0, y: 0 },
+      hub: { x: 0, y: -50 }
+    };
+    var o = Seidr.drawAdvancedOffsets;
+    if (!o || typeof o !== "object") return fallback;
+    return {
+      left: seidrPairOr(o.left, fallback.left),
+      right: seidrPairOr(o.right, fallback.right),
+      cuddle: seidrPairOr(o.cuddle, fallback.cuddle),
+      hub: seidrPairOr(o.hub, fallback.hub)
+    };
+  }
+  function seidrDrawSyncOverlay(hubId) {
+    if (!Seidr.drawAllowSync) return null;
+    if (typeof hubId !== "number") return null;
+    var map = Seidr._drawSyncByHub;
+    if (!map || typeof map !== "object") return null;
+    var o = map[hubId];
+    if (!o || typeof o !== "object") return null;
+    return {
+      left: seidrPairOr(o.left, { x: 0, y: 0 }),
+      right: seidrPairOr(o.right, { x: 0, y: 0 }),
+      cuddle: seidrPairOr(o.cuddle, { x: 0, y: 0 }),
+      hub: seidrPairOr(o.hub, { x: 0, y: 0 })
+    };
+  }
+  function seidrClearDrawSyncOverlays() {
+    Seidr._drawSyncByHub = {};
+  }
+  function seidrSetDrawSyncOverlay(hubId, offsets) {
+    if (typeof hubId !== "number") return;
+    if (!Seidr._drawSyncByHub || typeof Seidr._drawSyncByHub !== "object") {
+      Seidr._drawSyncByHub = {};
+    }
+    var next = {
+      left: seidrPairOr(offsets && offsets.left, { x: 0, y: 0 }),
+      right: seidrPairOr(offsets && offsets.right, { x: 0, y: 0 }),
+      cuddle: seidrPairOr(offsets && offsets.cuddle, { x: 0, y: 0 }),
+      hub: seidrPairOr(offsets && offsets.hub, { x: 0, y: 0 })
+    };
+    Seidr._drawSyncByHub[hubId] = next;
+  }
+  function seidrDropDrawSyncOverlay(hubId) {
+    if (typeof hubId !== "number") return;
+    var map = Seidr._drawSyncByHub;
+    if (!map || typeof map !== "object") return;
+    delete map[hubId];
+  }
+  function seidrPruneDrawSyncOverlays() {
+    var map = Seidr._drawSyncByHub;
+    if (!map || typeof map !== "object") return;
+    var me = typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number" ? Player.MemberNumber : null;
+    var hubs = Seidr.getHubs ? Seidr.getHubs() : {};
+    var selfCluster = me != null && SeidrState.clusterOf ? SeidrState.clusterOf(hubs, me) : null;
+    Object.keys(map).forEach(function(key) {
+      var hubId = Number(key);
+      if (!Number.isFinite(hubId)) {
+        delete map[key];
+        return;
+      }
+      if (!hubs[hubId]) {
+        delete map[hubId];
+        return;
+      }
+      if (selfCluster && selfCluster.hub === hubId) return;
+      delete map[hubId];
+    });
+  }
+  function seidrFreeDrawPose(cluster, member, offsets, zoom) {
     var z = typeof zoom === "number" ? zoom : 1;
-    if (!character || typeof character.MemberNumber !== "number") return null;
-    if (seidrInEcho(character)) return null;
-    var cluster = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
-    if (!cluster) return null;
+    if (!cluster || typeof member !== "number" || !offsets) return null;
     var center = seidrSharedCenter(cluster, z);
     if (!center) return null;
+    var pair = null;
+    if (member === cluster.left) pair = offsets.left;
+    else if (member === cluster.right) pair = offsets.right;
+    else if (member === cluster.cuddle) pair = offsets.cuddle;
+    else if (member === cluster.hub) pair = offsets.hub;
+    if (!pair) return null;
+    var ox = typeof pair.x === "number" && isFinite(pair.x) ? pair.x : 0;
+    var oy = typeof pair.y === "number" && isFinite(pair.y) ? pair.y : 0;
+    return { X: center.X + ox * z, Y: center.Y + oy * z, Zoom: z };
+  }
+  function seidrSynthesizeFreeFromNormal(cluster, pullCuddle) {
+    var o = pullCuddle || seidrLiveOffsets();
+    var ox = o.pull.x;
+    var oy = o.pull.y;
+    var hubOnCenterX = !!(cluster && (cluster.cuddle != null || cluster.left != null && cluster.right != null));
+    var sideOx = hubOnCenterX ? ox * 2 : ox;
+    var hub = { x: 0, y: 0 };
+    if (cluster && cluster.cuddle != null) {
+      hub = { x: o.cuddle.x, y: o.cuddle.y };
+    } else if (cluster && cluster.left != null && cluster.right == null) {
+      hub = { x: ox, y: 0 };
+    } else if (cluster && cluster.right != null && cluster.left == null) {
+      hub = { x: -ox, y: 0 };
+    }
+    return {
+      left: { x: -sideOx, y: oy },
+      right: { x: sideOx, y: oy },
+      cuddle: { x: 0, y: 0 },
+      hub
+    };
+  }
+  function seidrEffectiveFreeDrawForSync(cluster) {
+    if (Seidr.drawAdvancedMode) return seidrLiveAdvancedOffsets();
+    return seidrSynthesizeFreeFromNormal(cluster, seidrLiveOffsets());
+  }
+  function seidrNormalDrawPose(cluster, member, center, z) {
     var o = seidrLiveOffsets();
     var ox = o.pull.x * z;
     var oy = o.pull.y * z;
     var hubOnCenterX = cluster.cuddle != null || cluster.left != null && cluster.right != null;
     var sideOx = hubOnCenterX ? ox * 2 : ox;
-    var n = character.MemberNumber;
-    if (n === cluster.left) {
+    if (member === cluster.left) {
       return { X: center.X - sideOx, Y: center.Y + oy, Zoom: z };
     }
-    if (n === cluster.right) {
+    if (member === cluster.right) {
       return { X: center.X + sideOx, Y: center.Y + oy, Zoom: z };
     }
-    if (n === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
-    if (n === cluster.hub) {
+    if (member === cluster.cuddle) return { X: center.X, Y: center.Y, Zoom: z };
+    if (member === cluster.hub) {
       if (cluster.cuddle != null) {
         return { X: center.X + o.cuddle.x * z, Y: center.Y + o.cuddle.y * z, Zoom: z };
       }
@@ -3288,6 +3912,46 @@
     }
     return null;
   }
+  function seidrClusterForPose(cluster) {
+    if (!cluster) return null;
+    var present = seidrPresentMap();
+    function slot(id) {
+      return typeof id === "number" && present[id] ? id : null;
+    }
+    return {
+      hub: cluster.hub,
+      left: slot(cluster.left),
+      right: slot(cluster.right),
+      cuddle: slot(cluster.cuddle)
+    };
+  }
+  function seidrDrawPose(character, x, y, zoom) {
+    var z = typeof zoom === "number" ? zoom : 1;
+    if (!character || typeof character.MemberNumber !== "number") return null;
+    if (seidrInEcho(character)) return null;
+    var raw = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
+    if (!raw) return null;
+    var cluster = seidrClusterForPose(raw);
+    if (!cluster) return null;
+    var center = seidrSharedCenter(cluster, z);
+    if (!center) return null;
+    var n = character.MemberNumber;
+    var sync = seidrDrawSyncOverlay(cluster.hub);
+    if (sync) {
+      var synced = seidrFreeDrawPose(cluster, n, sync, z);
+      if (synced) return synced;
+    }
+    if (Seidr.drawAdvancedMode) {
+      var adv = seidrFreeDrawPose(cluster, n, seidrLiveAdvancedOffsets(), z);
+      if (adv) return adv;
+    }
+    return seidrNormalDrawPose(cluster, n, center, z);
+  }
+  Seidr.clearDrawSyncOverlays = seidrClearDrawSyncOverlays;
+  Seidr.setDrawSyncOverlay = seidrSetDrawSyncOverlay;
+  Seidr.dropDrawSyncOverlay = seidrDropDrawSyncOverlay;
+  Seidr.pruneDrawSyncOverlays = seidrPruneDrawSyncOverlays;
+  Seidr.effectiveFreeDrawForSync = seidrEffectiveFreeDrawForSync;
   var seidrInRoomLoop = false;
   var seidrFrontReplay = false;
   var seidrFrontCapture = null;
@@ -3380,7 +4044,7 @@
       const C = args[0];
       const mode = seidrClusterNameMode();
       const prevCtx = seidrNameDrawCtx;
-      if (mode !== "default" && seidrInCluster(C) && typeof C.MemberNumber === "number") {
+      if (mode !== "default" && seidrNameApplies(C)) {
         const stored = seidrNatural[C.MemberNumber];
         if (stored && typeof stored.X === "number" && typeof stored.Y === "number") {
           const fallbackZ = typeof args[3] === "number" && args[3] > 0 ? args[3] : 1;
@@ -3486,6 +4150,15 @@
     natural: seidrNatural,
     sharedCenter: seidrSharedCenter,
     drawPose: seidrDrawPose,
+    freeDrawPose: seidrFreeDrawPose,
+    normalDrawPose: seidrNormalDrawPose,
+    synthesizeFreeFromNormal: seidrSynthesizeFreeFromNormal,
+    effectiveFreeDrawForSync: seidrEffectiveFreeDrawForSync,
+    drawSyncOverlay: seidrDrawSyncOverlay,
+    setDrawSyncOverlay: seidrSetDrawSyncOverlay,
+    clearDrawSyncOverlays: seidrClearDrawSyncOverlays,
+    dropDrawSyncOverlay: seidrDropDrawSyncOverlay,
+    pruneDrawSyncOverlays: seidrPruneDrawSyncOverlays,
     statusCoords: seidrStatusCoords,
     clusterOrder: seidrClusterOrder,
     reorder: seidrReorderDrawlist,
@@ -3494,6 +4167,649 @@
     paginate: seidrPaginate,
     clearNatural: seidrClearNatural,
     pageSize: SEIDR_PAGE_SIZE
+  };
+
+  // src/mapHolds.ts
+  var SEIDR_MAP_WALK_GRACE_MS = 6e4;
+  var seidrMapAnchors = {};
+  var seidrMapWalkGrace = {};
+  var seidrMapHubGrace = {};
+  var seidrMapViewRect = null;
+  var seidrMapInGridDraw = false;
+  var seidrMapFrontCapture = null;
+  var seidrMapFrontReplay = false;
+  var seidrLastMapType = null;
+  function seidrMapNum(value) {
+    if (typeof value === "number" && isFinite(value)) return value;
+    return null;
+  }
+  function seidrMapType() {
+    if (typeof ChatRoomData === "undefined" || !ChatRoomData) return "Never";
+    const md = ChatRoomData.MapData;
+    const t = md && md.Type;
+    if (t === "Hybrid" || t === "Always") return t;
+    return "Never";
+  }
+  function seidrMapIsMapRoom() {
+    const t = seidrMapType();
+    return t === "Hybrid" || t === "Always";
+  }
+  function seidrMapFormHidesActivity() {
+    return seidrMapType() === "Always";
+  }
+  function seidrMapViewActive() {
+    if (typeof ChatRoomMapViewIsActive === "function") {
+      try {
+        return !!ChatRoomMapViewIsActive();
+      } catch (e) {
+        return false;
+      }
+    }
+    return false;
+  }
+  function seidrMapPos(character) {
+    if (!character || !character.MapData || !character.MapData.Pos) return null;
+    const x = seidrMapNum(character.MapData.Pos.X);
+    const y = seidrMapNum(character.MapData.Pos.Y);
+    if (x == null || y == null) return null;
+    return { X: x, Y: y };
+  }
+  function seidrMapPosOf(member) {
+    return seidrMapPos(seidrFindChar(member));
+  }
+  function seidrSeatTile(hub, slot) {
+    if (!hub || typeof hub.X !== "number" || typeof hub.Y !== "number") return null;
+    if (slot === "left") return { X: hub.X - 1, Y: hub.Y };
+    if (slot === "right") return { X: hub.X + 1, Y: hub.Y };
+    if (slot === "cuddle") return { X: hub.X, Y: hub.Y + 1 };
+    return null;
+  }
+  function seidrChebyshev(a, b) {
+    if (!a || !b) return Infinity;
+    return Math.max(Math.abs(a.X - b.X), Math.abs(a.Y - b.Y));
+  }
+  function seidrSeatDist(hub, satellite, slot) {
+    const seat = hub ? seidrSeatTile(hub, slot) : null;
+    return seidrChebyshev(satellite, seat);
+  }
+  function seidrMapSeatFormOk(hubPos, satPos, slot) {
+    if (!seidrMapIsMapRoom()) return true;
+    if (!hubPos || !satPos) return false;
+    return seidrSeatDist(hubPos, satPos, slot) === 0;
+  }
+  function seidrMapSeedAnchorsFromLive() {
+    if (!seidrMapIsMapRoom() || typeof Seidr.getHubs !== "function") return;
+    const hubs = Seidr.getHubs();
+    if (!hubs) return;
+    const hubIds = Object.keys(hubs).map(Number).filter(function(n) {
+      return isFinite(n);
+    });
+    for (let i = 0; i < hubIds.length; i++) {
+      const hubId = hubIds[i];
+      if (seidrMapAnchors[hubId]) continue;
+      const hubPos = seidrMapPosOf(hubId);
+      if (!hubPos) continue;
+      seidrMapAnchors[hubId] = { X: hubPos.X, Y: hubPos.Y };
+    }
+  }
+  function seidrCheckMapTypeChange() {
+    const next = seidrMapType();
+    if (seidrLastMapType === next) return;
+    const prev = seidrLastMapType;
+    seidrLastMapType = next;
+    if (prev == null) return;
+    if (next === "Never") {
+      seidrClearAllMapWalkGrace();
+      seidrClearMapAnchors();
+      return;
+    }
+    seidrMapSeedAnchorsFromLive();
+    seidrMapWatchTick();
+  }
+  function seidrMapPerceptionRange() {
+    if (typeof ChatRoomMapViewPerceptionRange === "number" && ChatRoomMapViewPerceptionRange > 0) {
+      return ChatRoomMapViewPerceptionRange;
+    }
+    return 4;
+  }
+  function seidrMapTileLayout(Left, Top, Width, Height) {
+    Left = Number(Left);
+    Top = Number(Top);
+    Width = Number(Width);
+    Height = Number(Height);
+    if (!isFinite(Left)) Left = 0;
+    if (!isFinite(Top)) Top = 0;
+    if (!isFinite(Width) || Width <= 0) Width = 1e3;
+    if (!isFinite(Height) || Height <= 0) Height = 1e3;
+    const range = seidrMapPerceptionRange();
+    const span = Math.max(range * 2 + 1, 1);
+    const TileSize = Height / span;
+    const OffsetX = (Width - TileSize) / 2;
+    const OffsetY = (Height - TileSize) / 2;
+    return {
+      Left,
+      Top,
+      Width,
+      Height,
+      range,
+      TileSize,
+      TileWidth: TileSize,
+      TileHeight: TileSize,
+      OffsetX,
+      OffsetY
+    };
+  }
+  function seidrMapScreenFromTile(X, Y, Left, Top, Width, Height) {
+    const layout = seidrMapTileLayout(Left, Top, Width, Height);
+    const px = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.X : 0;
+    const py = Player && Player.MapData && Player.MapData.Pos ? Player.MapData.Pos.Y : 0;
+    const tw = layout.TileWidth;
+    const th = layout.TileHeight;
+    const ScreenX = (X - px) * tw + layout.OffsetX;
+    const ScreenY = (Y - py) * th + layout.OffsetY;
+    return {
+      Left: layout.Left + ScreenX,
+      Top: layout.Top + ScreenY,
+      TileWidth: tw,
+      TileHeight: th,
+      TileSize: layout.TileSize
+    };
+  }
+  function seidrMapCharDrawPos(Left, Top, Width, Height, worldX, worldY) {
+    const s = seidrMapScreenFromTile(worldX, worldY, Left, Top, Width, Height);
+    const TileSize = s.TileSize || s.TileWidth;
+    return {
+      x: s.Left + TileSize * 0.05,
+      y: s.Top - TileSize * 0.85,
+      zoom: TileSize * 1.8 / 1e3
+    };
+  }
+  function seidrMapClampToward(natural, hub, blend) {
+    const t = typeof blend === "number" && isFinite(blend) ? Math.max(0, Math.min(1, blend)) : 0;
+    const moved = natural + (hub - natural) * t;
+    const lo = Math.min(natural, hub);
+    const hi = Math.max(natural, hub);
+    return Math.max(lo, Math.min(hi, moved));
+  }
+  function seidrMapMoveToward(natural, hub, amount) {
+    const gap = hub - natural;
+    const absGap = Math.abs(gap);
+    if (absGap < 1e-6) return natural;
+    const move = Math.min(Math.max(0, amount), absGap);
+    return natural + (gap > 0 ? 1 : -1) * move;
+  }
+  function seidrMapClampSegment(value, a, b) {
+    const lo = Math.min(a, b);
+    const hi = Math.max(a, b);
+    return Math.max(lo, Math.min(hi, value));
+  }
+  function seidrMapLiveOffsets() {
+    const fallback = { pull: { x: 100, y: 0 }, cuddle: { x: 0, y: -250 } };
+    const o = Seidr.mapDrawOffsets;
+    if (!o || typeof o !== "object") return fallback;
+    const pull = o.pull && typeof o.pull === "object" ? o.pull : fallback.pull;
+    const cuddle = o.cuddle && typeof o.cuddle === "object" ? o.cuddle : fallback.cuddle;
+    return {
+      pull: {
+        x: typeof pull.x === "number" && isFinite(pull.x) ? Math.abs(pull.x) : fallback.pull.x,
+        y: typeof pull.y === "number" && isFinite(pull.y) ? pull.y : fallback.pull.y
+      },
+      cuddle: {
+        x: typeof cuddle.x === "number" && isFinite(cuddle.x) ? cuddle.x : fallback.cuddle.x,
+        y: typeof cuddle.y === "number" && isFinite(cuddle.y) ? cuddle.y : fallback.cuddle.y
+      }
+    };
+  }
+  function seidrCancelMapWalkGrace(member) {
+    const entry = seidrMapWalkGrace[member];
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    delete seidrMapWalkGrace[member];
+  }
+  function seidrCancelMapHubGrace(hubId) {
+    const entry = seidrMapHubGrace[hubId];
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    delete seidrMapHubGrace[hubId];
+  }
+  function seidrClearAllMapWalkGrace() {
+    Object.keys(seidrMapWalkGrace).forEach(function(key) {
+      seidrCancelMapWalkGrace(Number(key));
+    });
+    Object.keys(seidrMapHubGrace).forEach(function(key) {
+      seidrCancelMapHubGrace(Number(key));
+    });
+  }
+  function seidrClearMapAnchors() {
+    seidrMapAnchors = {};
+  }
+  function seidrPruneMapAnchors(hubs) {
+    Object.keys(seidrMapAnchors).forEach(function(key) {
+      const hubN = Number(key);
+      if (!hubs || !hubs[hubN] || hubs[hubN].left == null && hubs[hubN].right == null && hubs[hubN].cuddle == null) {
+        delete seidrMapAnchors[hubN];
+        seidrCancelMapHubGrace(hubN);
+      }
+    });
+    Object.keys(seidrMapWalkGrace).forEach(function(key) {
+      const m = Number(key);
+      if (!SeidrState.clusterOf(hubs, m)) seidrCancelMapWalkGrace(m);
+    });
+    Object.keys(seidrMapHubGrace).forEach(function(key) {
+      const hubN = Number(key);
+      if (!hubs || !hubs[hubN]) seidrCancelMapHubGrace(hubN);
+    });
+  }
+  function seidrMapPublishHub(hubId) {
+    if (typeof Seidr.publishHub === "function") {
+      try {
+        Seidr.publishHub(hubId);
+      } catch (e) {
+      }
+    }
+    if (typeof Seidr.badgeActivityButtons === "function") {
+      try {
+        Seidr.badgeActivityButtons();
+      } catch (e2) {
+      }
+    }
+  }
+  function seidrMapIsHubAuthority(hubId) {
+    return typeof Player !== "undefined" && Player && Player.MemberNumber === hubId;
+  }
+  function seidrExpireMapWalkGrace(member) {
+    const entry = seidrMapWalkGrace[member];
+    if (!entry) return;
+    const hubId = entry.hub;
+    const slot = entry.slot;
+    if (entry.timer) clearTimeout(entry.timer);
+    delete seidrMapWalkGrace[member];
+    if (!seidrMapIsHubAuthority(hubId)) return;
+    const hubs = Seidr.getHubs();
+    const cluster = SeidrState.clusterOf(hubs, member);
+    if (!cluster || cluster.hub !== hubId) return;
+    if (cluster[slot] !== member) return;
+    const next = SeidrState.clearSlot(hubs, hubId, slot);
+    Seidr.setHubs(next);
+    seidrMapPublishHub(hubId);
+  }
+  function seidrStartMapWalkGrace(member, hub, slot) {
+    seidrCancelMapWalkGrace(member);
+    const until = Date.now() + SEIDR_MAP_WALK_GRACE_MS;
+    const timer = setTimeout(function() {
+      seidrExpireMapWalkGrace(member);
+    }, SEIDR_MAP_WALK_GRACE_MS);
+    seidrMapWalkGrace[member] = { hub, slot, until, timer };
+  }
+  function seidrExpireMapHubGrace(hubId) {
+    const entry = seidrMapHubGrace[hubId];
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    delete seidrMapHubGrace[hubId];
+    if (!seidrMapIsHubAuthority(hubId)) return;
+    seidrMapBreakHub(hubId);
+  }
+  function seidrStartMapHubGrace(hubId) {
+    seidrCancelMapHubGrace(hubId);
+    const until = Date.now() + SEIDR_MAP_WALK_GRACE_MS;
+    const timer = setTimeout(function() {
+      seidrExpireMapHubGrace(hubId);
+    }, SEIDR_MAP_WALK_GRACE_MS);
+    seidrMapHubGrace[hubId] = { until, timer };
+  }
+  function seidrMapSatsOnSeats(hubRec, anchor) {
+    if (!hubRec || !anchor) return false;
+    for (let i = 0; i < 3; i++) {
+      const slot = ["left", "right", "cuddle"][i];
+      const held = hubRec[slot];
+      if (typeof held !== "number") continue;
+      const satPos = seidrMapPosOf(held);
+      if (!satPos || seidrSeatDist(anchor, satPos, slot) !== 0) return false;
+    }
+    return true;
+  }
+  function seidrMapBreakHub(hubId) {
+    const before = Seidr.getHubs();
+    if (!before[hubId]) return;
+    ["left", "right", "cuddle"].forEach(function(slot) {
+      const held = before[hubId][slot];
+      if (typeof held === "number") seidrCancelMapWalkGrace(held);
+    });
+    seidrCancelMapHubGrace(hubId);
+    delete seidrMapAnchors[hubId];
+    const next = SeidrState.releaseMember(before, hubId);
+    Seidr.setHubs(next);
+    seidrMapPublishHub(hubId);
+  }
+  function seidrMapBreakSlot(hubId, slot, member) {
+    seidrCancelMapWalkGrace(member);
+    const before = Seidr.getHubs();
+    if (!before[hubId] || before[hubId][slot] !== member) return;
+    const next = SeidrState.clearSlot(before, hubId, slot);
+    Seidr.setHubs(next);
+    seidrMapPublishHub(hubId);
+  }
+  function seidrMapHubInGrace(hubId) {
+    return !!seidrMapHubGrace[hubId];
+  }
+  function seidrMapSatInGrace(member) {
+    return !!seidrMapWalkGrace[member];
+  }
+  function seidrMapPoseHubTile(hubId) {
+    const anchor = seidrMapAnchors[hubId];
+    if (anchor) return { X: anchor.X, Y: anchor.Y };
+    return seidrMapPosOf(hubId);
+  }
+  function seidrMapWatchTick() {
+    const liveType = seidrMapType();
+    if (seidrLastMapType !== liveType) {
+      const prev = seidrLastMapType;
+      seidrLastMapType = liveType;
+      if (prev != null && liveType === "Never") {
+        seidrClearAllMapWalkGrace();
+        seidrClearMapAnchors();
+        return;
+      }
+      if (prev != null && (liveType === "Hybrid" || liveType === "Always")) {
+        seidrMapSeedAnchorsFromLive();
+      }
+    }
+    if (!seidrMapIsMapRoom()) {
+      seidrClearAllMapWalkGrace();
+      seidrClearMapAnchors();
+      return;
+    }
+    if (typeof Seidr.getHubs !== "function") return;
+    const hubs = Seidr.getHubs();
+    seidrPruneMapAnchors(hubs);
+    const hubIds = Object.keys(hubs).map(Number).filter(function(n) {
+      return isFinite(n);
+    });
+    for (let i = 0; i < hubIds.length; i++) {
+      const hubId = hubIds[i];
+      const hubRec = hubs[hubId];
+      if (!hubRec) continue;
+      const hubPos = seidrMapPosOf(hubId);
+      if (!hubPos) continue;
+      const authority = seidrMapIsHubAuthority(hubId);
+      let anchor = seidrMapAnchors[hubId];
+      if (!anchor) {
+        if (!seidrMapSatsOnSeats(hubRec, hubPos)) continue;
+        seidrMapAnchors[hubId] = { X: hubPos.X, Y: hubPos.Y };
+        anchor = seidrMapAnchors[hubId];
+      }
+      const hubDist = seidrChebyshev(hubPos, anchor);
+      if (hubDist >= 2) {
+        if (authority) seidrMapBreakHub(hubId);
+        continue;
+      }
+      if (hubDist === 1) {
+        if (!seidrMapHubGrace[hubId]) seidrStartMapHubGrace(hubId);
+      } else if (hubDist === 0 && seidrMapHubGrace[hubId]) {
+        if (seidrMapSatsOnSeats(hubRec, anchor)) {
+          seidrCancelMapHubGrace(hubId);
+        }
+      }
+      const seatHub = anchor;
+      ["left", "right", "cuddle"].forEach(function(slot) {
+        const held = hubRec[slot];
+        if (typeof held !== "number") return;
+        const satPos = seidrMapPosOf(held);
+        if (!satPos) return;
+        const dist = seidrSeatDist(seatHub, satPos, slot);
+        if (dist === 0) {
+          seidrCancelMapWalkGrace(held);
+          return;
+        }
+        if (dist >= 2) {
+          if (authority) seidrMapBreakSlot(hubId, slot, held);
+          else if (!seidrMapWalkGrace[held]) seidrStartMapWalkGrace(held, hubId, slot);
+          return;
+        }
+        if (dist === 1 && !seidrMapWalkGrace[held]) {
+          seidrStartMapWalkGrace(held, hubId, slot);
+        }
+      });
+    }
+  }
+  function seidrMapPoseContextOk(args) {
+    if (!seidrMapInGridDraw) return false;
+    if (!seidrMapViewActive() || !seidrMapIsMapRoom()) return false;
+    if (!seidrMapViewRect) return false;
+    if (!args || !args[0]) return false;
+    const rect = seidrMapViewRect;
+    const layout = seidrMapTileLayout(rect.Left, rect.Top, rect.Width, rect.Height);
+    const mapZoom = layout.TileSize * 1.8 / 1e3;
+    const z = args[3];
+    if (typeof z !== "number" || !isFinite(z) || z <= 0) return false;
+    const tol = Math.max(0.02, mapZoom * 0.2);
+    if (Math.abs(z - mapZoom) > tol) return false;
+    const x = args[1];
+    const y = args[2];
+    if (typeof x !== "number" || typeof y !== "number") return false;
+    const w = 500 * z;
+    const h = 1e3 * z;
+    if (x + w < rect.Left || x > rect.Left + rect.Width) return false;
+    if (y + h < rect.Top || y > rect.Top + rect.Height) return false;
+    return true;
+  }
+  function seidrApplyMapSimplePose(args) {
+    if (!seidrMapPoseContextOk(args)) return null;
+    if (!args || !args[0] || typeof args[0].MemberNumber !== "number") return null;
+    const C = args[0];
+    const hubs = Seidr.getHubs();
+    const cluster = SeidrState.clusterOf(hubs, C.MemberNumber);
+    if (!cluster || cluster.hub == null) return null;
+    if (seidrMapSatInGrace(C.MemberNumber)) return null;
+    const rect = seidrMapViewRect;
+    const hubTile = seidrMapPoseHubTile(cluster.hub);
+    const satTile = seidrMapPos(C);
+    if (!hubTile || !satTile) return null;
+    const layout = seidrMapTileLayout(rect.Left, rect.Top, rect.Width, rect.Height);
+    const tile = layout.TileSize;
+    const mapZoom = typeof args[3] === "number" && args[3] > 0 ? args[3] : tile * 1.8 / 1e3;
+    if (C.MemberNumber === cluster.hub) {
+      return args;
+    }
+    const natX = typeof args[1] === "number" ? args[1] : 0;
+    const natY = typeof args[2] === "number" ? args[2] : 0;
+    const hubX = natX + (hubTile.X - satTile.X) * tile;
+    const hubY = natY + (hubTile.Y - satTile.Y) * tile;
+    const off = seidrMapLiveOffsets();
+    if (cluster.left === C.MemberNumber || cluster.right === C.MemberNumber) {
+      const gapX = Math.abs(natX - hubX);
+      const pullX = Math.min(off.pull.x * mapZoom * 2, gapX);
+      args[1] = seidrMapMoveToward(natX, hubX, pullX);
+      args[2] = natY + off.pull.y * mapZoom;
+      return args;
+    }
+    if (cluster.cuddle === C.MemberNumber) {
+      const nx = natX + off.cuddle.x * mapZoom;
+      const ny = natY + off.cuddle.y * mapZoom;
+      args[1] = seidrMapClampSegment(nx, natX, hubX);
+      args[2] = seidrMapClampSegment(ny, natY, hubY);
+      return args;
+    }
+    return null;
+  }
+  function seidrMapFrontRank(character) {
+    if (!character || typeof character.MemberNumber !== "number") return 0;
+    const cluster = SeidrState.clusterOf(Seidr.getHubs(), character.MemberNumber);
+    if (!cluster) return 0;
+    if (cluster.left === character.MemberNumber) return 1;
+    if (cluster.right === character.MemberNumber) return 2;
+    if (cluster.hub === character.MemberNumber) return 3;
+    if (cluster.cuddle === character.MemberNumber) return 4;
+    return 0;
+  }
+  function seidrMapHoldFrontCharacter(args) {
+    if (!seidrMapInGridDraw || seidrMapFrontReplay || !seidrMapFrontCapture) return false;
+    const rank = seidrMapFrontRank(args[0]);
+    if (!rank) return false;
+    seidrMapFrontCapture.characters.push({
+      rank,
+      args: Array.prototype.slice.call(args)
+    });
+    return true;
+  }
+  function seidrMapReplayFront(captured) {
+    if (!captured || !captured.characters || !captured.characters.length) return;
+    const fn = typeof DrawCharacter === "function" ? DrawCharacter : null;
+    if (!fn) return;
+    const list = captured.characters.slice().sort(function(a, b) {
+      return a.rank - b.rank;
+    });
+    seidrMapFrontReplay = true;
+    try {
+      for (let i = 0; i < list.length; i++) {
+        try {
+          fn.apply(null, list[i].args);
+        } catch (e) {
+          console.warn("[Seidr] map front draw", e);
+        }
+      }
+    } finally {
+      seidrMapFrontReplay = false;
+    }
+  }
+  function seidrResetMapHolds() {
+    seidrClearAllMapWalkGrace();
+    seidrClearMapAnchors();
+    seidrMapViewRect = null;
+    seidrMapInGridDraw = false;
+    seidrMapFrontCapture = null;
+    seidrMapFrontReplay = false;
+    seidrLastMapType = null;
+  }
+  Seidr.installMapHolds = function() {
+    Seidr.tryHook("ChatRoomMapViewDrawGrid", "ChatRoomMapViewDrawGrid", 5, function(args, next) {
+      const prev = seidrMapInGridDraw;
+      const prevCapture = seidrMapFrontCapture;
+      seidrMapInGridDraw = true;
+      seidrMapFrontCapture = { characters: [] };
+      try {
+        const Left = Number(args && args[0]);
+        const Top = Number(args && args[1]);
+        const Width = Number(args && args[2]);
+        const Height = Number(args && args[3]);
+        if (isFinite(Left) && isFinite(Top) && isFinite(Width) && isFinite(Height)) {
+          seidrMapViewRect = { Left, Top, Width, Height };
+        }
+        seidrMapWatchTick();
+        const result = next(args);
+        try {
+          seidrMapReplayFront(seidrMapFrontCapture);
+        } catch (eReplay) {
+          console.warn("[Seidr] map replay front", eReplay);
+        }
+        return result;
+      } finally {
+        seidrMapInGridDraw = prev;
+        seidrMapFrontCapture = prevCapture;
+      }
+    });
+    Seidr.tryHook("ChatRoomMapViewCalculatePerceptionMasks", "ChatRoomMapViewCalculatePerceptionMasks", 5, function(args, next) {
+      const result = next(args);
+      try {
+        seidrMapWatchTick();
+      } catch (e) {
+      }
+      return result;
+    });
+    Seidr.hookFunction("DrawCharacter", 3, function(args, next) {
+      try {
+        if (seidrMapFrontReplay) {
+          seidrApplyMapSimplePose(args);
+          return next(args);
+        }
+        if (seidrMapInGridDraw) {
+          seidrApplyMapSimplePose(args);
+          if (seidrMapHoldFrontCharacter(args)) return;
+        }
+      } catch (e) {
+      }
+      return next(args);
+    });
+    Seidr.tryHook("ChatRoomLeave", "ChatRoomLeave", 4, function(args, next) {
+      try {
+        seidrResetMapHolds();
+      } catch (e) {
+      }
+      return next(args);
+    });
+    Seidr.tryHook("ChatRoomSync", "ChatRoomSync", 11, function(args, next) {
+      const result = next(args);
+      try {
+        seidrCheckMapTypeChange();
+      } catch (e) {
+      }
+      return result;
+    });
+    const prevSetHubs = Seidr.setHubs;
+    Seidr.setHubs = function(hubs) {
+      prevSetHubs(hubs);
+      try {
+        seidrPruneMapAnchors(hubs || {});
+      } catch (e) {
+      }
+    };
+    try {
+      seidrLastMapType = seidrMapType();
+    } catch (e) {
+    }
+  };
+  Seidr.mapSeatFormOk = seidrMapSeatFormOk;
+  Seidr.mapIsMapRoom = seidrMapIsMapRoom;
+  Seidr.mapType = seidrMapType;
+  Seidr.mapFormHidesActivity = seidrMapFormHidesActivity;
+  Seidr.checkMapTypeChange = seidrCheckMapTypeChange;
+  Seidr.resetMapHolds = seidrResetMapHolds;
+  Seidr._mapHolds = {
+    WALK_GRACE_MS: SEIDR_MAP_WALK_GRACE_MS,
+    isMapRoom: seidrMapIsMapRoom,
+    mapType: seidrMapType,
+    formHidesActivity: seidrMapFormHidesActivity,
+    checkMapTypeChange: seidrCheckMapTypeChange,
+    viewActive: seidrMapViewActive,
+    pos: seidrMapPos,
+    seatTile: seidrSeatTile,
+    chebyshev: seidrChebyshev,
+    seatDist: seidrSeatDist,
+    seatFormOk: seidrMapSeatFormOk,
+    clampToward: seidrMapClampToward,
+    moveToward: seidrMapMoveToward,
+    clampSegment: seidrMapClampSegment,
+    tileLayout: seidrMapTileLayout,
+    charDrawPos: seidrMapCharDrawPos,
+    watchTick: seidrMapWatchTick,
+    applySimplePose: seidrApplyMapSimplePose,
+    poseContextOk: seidrMapPoseContextOk,
+    frontRank: seidrMapFrontRank,
+    reset: seidrResetMapHolds,
+    setInGridDraw: function(on) {
+      seidrMapInGridDraw = !!on;
+    },
+    setViewRect: function(rect) {
+      seidrMapViewRect = rect;
+    },
+    anchors: function() {
+      return seidrMapAnchors;
+    },
+    grace: function() {
+      return seidrMapWalkGrace;
+    },
+    hubGrace: function() {
+      return seidrMapHubGrace;
+    },
+    hubInGrace: seidrMapHubInGrace,
+    satInGrace: seidrMapSatInGrace,
+    poseHubTile: seidrMapPoseHubTile,
+    lastMapType: function() {
+      return seidrLastMapType;
+    },
+    setLastMapType: function(t) {
+      seidrLastMapType = t;
+    }
   };
 
   // src/arousalBars.ts
@@ -3574,7 +4890,7 @@
   }
   function untilChangeVisible(C, prog) {
     const id = C.MemberNumber;
-    const now = typeof CommonTime === "function" ? CommonTime() : Date.now();
+    const now2 = typeof CommonTime === "function" ? CommonTime() : Date.now();
     const oVal = prog.orgasm != null ? prog.orgasm : -1;
     let st = lastProg[id];
     if (!st) {
@@ -3584,9 +4900,9 @@
     if (st.a !== prog.arousal || st.o !== oVal) {
       st.a = prog.arousal;
       st.o = oVal;
-      st.showUntil = now + SHOW_MS;
+      st.showUntil = now2 + SHOW_MS;
     }
-    return now < st.showUntil;
+    return now2 < st.showUntil;
   }
   function shouldSkipOnCharacter(C) {
     if (!seidrMeterApplies(C)) return false;
@@ -3725,20 +5041,42 @@
   Seidr.installArousalBars = seidrInstallArousalBars;
 
   // src/actions/conditions.ts
-  function seidrActionItemsOk(action, acted) {
-    const items = action && action.items;
-    if (!items || !items.length) return true;
-    if (!acted || typeof InventoryGet !== "function") return false;
+  function slotsForItemRef(ref, actionSlots) {
+    const out = [];
+    if (ref.slot) out.push(ref.slot);
+    const zones = actionSlots || [];
+    for (let i = 0; i < zones.length; i++) {
+      const s = zones[i];
+      if (s && out.indexOf(s) < 0) out.push(s);
+    }
+    return out;
+  }
+  function charWearsListedItem(C, items, actionSlots) {
+    if (!C || typeof InventoryGet !== "function") return false;
     for (let i = 0; i < items.length; i++) {
       const ref = items[i];
-      if (!ref || !ref.slot || !ref.name) continue;
-      try {
-        const worn = InventoryGet(acted, ref.slot);
-        if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
-      } catch (e) {
+      if (!ref || !ref.name) continue;
+      const slots = slotsForItemRef(ref, actionSlots);
+      for (let j = 0; j < slots.length; j++) {
+        try {
+          const worn = InventoryGet(C, slots[j]);
+          if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
+        } catch (e) {
+        }
       }
     }
     return false;
+  }
+  function seidrActionItemsOk(action, source, target) {
+    const items = action && action.items;
+    if (!items || !items.length) return true;
+    let onTarget = action.itemsOnTarget !== false;
+    let onSource = !!action.itemsOnSource;
+    if (!onTarget && !onSource) onTarget = true;
+    const zones = action.slots || [];
+    if (onTarget && !charWearsListedItem(target, items, zones)) return false;
+    if (onSource && !charWearsListedItem(source, items, zones)) return false;
+    return true;
   }
   function charOf(who, source, target) {
     return who === "source" ? source : target;
@@ -3825,8 +5163,241 @@
   }
   function seidrActionAvailable(action, source, target) {
     if (!seidrActionAudienceOk(action, source, target)) return false;
-    if (!seidrActionItemsOk(action, target)) return false;
+    if (!seidrActionItemsOk(action, source, target)) return false;
     return seidrActionConditionsOk(action, source, target);
+  }
+
+  // src/chat/actionText.ts
+  var SEIDR_ACTION_CONTENT_KEY = "SEIDR_PLAYER_CUSTOM_DIALOG";
+  var SEIDR_ACTION_MISSING_TAG = 'MISSING TEXT IN "Interface.csv": SEIDR_PLAYER_CUSTOM_DIALOG';
+  function displayName(C) {
+    if (!C) return "?";
+    try {
+      if (typeof CharacterNickname === "function") return CharacterNickname(C);
+    } catch (e) {
+    }
+    return C.Name || String(C.MemberNumber || "?");
+  }
+  function pronounKey(C) {
+    if (!C) return null;
+    try {
+      if (typeof C.GetPronouns === "function") {
+        const k = C.GetPronouns();
+        if (k) return String(k);
+      }
+    } catch (e) {
+    }
+    try {
+      if (typeof InventoryGet === "function") {
+        const item = InventoryGet(C, "Pronouns");
+        const name = item && item.Asset && item.Asset.Name;
+        if (name) return String(name);
+      }
+    } catch (e2) {
+    }
+    return null;
+  }
+  function mapPossessive(key) {
+    if (!key) return null;
+    const raw = String(key).replace(/[\/_\-\s]/g, "");
+    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "her";
+    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "his";
+    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "their";
+    return null;
+  }
+  function mapPronounSelf(key) {
+    if (!key) return null;
+    const raw = String(key).replace(/[\/_\-\s]/g, "");
+    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "herself";
+    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "himself";
+    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "themself";
+    return null;
+  }
+  function possessiveFor(C) {
+    const mapped = mapPossessive(pronounKey(C));
+    if (mapped) return mapped;
+    try {
+      if (typeof CharacterPronoun === "function") {
+        const p = String(CharacterPronoun(C, "Possessive", false) || "").trim().toLowerCase();
+        if (p === "her" || p === "his" || p === "their") return p;
+      }
+    } catch (e) {
+    }
+    return "their";
+  }
+  function pronounSelfFor(C) {
+    const mapped = mapPronounSelf(pronounKey(C));
+    if (mapped) return mapped;
+    const poss = possessiveFor(C);
+    if (poss === "her") return "herself";
+    if (poss === "his") return "himself";
+    return "themself";
+  }
+  function seidrResolveActionText(template, source, target) {
+    const src = source || null;
+    const tgt = target || source || null;
+    let out = String(template || "");
+    if (!out.trim()) return "";
+    const srcName = displayName(src);
+    const tgtName = displayName(tgt);
+    const srcPoss = possessiveFor(src);
+    const tgtPoss = possessiveFor(tgt);
+    const srcSelf = pronounSelfFor(src);
+    out = out.split("TargetPronounPossessive").join(tgtPoss);
+    out = out.split("PronounPossessive").join(srcPoss);
+    out = out.split("PronounSelf").join(srcSelf);
+    out = out.split("TargetCharacter").join(tgtName);
+    out = out.split("SourceCharacter").join(srcName);
+    out = out.split("ActivityAsset").join("");
+    out = out.replace(/\s{2,}/g, " ").trim();
+    if (out.length > SEIDR_ACTION_CHAT_MAX) out = out.slice(0, SEIDR_ACTION_CHAT_MAX);
+    return out;
+  }
+  function seidrPublishActionText(template, source, target) {
+    const text = seidrResolveActionText(template, source, target);
+    if (!text) return false;
+    if (typeof ServerSend !== "function") return false;
+    try {
+      ServerSend("ChatRoomChat", {
+        Content: SEIDR_ACTION_CONTENT_KEY,
+        Type: "Action",
+        Dictionary: [{ Tag: SEIDR_ACTION_MISSING_TAG, Text: text }]
+      });
+      return true;
+    } catch (e) {
+      console.warn("[Seidr] publishActionText", e);
+      return false;
+    }
+  }
+
+  // src/commands/poseChat.ts
+  var FALLBACK = {
+    self: "SourceCharacter changes PronounPossessive pose.",
+    other: "SourceCharacter changes TargetCharacter's pose."
+  };
+  var SEIDR_POSE_CHAT = {
+    BaseLower: {
+      self: "SourceCharacter straightens PronounPossessive legs to stand.",
+      other: "SourceCharacter helps TargetCharacter straighten TargetPronounPossessive legs to stand."
+    },
+    LegsClosed: {
+      self: "SourceCharacter presses PronounPossessive thighs together.",
+      other: "SourceCharacter guides TargetCharacter to press TargetPronounPossessive thighs together."
+    },
+    Kneel: {
+      self: "SourceCharacter sinks down onto PronounPossessive knees.",
+      other: "SourceCharacter guides TargetCharacter down onto TargetPronounPossessive knees."
+    },
+    KneelingSpread: {
+      self: "SourceCharacter kneels and spreads PronounPossessive knees apart.",
+      other: "SourceCharacter spreads TargetCharacter's knees while TargetCharacter kneels."
+    },
+    BaseUpper: {
+      self: "SourceCharacter lets PronounPossessive arms hang relaxed at PronounPossessive sides.",
+      other: "SourceCharacter eases TargetCharacter's arms down to hang relaxed."
+    },
+    Yoked: {
+      self: "SourceCharacter folds PronounPossessive arms behind PronounPossessive head.",
+      other: "SourceCharacter folds TargetCharacter's arms behind TargetCharacter's head."
+    },
+    OverTheHead: {
+      self: "SourceCharacter raises PronounPossessive hands high above PronounPossessive head.",
+      other: "SourceCharacter lifts TargetCharacter's hands high above TargetCharacter's head."
+    },
+    BackBoxTie: {
+      self: "SourceCharacter draws PronounPossessive arms back into a box-tie behind PronounSelf.",
+      other: "SourceCharacter draws TargetCharacter's arms back into a box-tie behind TargetCharacter."
+    },
+    BackElbowTouch: {
+      self: "SourceCharacter pulls PronounPossessive elbows together behind PronounPossessive back.",
+      other: "SourceCharacter pulls TargetCharacter's elbows together behind TargetCharacter's back."
+    },
+    BackCuffs: {
+      self: "SourceCharacter cuffs PronounPossessive wrists behind PronounPossessive back.",
+      other: "SourceCharacter cuffs TargetCharacter's wrists behind TargetCharacter's back."
+    },
+    AllFours: {
+      self: "SourceCharacter drops onto all fours.",
+      other: "SourceCharacter puts TargetCharacter down onto all fours."
+    },
+    Hogtied: {
+      self: "SourceCharacter settles onto PronounPossessive belly.",
+      other: "SourceCharacter lays TargetCharacter down onto TargetPronounPossessive belly."
+    }
+  };
+  function seidrPoseChatTemplate(poseId, side) {
+    const entry = SEIDR_POSE_CHAT[String(poseId || "")];
+    if (entry && entry[side]) return entry[side];
+    return FALLBACK[side];
+  }
+
+  // src/poses/apply.ts
+  function seidrCanPoseTarget(actor, acted) {
+    if (!actor || !acted) return false;
+    if (actor === acted) return true;
+    try {
+      if (actor.IsPlayer && actor.IsPlayer() && acted.IsPlayer && acted.IsPlayer()) return true;
+    } catch (e) {
+    }
+    try {
+      if (typeof ServerChatRoomGetAllowItem === "function") {
+        return !!ServerChatRoomGetAllowItem(actor, acted);
+      }
+    } catch (e2) {
+    }
+    return !!acted.AllowItem;
+  }
+  function seidrApplyClubPose(C, pose) {
+    if (!C || !pose) return;
+    try {
+      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
+      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
+    } catch (e) {
+    }
+    seidrSyncPose(C);
+  }
+  function seidrSyncPose(C) {
+    if (!C) return;
+    try {
+      const own = !!(C.IsPlayer && C.IsPlayer());
+      if (own && typeof ServerSend === "function") {
+        if (typeof ServerPlayerIsInChatRoom === "function" && !ServerPlayerIsInChatRoom()) return;
+        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
+      } else if (typeof ChatRoomCharacterUpdate === "function") {
+        ChatRoomCharacterUpdate(C);
+      }
+    } catch (e2) {
+    }
+  }
+  function seidrApplyPoseOnOther(target, pose) {
+    if (!target || !pose) return false;
+    const self = target === Player || typeof target.MemberNumber === "number" && typeof Player !== "undefined" && Player && target.MemberNumber === Player.MemberNumber;
+    if (self) {
+      seidrCmdWarn("Use Club Pose menu on yourself.");
+      return false;
+    }
+    try {
+      if (typeof target.IsNpc === "function" && target.IsNpc()) {
+        seidrCmdWarn("Poses only work on other players, not NPCs.");
+        return false;
+      }
+    } catch (eNpc) {
+    }
+    if (typeof target.MemberNumber !== "number") {
+      seidrCmdWarn("Poses only work on other players, not NPCs.");
+      return false;
+    }
+    if (!seidrCanPoseTarget(Player, target)) {
+      seidrCmdError("You cannot change that person's pose right now.");
+      return false;
+    }
+    if (!seidrPoseAvailable(target, pose, { aided: true })) {
+      seidrCmdWarn('Pose "' + (seidrPoseLabel(pose) || pose) + '" is not available on that person.');
+      return false;
+    }
+    seidrApplyClubPose(target, pose);
+    seidrPublishActionText(seidrPoseChatTemplate(pose, "other"), Player, target);
+    return true;
   }
 
   // src/actions/icons.ts
@@ -4191,6 +5762,10 @@
     const name = action.effects.arousal.activity;
     return typeof name === "string" && name ? name : "Caress";
   }
+  function arousalReverse(action) {
+    return !!(action.effects && action.effects.arousal && action.effects.arousal.reverse);
+  }
+  var seidrArousalReverseFlip = false;
   function activityNameFromArgs(A) {
     if (typeof A === "string") return A;
     if (A && typeof A === "object" && typeof A.Name === "string") {
@@ -4337,27 +5912,27 @@
     }
     data.Dictionary.push({ ActivityName: template });
   }
-  function writeLabels(cache, actions) {
-    if (!cache || !cache.cache) return;
+  function writeLabels(cache2, actions) {
+    if (!cache2 || !cache2.cache) return;
     actions.forEach(function(action) {
       const actName = seidrActionActivityName(action.id);
       const other = chatOther(action);
       const self = chatSelf(action);
-      cache.cache["Activity" + actName] = action.name;
+      cache2.cache["Activity" + actName] = action.name;
       action.slots.forEach(function(group) {
-        cache.cache["Label-ChatOther-" + group + "-" + actName] = action.name;
-        cache.cache["Label-ChatSelf-" + group + "-" + actName] = action.name;
-        cache.cache["ChatOther-" + group + "-" + actName] = other;
-        cache.cache["ChatSelf-" + group + "-" + actName] = self;
-        cache.cache["ChatOther-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = other;
-        cache.cache["ChatSelf-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = self;
+        cache2.cache["Label-ChatOther-" + group + "-" + actName] = action.name;
+        cache2.cache["Label-ChatSelf-" + group + "-" + actName] = action.name;
+        cache2.cache["ChatOther-" + group + "-" + actName] = other;
+        cache2.cache["ChatSelf-" + group + "-" + actName] = self;
+        cache2.cache["ChatOther-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = other;
+        cache2.cache["ChatSelf-" + group + "-" + actName + CLUB_SPANK_SUFFIX] = self;
       });
     });
   }
   function ensureLabels(actions) {
     if (typeof ActivityDictionaryLoad !== "function") return;
-    const cache = ActivityDictionaryLoad();
-    writeLabels(cache, actions);
+    const cache2 = ActivityDictionaryLoad();
+    writeLabels(cache2, actions);
   }
   function removeStaleActivities(keep) {
     if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return;
@@ -4430,14 +6005,7 @@
       else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
     } catch (e) {
     }
-    try {
-      if (typeof ChatRoomCharacterUpdate === "function") {
-        ChatRoomCharacterUpdate(C);
-      } else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
-        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
-      }
-    } catch (e2) {
-    }
+    seidrSyncPose(C);
   }
   function canPoseTarget(actor, acted) {
     if (!actor || !acted) return false;
@@ -4479,13 +6047,23 @@
     Seidr.hookFunction("PreferenceGetActivityFactor", 1, function(args, next) {
       const type = args[1];
       const id = typeof type === "string" ? seidrParseActionActivityName(type) : null;
-      if (id == null) return next(args);
+      if (id == null) {
+        if (seidrArousalReverseFlip && typeof args[2] === "boolean") {
+          const nextArgs = args.slice();
+          nextArgs[2] = !args[2];
+          return next(nextArgs);
+        }
+        return next(args);
+      }
       const action = seidrGetActionById(id);
       if (!action) return 0;
       const template = arousalTemplate(action);
       if (template) {
         const nextArgs = args.slice();
         nextArgs[1] = template;
+        if (arousalReverse(action) && typeof args[2] === "boolean") {
+          nextArgs[2] = !args[2];
+        }
         return next(nextArgs);
       }
       return 2;
@@ -4500,7 +6078,13 @@
       if (!template) return;
       const nextArgs = args.slice();
       nextArgs[2] = template;
-      return next(nextArgs);
+      const flip = arousalReverse(action);
+      if (flip) seidrArousalReverseFlip = true;
+      try {
+        return next(nextArgs);
+      } finally {
+        if (flip) seidrArousalReverseFlip = false;
+      }
     });
     Seidr.hookFunction("ServerSend", 6, function(args, next) {
       try {
@@ -4691,20 +6275,34 @@
   }
 
   // src/commands/catalog.ts
-  function activityLabel(name, group) {
+  function activityDictLookup(key) {
     try {
-      if (typeof ActivityBuildChatTag === "function" && typeof ActivityDictionaryText === "function" && group) {
-        const key = ActivityBuildChatTag(Player, { Name: group }, { Name: name }, true);
-        const t = ActivityDictionaryText(key);
-        if (t && String(t).indexOf("MISSING") < 0) return String(t);
-      }
+      if (typeof ActivityDictionaryLoad !== "function") return null;
+      const tc = ActivityDictionaryLoad();
+      if (!tc) return null;
+      let t;
+      if (typeof tc.getOptional === "function") t = tc.getOptional(key);
+      else if (tc.cache) t = tc.cache[key];
+      if (typeof t !== "string" || !t) return null;
+      if (String(t).indexOf("MISSING") >= 0) return null;
+      return String(t);
     } catch (e) {
+      return null;
     }
-    try {
-      const cache = typeof ActivityDictionaryLoad === "function" && ActivityDictionaryLoad().cache;
-      if (cache && cache["Activity" + name]) return String(cache["Activity" + name]);
-    } catch (e2) {
+  }
+  function activityLabel(name, group) {
+    if (group) {
+      const keys = [
+        "Label-ChatSelf-" + group + "-" + name,
+        "Label-ChatOther-" + group + "-" + name
+      ];
+      for (let i = 0; i < keys.length; i++) {
+        const t = activityDictLookup(keys[i]);
+        if (t) return t;
+      }
     }
+    const generic = activityDictLookup("Activity" + name);
+    if (generic) return generic;
     return name;
   }
   function seidrCmdListSlots() {
@@ -4830,6 +6428,100 @@
     return null;
   }
 
+  // src/commands/onlineFriends.ts
+  var TTL_MS = 3e4;
+  var cache = [];
+  var cacheAt = 0;
+  var hooked = false;
+  var pendingRefresh = false;
+  function now() {
+    return Date.now();
+  }
+  function ingestResult(result) {
+    if (!Array.isArray(result)) return;
+    const next = [];
+    for (let i = 0; i < result.length; i++) {
+      const row = result[i];
+      if (!row || row.MemberNumber == null) continue;
+      const mn = Number(row.MemberNumber);
+      if (!Number.isFinite(mn) || mn <= 0) continue;
+      const name = String(row.MemberName || "");
+      next.push({
+        memberNumber: mn,
+        memberName: name,
+        chatRoomName: row.ChatRoomName != null ? String(row.ChatRoomName) : void 0
+      });
+      try {
+        if (typeof Player !== "undefined" && Player && Player.FriendNames && typeof Player.FriendNames.set === "function" && name && !Player.FriendNames.has(mn)) {
+          Player.FriendNames.set(mn, name);
+        }
+      } catch (e) {
+      }
+    }
+    cache = next;
+    cacheAt = now();
+    pendingRefresh = false;
+  }
+  function seidrGetOnlineFriends() {
+    return cache.slice();
+  }
+  function seidrOnlineFriendsCacheAgeMs() {
+    if (!cacheAt) return Number.POSITIVE_INFINITY;
+    return Math.max(0, now() - cacheAt);
+  }
+  function seidrOnlineFriendsCacheStale() {
+    return !cacheAt || seidrOnlineFriendsCacheAgeMs() >= TTL_MS;
+  }
+  function seidrRefreshOnlineFriends(force) {
+    if (!force && pendingRefresh && !seidrOnlineFriendsCacheStale()) return;
+    try {
+      if (typeof ServerSend !== "function") return;
+      pendingRefresh = true;
+      ServerSend("AccountQuery", { Query: "OnlineFriends" });
+    } catch (e) {
+      pendingRefresh = false;
+      console.warn("[Seidr Cmd] OnlineFriends refresh failed", e);
+    }
+  }
+  function seidrFilterOnlineFriends(prefix) {
+    if (seidrOnlineFriendsCacheStale()) seidrRefreshOnlineFriends();
+    const pfx = String(prefix || "").trim().toLowerCase();
+    if (!pfx) return seidrGetOnlineFriends();
+    return cache.filter(function(f) {
+      const name = String(f.memberName || "").toLowerCase();
+      const id = String(f.memberNumber);
+      return name.indexOf(pfx) >= 0 || id.indexOf(pfx) === 0;
+    });
+  }
+  function seidrInstallOnlineFriends() {
+    if (hooked) return;
+    hooked = true;
+    if (!Seidr.hookFunction) return;
+    Seidr.hookFunction(
+      "ServerAccountQueryResult",
+      5,
+      function(args, next) {
+        try {
+          const data = args && args[0];
+          if (data && typeof data === "object" && !Array.isArray(data) && data.Query === "OnlineFriends" && data.Result != null) {
+            ingestResult(data.Result);
+          }
+        } catch (e) {
+          console.warn("[Seidr Cmd] OnlineFriends ingest", e);
+        }
+        return next(args);
+      }
+    );
+    Seidr.tryHook("ChatRoomLoad", "ChatRoomLoad", 4, function(args, next) {
+      try {
+        seidrRefreshOnlineFriends(true);
+      } catch (e) {
+      }
+      return next(args);
+    });
+    seidrRefreshOnlineFriends(true);
+  }
+
   // src/commands/parse.ts
   var TAG_ALT = "roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p";
   var TAG_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s|$)", "i");
@@ -4872,6 +6564,105 @@
   }
   function seidrCmdStartsWithTag(msg) {
     return new RegExp("^\\s*/(" + TAG_ALT + ")", "i").test(String(msg || ""));
+  }
+  var ASSIST_TAG_ALT = "whisper|beep";
+  var ASSIST_TAG_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(?:\\s|$)", "i");
+  var ASSIST_TAG_LINE_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(?:\\s+(.*))?$", "i");
+  var ASSIST_TAG_TOKEN_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(\\s+)?", "i");
+  function normalizeAssistTag(raw) {
+    return String(raw || "").toLowerCase() === "whisper" ? "whisper" : "beep";
+  }
+  function seidrCmdIsAssistLine(msg) {
+    return ASSIST_TAG_RE.test(String(msg || "").trim());
+  }
+  function seidrCmdAssistTagFromLine(msg) {
+    const m = String(msg || "").trim().match(ASSIST_TAG_RE);
+    if (!m) return null;
+    return normalizeAssistTag(m[1]);
+  }
+  function seidrCmdStartsWithAssistTag(msg) {
+    return new RegExp("^\\s*/(" + ASSIST_TAG_ALT + ")", "i").test(String(msg || ""));
+  }
+  function seidrCmdPeekAssistLine(msg) {
+    const raw = String(msg || "").trim();
+    const m = raw.match(ASSIST_TAG_LINE_RE);
+    if (!m) return null;
+    const tag = normalizeAssistTag(m[1]);
+    const rest = (m[2] || "").trim();
+    if (!rest) {
+      return { tag, memberRaw: "", memberQuoted: false, secondRaw: "" };
+    }
+    const parts = parseMemberAndRest(rest);
+    return {
+      tag,
+      memberRaw: parts.memberRaw,
+      memberQuoted: parts.memberQuoted,
+      secondRaw: parts.secondRaw
+    };
+  }
+  function seidrCmdAssistTokenAtCaret(value, caret) {
+    const text = String(value || "");
+    const pos = Math.max(0, Math.min(caret || 0, text.length));
+    const trimmedStart = text.match(/^\s*/);
+    const startOffset = trimmedStart ? trimmedStart[0].length : 0;
+    const body = text.slice(startOffset);
+    const bodyCaret = pos - startOffset;
+    if (bodyCaret < 0) return { kind: "none" };
+    const tagMatch = body.match(ASSIST_TAG_TOKEN_RE);
+    if (!tagMatch) return { kind: "none" };
+    const tagEnd = tagMatch[0].length;
+    if (bodyCaret <= tagEnd && !tagMatch[2]) return { kind: "tag" };
+    if (bodyCaret <= tagEnd) {
+      return {
+        kind: "member",
+        prefix: "",
+        quoted: false,
+        start: startOffset + tagEnd,
+        end: startOffset + tagEnd
+      };
+    }
+    const rest = body.slice(tagEnd);
+    const restCaret = bodyCaret - tagEnd;
+    const q = rest.charAt(0);
+    if (q === '"' || q === "'") {
+      let i = 1;
+      let closed = false;
+      while (i < rest.length) {
+        if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
+          i += 2;
+          continue;
+        }
+        if (rest.charAt(i) === q) {
+          closed = true;
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      const memberEnd = closed ? i : rest.length;
+      if (restCaret <= memberEnd) {
+        const inner = rest.slice(1, Math.min(restCaret, closed ? i - 1 : rest.length));
+        return {
+          kind: "member",
+          prefix: inner.replace(/\\(.)/g, "$1"),
+          quoted: true,
+          start: startOffset + tagEnd,
+          end: startOffset + tagEnd + memberEnd
+        };
+      }
+      return { kind: "none" };
+    }
+    const sp = rest.search(/\s/);
+    if (sp < 0 || restCaret <= sp) {
+      return {
+        kind: "member",
+        prefix: rest.slice(0, restCaret),
+        quoted: false,
+        start: startOffset + tagEnd,
+        end: startOffset + tagEnd + (sp < 0 ? rest.length : sp)
+      };
+    }
+    return { kind: "none" };
   }
   function parseMemberAndRest(rest) {
     if (!rest) {
@@ -5146,6 +6937,15 @@
   function seidrGetCommandsBag() {
     const s = seidrGetSettings();
     return seidrNormalizeCommandsBag(s.commands);
+  }
+  function seidrCmdAcWhisperEnabled() {
+    return seidrGetCommandsBag().acWhisper !== false;
+  }
+  function seidrCmdAcBeepEnabled() {
+    return seidrGetCommandsBag().acBeep !== false;
+  }
+  function seidrCmdBeepReplyEnabled() {
+    return seidrGetCommandsBag().beepReply !== false;
   }
   function seidrSaveCommandsBag(bag) {
     const normalized = seidrNormalizeCommandsBag(bag);
@@ -5463,109 +7263,6 @@
     });
   }
 
-  // src/chat/actionText.ts
-  var SEIDR_ACTION_CONTENT_KEY = "SEIDR_PLAYER_CUSTOM_DIALOG";
-  var SEIDR_ACTION_MISSING_TAG = 'MISSING TEXT IN "Interface.csv": SEIDR_PLAYER_CUSTOM_DIALOG';
-  function displayName(C) {
-    if (!C) return "?";
-    try {
-      if (typeof CharacterNickname === "function") return CharacterNickname(C);
-    } catch (e) {
-    }
-    return C.Name || String(C.MemberNumber || "?");
-  }
-  function pronounKey(C) {
-    if (!C) return null;
-    try {
-      if (typeof C.GetPronouns === "function") {
-        const k = C.GetPronouns();
-        if (k) return String(k);
-      }
-    } catch (e) {
-    }
-    try {
-      if (typeof InventoryGet === "function") {
-        const item = InventoryGet(C, "Pronouns");
-        const name = item && item.Asset && item.Asset.Name;
-        if (name) return String(name);
-      }
-    } catch (e2) {
-    }
-    return null;
-  }
-  function mapPossessive(key) {
-    if (!key) return null;
-    const raw = String(key).replace(/[\/_\-\s]/g, "");
-    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "her";
-    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "his";
-    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "their";
-    return null;
-  }
-  function mapPronounSelf(key) {
-    if (!key) return null;
-    const raw = String(key).replace(/[\/_\-\s]/g, "");
-    if (/^sheher$/i.test(raw) || /^she$/i.test(raw)) return "herself";
-    if (/^hehim$/i.test(raw) || /^he$/i.test(raw)) return "himself";
-    if (/^theythem$/i.test(raw) || /^they$/i.test(raw)) return "themself";
-    return null;
-  }
-  function possessiveFor(C) {
-    const mapped = mapPossessive(pronounKey(C));
-    if (mapped) return mapped;
-    try {
-      if (typeof CharacterPronoun === "function") {
-        const p = String(CharacterPronoun(C, "Possessive", false) || "").trim().toLowerCase();
-        if (p === "her" || p === "his" || p === "their") return p;
-      }
-    } catch (e) {
-    }
-    return "their";
-  }
-  function pronounSelfFor(C) {
-    const mapped = mapPronounSelf(pronounKey(C));
-    if (mapped) return mapped;
-    const poss = possessiveFor(C);
-    if (poss === "her") return "herself";
-    if (poss === "his") return "himself";
-    return "themself";
-  }
-  function seidrResolveActionText(template, source, target) {
-    const src = source || null;
-    const tgt = target || source || null;
-    let out = String(template || "");
-    if (!out.trim()) return "";
-    const srcName = displayName(src);
-    const tgtName = displayName(tgt);
-    const srcPoss = possessiveFor(src);
-    const tgtPoss = possessiveFor(tgt);
-    const srcSelf = pronounSelfFor(src);
-    out = out.split("TargetPronounPossessive").join(tgtPoss);
-    out = out.split("PronounPossessive").join(srcPoss);
-    out = out.split("PronounSelf").join(srcSelf);
-    out = out.split("TargetCharacter").join(tgtName);
-    out = out.split("SourceCharacter").join(srcName);
-    out = out.split("ActivityAsset").join("");
-    out = out.replace(/\s{2,}/g, " ").trim();
-    if (out.length > SEIDR_ACTION_CHAT_MAX) out = out.slice(0, SEIDR_ACTION_CHAT_MAX);
-    return out;
-  }
-  function seidrPublishActionText(template, source, target) {
-    const text = seidrResolveActionText(template, source, target);
-    if (!text) return false;
-    if (typeof ServerSend !== "function") return false;
-    try {
-      ServerSend("ChatRoomChat", {
-        Content: SEIDR_ACTION_CONTENT_KEY,
-        Type: "Action",
-        Dictionary: [{ Tag: SEIDR_ACTION_MISSING_TAG, Text: text }]
-      });
-      return true;
-    } catch (e) {
-      console.warn("[Seidr] publishActionText", e);
-      return false;
-    }
-  }
-
   // src/animations/play.ts
   var playing = false;
   function applyPose2(C, pose) {
@@ -5575,13 +7272,7 @@
       else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
     } catch (e) {
     }
-    try {
-      if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
-      else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
-        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
-      }
-    } catch (e2) {
-    }
+    seidrSyncPose(C);
   }
   function applyFace(C, step) {
     if (!C || typeof CharacterSetFacialExpression !== "function") return;
@@ -5642,59 +7333,6 @@
       return Promise.resolve({ ok: true });
     }
     return next();
-  }
-
-  // src/commands/poseChat.ts
-  var FALLBACK = {
-    self: "SourceCharacter changes PronounPossessive pose.",
-    other: "SourceCharacter changes TargetCharacter's pose."
-  };
-  var SEIDR_POSE_CHAT = {
-    BaseLower: {
-      self: "SourceCharacter straightens PronounPossessive legs to stand.",
-      other: "SourceCharacter helps TargetCharacter straighten TargetPronounPossessive legs to stand."
-    },
-    LegsClosed: {
-      self: "SourceCharacter presses PronounPossessive thighs together.",
-      other: "SourceCharacter guides TargetCharacter to press TargetPronounPossessive thighs together."
-    },
-    Kneel: {
-      self: "SourceCharacter sinks down onto PronounPossessive knees.",
-      other: "SourceCharacter guides TargetCharacter down onto TargetPronounPossessive knees."
-    },
-    KneelingSpread: {
-      self: "SourceCharacter kneels and spreads PronounPossessive knees apart.",
-      other: "SourceCharacter spreads TargetCharacter's knees while TargetCharacter kneels."
-    },
-    BaseUpper: {
-      self: "SourceCharacter lets PronounPossessive arms hang relaxed at PronounPossessive sides.",
-      other: "SourceCharacter eases TargetCharacter's arms down to hang relaxed."
-    },
-    Yoked: {
-      self: "SourceCharacter folds PronounPossessive arms behind PronounPossessive head.",
-      other: "SourceCharacter folds TargetCharacter's arms behind TargetCharacter's head."
-    },
-    OverTheHead: {
-      self: "SourceCharacter raises PronounPossessive hands high above PronounPossessive head.",
-      other: "SourceCharacter lifts TargetCharacter's hands high above TargetCharacter's head."
-    },
-    BackBoxTie: {
-      self: "SourceCharacter draws PronounPossessive arms back into a box-tie behind PronounSelf.",
-      other: "SourceCharacter draws TargetCharacter's arms back into a box-tie behind TargetCharacter."
-    },
-    BackElbowTouch: {
-      self: "SourceCharacter pulls PronounPossessive elbows together behind PronounPossessive back.",
-      other: "SourceCharacter pulls TargetCharacter's elbows together behind TargetCharacter's back."
-    },
-    AllFours: {
-      self: "SourceCharacter drops onto all fours.",
-      other: "SourceCharacter puts TargetCharacter down onto all fours."
-    }
-  };
-  function seidrPoseChatTemplate(poseId, side) {
-    const entry = SEIDR_POSE_CHAT[String(poseId || "")];
-    if (entry && entry[side]) return entry[side];
-    return FALLBACK[side];
   }
 
   // src/commands/stripCatalog.ts
@@ -5831,27 +7469,6 @@
     };
   }
 
-  // src/commands/warn.ts
-  function escapeHtml(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function seidrCmdLocal(text, timeoutMs) {
-    if (typeof ChatRoomSendLocal !== "function") return;
-    const ms = typeof timeoutMs === "number" ? timeoutMs : SEIDR_CMD_WARN_MS;
-    const html = '<span style="color:#d4a017;">[Seidr]</span> <span style="color:#f0e6d4;">' + escapeHtml(text) + "</span>";
-    try {
-      ChatRoomSendLocal(html, ms);
-    } catch (e) {
-      console.warn("[Seidr Cmd]", text);
-    }
-  }
-  function seidrCmdWarn(text) {
-    seidrCmdLocal(text, SEIDR_CMD_WARN_MS);
-  }
-  function seidrCmdError(text) {
-    seidrCmdLocal(text, SEIDR_CMD_ERROR_MS);
-  }
-
   // src/commands/run.ts
   function seidrCmdIsEnabled(tag) {
     const key = seidrCmdEnableKeyForTag(tag);
@@ -5885,32 +7502,6 @@
       console.warn("[Seidr Cmd] ActivityRun failed", e);
       seidrCmdError("Failed to run activity.");
       return false;
-    }
-  }
-  function canPoseTarget2(actor, acted) {
-    if (!actor || !acted) return false;
-    if (actor === acted || actor.IsPlayer && actor.IsPlayer() && acted.IsPlayer && acted.IsPlayer()) return true;
-    try {
-      if (typeof ServerChatRoomGetAllowItem === "function") {
-        return !!ServerChatRoomGetAllowItem(actor, acted);
-      }
-    } catch (e) {
-    }
-    return !!acted.AllowItem;
-  }
-  function applyPose3(C, pose) {
-    if (!C || !pose) return;
-    try {
-      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
-      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
-    } catch (e) {
-    }
-    try {
-      if (typeof ChatRoomCharacterUpdate === "function") ChatRoomCharacterUpdate(C);
-      else if (typeof ServerSend === "function" && C.IsPlayer && C.IsPlayer()) {
-        ServerSend("ChatRoomCharacterPoseUpdate", { Pose: C.ActivePose });
-      }
-    } catch (e2) {
     }
   }
   function executeActionCommand(memberRaw, actionRaw) {
@@ -5976,7 +7567,7 @@
       return true;
     }
     const self = target === Player || typeof target.MemberNumber === "number" && target.MemberNumber === Player.MemberNumber;
-    if (!self && !canPoseTarget2(Player, target)) {
+    if (!self && !seidrCanPoseTarget(Player, target)) {
       seidrCmdError("You cannot change that person's pose right now.");
       return true;
     }
@@ -5984,7 +7575,7 @@
       seidrCmdWarn('Pose "' + (seidrPoseLabel(pose) || pose) + '" is not available on that person.');
       return true;
     }
-    applyPose3(target, pose);
+    seidrApplyClubPose(target, pose);
     seidrCmdSetLastActor(mem.memberNumber);
     const side = self ? "self" : "other";
     seidrPublishActionText(seidrPoseChatTemplate(pose, side), Player, target);
@@ -6105,6 +7696,7 @@
   }
 
   // src/commands/autocomplete.ts
+  var commandInputOverride = null;
   var state = {
     open: false,
     kind: null,
@@ -6112,7 +7704,8 @@
     index: 0,
     spanStart: 0,
     spanEnd: 0,
-    quoted: false
+    quoted: false,
+    assistTag: null
   };
   function ensureStyles() {
     let style = document.getElementById("seidr-cmd-styles");
@@ -6124,10 +7717,24 @@
     style.textContent = seidrCmdCss();
   }
   function getInput() {
+    if (commandInputOverride && commandInputOverride.isConnected && (commandInputOverride instanceof HTMLTextAreaElement || commandInputOverride instanceof HTMLInputElement)) {
+      return commandInputOverride;
+    }
     const el = document.getElementById("InputChat");
     if (!el) return null;
     if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) return el;
     return null;
+  }
+  function seidrGetCommandInput() {
+    return getInput();
+  }
+  function seidrSetCommandInput(el) {
+    if (el && (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)) {
+      commandInputOverride = el;
+    } else {
+      commandInputOverride = null;
+      seidrCmdAcClose();
+    }
   }
   function ensureRoot() {
     ensureStyles();
@@ -6149,6 +7756,7 @@
     state.kind = null;
     state.items = [];
     state.index = 0;
+    state.assistTag = null;
     const root3 = document.getElementById("seidr-cmd-ac");
     if (root3) {
       root3.hidden = true;
@@ -6184,11 +7792,11 @@
       const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml2(it.hint) + "</span>" : "";
       return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml2(it.label) + "</span>" + hint + "</button>";
     }).join("");
-    root3.querySelectorAll("[data-i]").forEach(function(btn2) {
-      btn2.addEventListener("mousedown", function(ev) {
+    root3.querySelectorAll("[data-i]").forEach(function(btn3) {
+      btn3.addEventListener("mousedown", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const i = parseInt(btn2.getAttribute("data-i") || "0", 10);
+        const i = parseInt(btn3.getAttribute("data-i") || "0", 10);
         state.index = i;
         seidrCmdAcAccept();
       });
@@ -6209,6 +7817,53 @@
         hint: "#" + p.memberNumber
       };
     });
+  }
+  function nameIdLabel(name, memberNumber) {
+    const n = String(name || "").trim() || String(memberNumber);
+    return n + " (" + memberNumber + ")";
+  }
+  function selfMemberNumber() {
+    try {
+      if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number") {
+        return Player.MemberNumber;
+      }
+    } catch (e) {
+    }
+    return NaN;
+  }
+  function assistTagEnabled(tag) {
+    if (tag === "beep") return seidrCmdAcBeepEnabled();
+    return seidrCmdAcWhisperEnabled();
+  }
+  function buildAssistMemberItems(tag, prefix) {
+    if (tag === "beep") {
+      return seidrFilterOnlineFriends(prefix).map(function(f) {
+        return {
+          insert: String(f.memberNumber),
+          label: nameIdLabel(f.memberName, f.memberNumber),
+          hint: "#" + f.memberNumber
+        };
+      });
+    }
+    const self = selfMemberNumber();
+    const pfx = String(prefix || "").trim().toLowerCase();
+    const room = seidrCmdRoomPeople();
+    const out = [];
+    for (let i = 0; i < room.length; i++) {
+      const p = room[i];
+      if (Number.isFinite(self) && p.memberNumber === self) continue;
+      const display = (p.nickname || p.name || String(p.memberNumber)).trim();
+      const search = (p.nickname + " " + p.name + " " + p.memberNumber).toLowerCase();
+      if (pfx && search.indexOf(pfx) < 0 && String(p.memberNumber).indexOf(pfx) !== 0) {
+        continue;
+      }
+      out.push({
+        insert: String(p.memberNumber),
+        label: nameIdLabel(display, p.memberNumber),
+        hint: "#" + p.memberNumber
+      });
+    }
+    return out;
   }
   function buildActionItems(prefix, memberRaw) {
     const pfx = String(prefix || "").trim().toLowerCase();
@@ -6270,6 +7925,33 @@
       };
     });
   }
+  function openForAssistFocus(focus, value) {
+    if (focus.kind !== "member") {
+      seidrCmdAcClose();
+      return false;
+    }
+    const peek = seidrCmdPeekAssistLine(value);
+    const tag = peek && peek.tag || seidrCmdAssistTagFromLine(value);
+    if (!tag || !assistTagEnabled(tag)) {
+      seidrCmdAcClose();
+      return false;
+    }
+    const items = buildAssistMemberItems(tag, focus.prefix);
+    if (!items.length) {
+      seidrCmdAcClose();
+      return false;
+    }
+    state.open = true;
+    state.kind = "member";
+    state.items = items;
+    state.index = 0;
+    state.spanStart = focus.start;
+    state.spanEnd = focus.end;
+    state.quoted = focus.quoted;
+    state.assistTag = tag;
+    render();
+    return true;
+  }
   function openForFocus(focus, value) {
     const kind = focus.kind;
     if (kind !== "member" && kind !== "action" && kind !== "slot" && kind !== "pose" && kind !== "animation") {
@@ -6320,6 +8002,7 @@
     state.spanStart = focus.start;
     state.spanEnd = focus.end;
     state.quoted = kind === "member" ? focus.quoted : false;
+    state.assistTag = null;
     render();
     return true;
   }
@@ -6327,10 +8010,48 @@
     const input = getInput();
     if (!input) return false;
     let value = input.value || "";
-    if (!seidrCmdIsCommandLine(value) && !seidrCmdStartsWithTag(value)) {
+    const isAssist = seidrCmdIsAssistLine(value) || seidrCmdStartsWithAssistTag(value);
+    const isSeidr = seidrCmdIsCommandLine(value) || seidrCmdStartsWithTag(value);
+    if (!isAssist && !isSeidr) {
       return false;
     }
     const caret = input.selectionStart != null ? input.selectionStart : value.length;
+    if (isAssist) {
+      const assistTag = seidrCmdAssistTagFromLine(value) || seidrCmdPeekAssistLine(value)?.tag;
+      if (assistTag && !assistTagEnabled(assistTag)) return false;
+      let focus2 = seidrCmdAssistTokenAtCaret(value, caret);
+      if (focus2.kind === "tag") {
+        const bare = value.match(/^\s*\/(whisper|beep)\s*$/i);
+        if (!bare) return false;
+        const tag = bare[1].toLowerCase();
+        if (!assistTagEnabled(tag)) return false;
+        const spaced = "/" + tag + " ";
+        input.value = spaced;
+        try {
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        } catch (e) {
+        }
+        if (typeof input.setSelectionRange === "function") {
+          input.setSelectionRange(spaced.length, spaced.length);
+        }
+        value = spaced;
+        focus2 = {
+          kind: "member",
+          prefix: "",
+          quoted: false,
+          start: spaced.length,
+          end: spaced.length
+        };
+      }
+      if (focus2.kind === "none") return false;
+      try {
+        return openForAssistFocus(focus2, value);
+      } catch (e) {
+        console.warn("[Seidr Cmd] assist autocomplete failed", e);
+        seidrCmdAcClose();
+        return false;
+      }
+    }
     let focus = seidrCmdTokenAtCaret(value, caret);
     if (focus.kind === "tag") {
       const bare = value.match(
@@ -6394,9 +8115,17 @@
     let nextValue;
     let nextCaret;
     if (state.kind === "member") {
-      const peek = seidrCmdPeekLine(value);
-      const tag = peek && peek.tag || seidrCmdTagFromLine(value) || "a";
-      const second = peek && peek.secondRaw ? peek.secondRaw : "";
+      let tag;
+      let second = "";
+      if (state.assistTag) {
+        const peekA = seidrCmdPeekAssistLine(value);
+        tag = state.assistTag || peekA && peekA.tag || seidrCmdAssistTagFromLine(value) || "beep";
+        second = peekA && peekA.secondRaw ? peekA.secondRaw : "";
+      } else {
+        const peek = seidrCmdPeekLine(value);
+        tag = peek && peek.tag || seidrCmdTagFromLine(value) || "a";
+        second = peek && peek.secondRaw ? peek.secondRaw : "";
+      }
       const head = "/" + tag + " " + insert + " ";
       nextValue = head + second;
       nextCaret = head.length;
@@ -6424,7 +8153,8 @@
   }
   function seidrCmdAcHandleKeyDown(ev) {
     const input = getInput();
-    if (!input || document.activeElement !== input) {
+    const focused = !!input && (document.activeElement === input || ev.target === input);
+    if (!focused) {
       if (state.open) seidrCmdAcClose();
       return false;
     }
@@ -6436,7 +8166,7 @@
         ev.stopPropagation();
         return true;
       }
-      const onSeidrCmd = state.open || seidrCmdIsCommandLine(value) || seidrCmdStartsWithTag(value);
+      const onSeidrCmd = state.open || seidrCmdIsCommandLine(value) || seidrCmdStartsWithTag(value) || seidrCmdIsAssistLine(value) || seidrCmdStartsWithAssistTag(value);
       if (!onSeidrCmd) return false;
       if (state.open) {
         ev.preventDefault();
@@ -6491,14 +8221,262 @@
     return false;
   }
 
+  // src/commands/beepReply.ts
+  var STRIP_TARGET_RE = /^\/(beep|whisper|w)\s+\S+\s?/iu;
+  var activeBeepReply = false;
+  var activeBeepName = "";
+  var installed = false;
+  function replyLabelPrefix() {
+    try {
+      if (typeof TextGet === "function") {
+        const t = TextGet("ChatRoomReply");
+        if (t) return String(t);
+      }
+    } catch (e) {
+    }
+    return "Reply";
+  }
+  function friendName(mn, fallback) {
+    if (fallback) return fallback;
+    try {
+      if (typeof Player !== "undefined" && Player && Player.FriendNames && typeof Player.FriendNames.get === "function") {
+        const n = Player.FriendNames.get(mn);
+        if (n) return String(n);
+      }
+    } catch (e) {
+    }
+    return String(mn);
+  }
+  function getCompose() {
+    const override = seidrGetCommandInput();
+    if (override && override.isConnected) return override;
+    const el = document.getElementById("InputChat");
+    if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) return el;
+    return null;
+  }
+  function seidrBeepPrefill(memberNumber, keepRest) {
+    const mn = Number(memberNumber);
+    if (!Number.isFinite(mn) || mn <= 0) return;
+    const input = getCompose();
+    if (!input) return;
+    let rest = "";
+    if (keepRest !== false) {
+      rest = String(input.value || "").replace(STRIP_TARGET_RE, "");
+    }
+    const next = "/beep " + mn + " " + rest;
+    input.value = next;
+    input.focus();
+    const caret = ("/beep " + mn + " ").length;
+    if (typeof input.setSelectionRange === "function") {
+      input.setSelectionRange(caret, caret);
+    }
+    try {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    } catch (e) {
+    }
+  }
+  function seidrBeepClearReply() {
+    activeBeepReply = false;
+    activeBeepName = "";
+    try {
+      const replyIndicator = document.getElementById("chat-room-reply-indicator");
+      if (replyIndicator && !replyIndicator.hasAttribute("hidden")) {
+        const clubInput = document.getElementById("InputChat");
+        const hasClubReply = clubInput && clubInput instanceof HTMLElement && clubInput.hasAttribute("reply-id");
+        if (!hasClubReply) {
+          replyIndicator.toggleAttribute("hidden", true);
+        }
+      }
+    } catch (e) {
+    }
+  }
+  function seidrBeepStartReply(memberNumber, name) {
+    if (!seidrCmdBeepReplyEnabled()) return;
+    const mn = Number(memberNumber);
+    if (!Number.isFinite(mn) || mn <= 0) return;
+    const display = friendName(mn, name);
+    seidrBeepPrefill(mn, true);
+    activeBeepReply = true;
+    activeBeepName = display;
+    try {
+      const replyIndicator = document.getElementById("chat-room-reply-indicator");
+      const labelHost = document.getElementById("chat-room-reply-indicator-text");
+      const label = labelHost ? labelHost.querySelector(".button-label") : null;
+      if (label) {
+        label.textContent = replyLabelPrefix() + ": " + display;
+      }
+      if (replyIndicator) {
+        replyIndicator.toggleAttribute("hidden", false);
+      }
+      const clubInput = document.getElementById("InputChat");
+      if (clubInput instanceof HTMLElement) {
+        clubInput.removeAttribute("reply-id");
+      }
+    } catch (e) {
+    }
+  }
+  function beepMemberFromDiv(div) {
+    try {
+      const sender = Number.parseInt(div.getAttribute("data-sender") || "", 10);
+      const target = Number.parseInt(div.getAttribute("data-target") || "", 10);
+      const self = typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number" ? Player.MemberNumber : NaN;
+      let mn = sender;
+      if (Number.isFinite(self) && sender === self && Number.isFinite(target)) {
+        mn = target;
+      }
+      if (!Number.isFinite(mn) || mn <= 0) return null;
+      if (Number.isFinite(self) && mn === self) return null;
+      return { mn, name: friendName(mn) };
+    } catch (e) {
+      return null;
+    }
+  }
+  function enhanceBeepDiv(div) {
+    if (!div || !div.classList || !div.classList.contains("ChatMessageBeep")) return;
+    if (!seidrCmdBeepReplyEnabled()) return;
+    if (div.getAttribute("data-seidr-beep-reply") === "1") return;
+    const info = beepMemberFromDiv(div);
+    if (!info) return;
+    div.setAttribute("data-seidr-beep-reply", "1");
+    const onReply = function() {
+      if (!seidrCmdBeepReplyEnabled()) return;
+      seidrBeepStartReply(info.mn, info.name);
+    };
+    try {
+      if (typeof ElementMenu !== "undefined" && ElementMenu && typeof ElementMenu.Create === "function" && typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.Create === "function") {
+        const id = typeof ElementGenerateID === "function" ? ElementGenerateID() : "seidr-beep-reply-" + info.mn + "-" + Date.now();
+        const menu = ElementMenu.Create(
+          id,
+          [
+            ElementButton.Create(
+              null,
+              onReply,
+              { noStyling: true, tooltip: "Reply" },
+              { button: { attributes: { name: "reply" } } }
+            )
+          ],
+          { direction: "rtl", role: "menu" },
+          {
+            menu: {
+              classList: ["chat-room-message-popup", "seidr-beep-reply-menu"],
+              attributes: { "aria-direction": "horizontal" }
+            }
+          }
+        );
+        div.appendChild(menu);
+        return;
+      }
+    } catch (e) {
+      console.warn("[Seidr] beep hover Reply menu failed", e);
+    }
+    const btn3 = document.createElement("button");
+    btn3.type = "button";
+    btn3.className = "seidr-beep-reply-btn ReplyButton";
+    btn3.title = "Reply";
+    btn3.textContent = "Reply";
+    btn3.addEventListener("click", function(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      onReply();
+    });
+    div.appendChild(btn3);
+  }
+  function onComposeKeyDown(ev) {
+    if (!activeBeepReply) return;
+    if (ev.key !== "Escape") return;
+    const t = ev.target;
+    if (!t) return;
+    if (t.id !== "InputChat" && t.id !== "fbm-fc-input") return;
+    seidrBeepClearReply();
+  }
+  function wireReplyIndicatorClose() {
+    const close = document.getElementById("chat-room-reply-indicator-close");
+    if (!close || close.__seidrBeepClose) return;
+    close.__seidrBeepClose = true;
+    close.addEventListener("click", function() {
+      seidrBeepClearReply();
+    });
+  }
+  function seidrInstallBeepReply() {
+    if (installed) return;
+    installed = true;
+    if (!Seidr.hookFunction) return;
+    Seidr.hookFunction(
+      "ChatRoomAppendChat",
+      6,
+      function(args, next) {
+        const ret = next(args);
+        try {
+          const div = args && args[0];
+          if (div && div.classList && div.classList.contains("ChatMessageBeep")) {
+            enhanceBeepDiv(div);
+          }
+        } catch (e) {
+          console.warn("[Seidr] beep reply enhance", e);
+        }
+        return ret;
+      }
+    );
+    Seidr.hookFunction(
+      "ChatRoomSendChat",
+      9,
+      function(args, next) {
+        try {
+          const club = document.getElementById("InputChat");
+          const msg = club ? String(club.value || "").trim() : "";
+          if (/^\/beep\b/i.test(msg) && activeBeepReply) {
+            seidrBeepClearReply();
+          }
+        } catch (e) {
+        }
+        return next(args);
+      }
+    );
+    document.addEventListener("keydown", onComposeKeyDown, true);
+    wireReplyIndicatorClose();
+    setTimeout(wireReplyIndicatorClose, 2e3);
+    seidrBeepReplyRescan();
+  }
+  function seidrBeepReplyRescan() {
+    if (!seidrCmdBeepReplyEnabled()) return;
+    try {
+      const log = document.getElementById("TextAreaChatLog");
+      if (!log) return;
+      log.querySelectorAll(".ChatMessageBeep").forEach(function(node) {
+        enhanceBeepDiv(node);
+      });
+    } catch (e) {
+    }
+  }
+  function seidrBeepReplyStrip() {
+    try {
+      const log = document.getElementById("TextAreaChatLog");
+      if (!log) return;
+      log.querySelectorAll(".ChatMessageBeep[data-seidr-beep-reply='1']").forEach(function(node) {
+        const div = node;
+        div.querySelectorAll(".seidr-beep-reply-menu, .seidr-beep-reply-btn").forEach(function(el) {
+          if (el.parentNode) el.parentNode.removeChild(el);
+        });
+        div.removeAttribute("data-seidr-beep-reply");
+      });
+    } catch (e) {
+    }
+    seidrBeepClearReply();
+  }
+
   // src/commands/runtime.ts
   function clearInput() {
     try {
       if (typeof ElementValue === "function") ElementValue("InputChat", "");
       else {
-        const el = document.getElementById("InputChat");
-        if (el) el.value = "";
+        const club = document.getElementById("InputChat");
+        if (club) club.value = "";
       }
+    } catch (e) {
+    }
+    try {
+      const el = seidrGetCommandInput();
+      if (el && el.id !== "InputChat") el.value = "";
     } catch (e) {
     }
   }
@@ -6508,7 +8486,7 @@
       clearInput();
       return;
     }
-    const el = document.getElementById("InputChat");
+    const el = seidrGetCommandInput();
     const msg = el ? String(el.value || "").trim() : "";
     const line = msg || "";
     const full = seidrCmdIsCommandLine(line) ? line : "/" + fallbackTag + " " + String(_args || "").trim();
@@ -6644,12 +8622,12 @@
       seidrCmdAcClose();
     }, 50);
   }
-  function hookInput() {
-    const el = document.getElementById("InputChat");
-    if (!el || el.__seidrCmdHooked) return;
-    el.__seidrCmdHooked = true;
-    el.addEventListener("keydown", onKeyDownCapture, true);
-    el.addEventListener("blur", onBlurClose);
+  function hookInput(el) {
+    const target = el || document.getElementById("InputChat");
+    if (!target || target.__seidrCmdHooked) return;
+    target.__seidrCmdHooked = true;
+    target.addEventListener("keydown", onKeyDownCapture, true);
+    target.addEventListener("blur", onBlurClose);
   }
   function installInputWatch() {
     hookInput();
@@ -6657,17 +8635,30 @@
       "focusin",
       function(ev) {
         const t = ev.target;
-        if (t && t.id === "InputChat") hookInput();
+        if (!t) return;
+        if (t.id === "InputChat") {
+          hookInput(t);
+          return;
+        }
+        const cur = seidrGetCommandInput();
+        if (cur && t === cur) hookInput(t);
       },
       true
     );
+  }
+  function setCommandInput(el) {
+    seidrSetCommandInput(el);
+    if (el) hookInput(el);
   }
   function hookSendChat() {
     if (!Seidr.hookFunction) return;
     Seidr.hookFunction("ChatRoomSendChat", 8, function(args, next) {
       try {
-        const el = document.getElementById("InputChat");
-        const msg = el ? String(el.value || "").trim() : "";
+        const club = document.getElementById("InputChat");
+        const override = seidrGetCommandInput();
+        const fromClub = club ? String(club.value || "").trim() : "";
+        const fromOverride = override && override.id !== "InputChat" ? String(override.value || "").trim() : "";
+        const msg = fromClub || fromOverride;
         if (seidrCmdIsCommandLine(msg)) {
           seidrCmdAcClose();
           seidrCmdExecuteLine(msg);
@@ -6689,11 +8680,17 @@
     if (!Seidr._hookState) Seidr._hookState = {};
     Seidr._hookState.commands = true;
     seidrRegisterCommands();
+    seidrInstallOnlineFriends();
+    seidrInstallBeepReply();
     installInputWatch();
     hookSendChat();
   }
   Seidr.installCommands = seidrInstallCommands;
   Seidr.registerCommands = seidrRegisterCommands;
+  Seidr.setCommandInput = setCommandInput;
+  Seidr.getCommandInput = seidrGetCommandInput;
+  Seidr.cmdAcIsOpen = seidrCmdAcIsOpen;
+  Seidr.cmdAcHandleKeyDown = seidrCmdAcHandleKeyDown;
 
   // src/commands/ui.ts
   var editPersonId = null;
@@ -7075,12 +9072,400 @@
   Seidr.installAnimations = function() {
   };
 
+  // src/poses/styles.ts
+  function seidrPoseCss() {
+    return [
+      "#seidr-pose-btn {",
+      "  position: fixed; z-index: 118; box-sizing: border-box;",
+      "  display: none; place-items: center; padding: 0; margin: 0;",
+      "  border: 1px solid #000;",
+      "  border-radius: 0;",
+      "  background: #fff;",
+      "  color: #000;",
+      "  box-shadow: none;",
+      "  cursor: pointer;",
+      "}",
+      "#seidr-pose-btn.seidr-pose-btn-visible { display: grid; }",
+      /* Club DrawButton hover uses Cyan over White. */
+      "#seidr-pose-btn:hover { background: Cyan; }",
+      "#seidr-pose-btn .seidr-pose-btn-icon {",
+      "  width: 78%; height: 78%; pointer-events: none; display: block;",
+      "}",
+      "#seidr-pose-btn .seidr-pose-btn-icon svg {",
+      "  width: 100%; height: 100%; display: block;",
+      "}",
+      "#seidr-pose-panel {",
+      "  position: fixed; z-index: 130; display: none; flex-direction: column;",
+      "  width: min(92vw, 420px); max-height: min(80vh, 520px);",
+      "  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;",
+      "  box-shadow: 0 12px 40px rgba(0,0,0,0.5);",
+      "  overflow: hidden;",
+      "  font: 13px/1.35 system-ui, -apple-system, Segoe UI, sans-serif;",
+      "}",
+      "#seidr-pose-panel.seidr-pose-open { display: flex; }",
+      "#seidr-pose-panel[hidden] { display: none !important; }",
+      ".seidr-pose-header {",
+      "  flex-shrink: 0; display: flex; align-items: center; gap: 8px;",
+      "  padding: 8px 10px; background: rgba(42, 34, 56, 0.95);",
+      "  border-bottom: 1px solid rgba(255,255,255,0.1); user-select: none;",
+      "}",
+      ".seidr-pose-header-title {",
+      "  flex: 1; font-weight: 600; font-size: 12px; letter-spacing: 0.06em;",
+      "  text-transform: uppercase; color: #d4a017;",
+      "}",
+      ".seidr-pose-icon-btn {",
+      "  width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);",
+      "  background: transparent; color: inherit; cursor: pointer; font: inherit;",
+      "  display: inline-grid; place-items: center; padding: 0; line-height: 1;",
+      "}",
+      ".seidr-pose-icon-btn:hover { border-color: #d4a017; color: #d4a017; }",
+      ".seidr-pose-icon-btn svg { display: block; pointer-events: none; }",
+      ".seidr-pose-body {",
+      "  flex: 1; min-height: 0; overflow: auto; padding: 10px;",
+      "}",
+      ".seidr-pose-grid {",
+      "  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;",
+      "}",
+      ".seidr-pose-tile {",
+      "  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;",
+      "  gap: 6px; min-height: 88px; padding: 8px 4px 6px;",
+      "  border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);",
+      "  background: rgba(20, 16, 28, 0.9); color: #f0e6d4;",
+      "  cursor: pointer; font: inherit;",
+      "}",
+      ".seidr-pose-tile:hover:not(:disabled) { border-color: #d4a017; }",
+      ".seidr-pose-tile:disabled {",
+      "  opacity: 0.35; cursor: not-allowed;",
+      "}",
+      ".seidr-pose-tile img, .seidr-pose-tile svg {",
+      "  width: 44px; height: 44px; object-fit: contain; pointer-events: none;",
+      "  filter: invert(1) brightness(1.05);",
+      "}",
+      ".seidr-pose-tile svg { filter: none; fill: #f0e6d4; }",
+      ".seidr-pose-tile-label {",
+      "  font-size: 10px; line-height: 1.2; text-align: center;",
+      "  color: #a898b0; max-width: 100%;",
+      "  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+      "}",
+      ".seidr-pose-empty {",
+      "  padding: 16px 8px; text-align: center; color: #a898b0; font-size: 12px;",
+      "}"
+    ].join("\n");
+  }
+  function seidrInjectPoseStyles() {
+    if (document.getElementById("seidr-pose-styles")) return;
+    const style = document.createElement("style");
+    style.id = "seidr-pose-styles";
+    style.textContent = seidrPoseCss();
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  // src/poses/ui.ts
+  var BTN_ID = "seidr-pose-btn";
+  var PANEL_ID = "seidr-pose-panel";
+  var GRID_ID = "seidr-pose-grid";
+  var CLUB_POSE_ICON = {
+    BaseUpper: "Icons/Poses/BaseUpper.png",
+    Yoked: "Icons/Poses/Yoked.png",
+    OverTheHead: "Icons/Poses/OverTheHead.png",
+    BackBoxTie: "Icons/Poses/BackBoxTie.png",
+    BackElbowTouch: "Icons/Poses/BackElbowTouch.png",
+    BackCuffs: "Icons/Poses/BackCuffs.png",
+    BaseLower: "Icons/Poses/BaseLower.png",
+    LegsClosed: "Icons/Poses/LegsClosed.png",
+    Kneel: "Icons/Poses/Kneel.png",
+    KneelingSpread: "Icons/Poses/KneelingSpread.png",
+    AllFours: "Icons/Poses/AllFours.png"
+  };
+  var BELLY_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 1024" aria-hidden="true"><path fill="#f0e6d4" d="M1260.5 265.1c-6.6 1.5-21.5 9.5-30.5 16.3-4.7 3.5-14.3 11.4-21.4 17.6-7.1 6.1-21.8 18.3-32.7 27.1-10.8 8.7-20.9 17.3-22.4 19-7.8 9.3-9.9 20.3-5.7 29 1.2 2.4 5.4 8.4 9.3 13.3 18.6 23.5 20 33.4 17.9 125.8-1.4 64.2-.8 90.5 2.9 112.9l1.7 10.7 7.6 8.3c4.2 4.6 7.5 8.5 7.4 8.6-.2.2-5.1-2-11-4.8-26.8-12.6-70.8-28.4-100.1-35.9-8.8-2.3-17.7-4.6-19.8-5.1-3.3-.9-4.1-1.8-7.2-8-11.2-22.1-26.3-40.6-44.5-54.2-43.5-32.7-105.4-37.7-157.5-12.8-18.5 8.9-31.2 17.6-64 43.7-38.3 30.5-54.8 40.8-73 45.4-12.8 3.3-30.4 4.5-44.2 3.1-32.9-3.3-61.3-13.5-113.4-40.7-51.5-26.8-71.9-36.2-97.4-44.8-32.9-11.1-63.3-15.5-79.5-11.6-15.6 3.7-26.8 14.2-31.9 30-1.1 3.6-4.3 17.5-7.1 31-4.9 24-10.8 48.2-20.6 84.6l-4.8 18.1-38.6.6c-57.5.9-99.6 5-125 12.3-23.9 6.9-36.3 24.6-28.6 40.9 2.9 6.1 6.5 9.7 13.1 12.7l5 2.3h221l4.1-2.2c7.1-3.8 11.5-10 18.9-26.5 11.3-25.4 30.8-70.6 35.9-83.1 2.7-6.4 5.2-11.7 5.6-11.7 1.7 0 5 5.3 5 7.9 0 5-15.3 46.5-30.1 81.8-3.5 8.4-4 10.4-3 11.7 1.9 2.3 18.8 10.3 25.6 12.2 3.9 1.1 11.6 1.8 22 2.1 19.6.6 28.2-.9 49-8.7 23.6-8.8 15.1-8.2 129-8.4 106.5-.2 105.6-.2 164.6-5.6 58.4-5.4 69.9-4.5 152.9 11.9 53.2 10.5 69.8 13.2 105 17.5 84.3 10.3 193.9 7.7 235-5.6 27.4-8.8 41.1-27.5 38-52.1-2.3-18.8-6.3-31.7-25.7-83.7-22.8-61-24.7-66.2-33.8-92.6-28-81.3-35.9-120.1-29.6-146.4 5.4-22.8 19.5-48.6 40.5-74.5 11.6-14.2 13.6-17.8 13.6-24.3 0-12.2-11.9-18.7-27.5-15.1"/><path fill="#f0e6d4" d="M288 289.7c-13.3 1.4-33.7 8-49 15.9-42.7 22.2-72.4 61.2-77 101.2-1.8 16.3 1.7 37.8 8.9 53.6 2.7 5.9 3.1 6.3 6.9 6.9 2.2.4 5 1.5 6.3 2.6 2.3 1.8 2.4 2.5 2.3 13.3 0 13.1-1.5 19.2-9.9 41.9-7.1 19.1-7.8 22.4-7.3 31.9.7 12 5.1 20.2 17.3 32.2 10.6 10.3 12.5 13.5 12.5 20.2 0 6.9-2.4 11.4-9.2 17.9-5.6 5.2-6 5.9-4.6 7.3.8.8 4.6 2 8.4 2.6 13.5 2.1 29.7-3.3 43.8-14.7 3.8-3 7.2-5.5 7.6-5.5 2 0 8.8 7.4 9.9 10.8 2.7 8.1-.2 19.6-6.6 26.4-1.6 1.7-2.3 3.3-1.9 4.4.5 1.4 1.9 1.6 10.4 1.2 17.6-.8 35.7-9.3 52.1-24.4l7.7-7.2 3.2-14.8c1.7-8.2 4.6-22.6 6.3-31.9 6.2-34.2 9.8-43.6 21-54.8 11.8-11.8 26.2-17.1 46.4-17 23.5.1 49.1 6.6 89.9 22.8l11.9 4.7 6.5-3.4c8.4-4.2 17.4-12.9 20.7-19.9 4.4-9.6 3.5-10.8-6.5-8.3-10.3 2.5-20.8 1.6-29.3-2.4-3.7-1.7-6.7-3.5-6.7-3.9s3.1-2.1 6.8-3.8c8.9-4 20.1-14.9 22.5-22 2.2-6.4 2.1-10.7-.3-13.8-1.9-2.4-2.5-2.5-14.2-2.9-10.4-.3-13.3-.8-18.6-3-23.8-9.9-37.1-26.4-57.2-71.3-14.9-33.2-22.9-47.3-34.2-59.9-15.2-17.1-36.9-28.5-60.8-32.1-8.6-1.4-27-1.7-36-.8m1092.5 10.7c-13.6 3.1-23.3 8.3-46.3 24.4-16.4 11.5-25.9 17.4-40.7 25.2-34.1 18-40.9 29.5-31.3 52.4 6.2 14.7 7.8 21.1 7.8 31 0 10.4-2.6 26.7-7 43.2l-3 11.2 6.4 17.8c12.6 35 35.6 94.7 36.3 94 .6-.6 4.6-27.3 8.8-58.1 5.6-41.1 11.4-78.8 14.4-94 7.2-35.5 20.6-57.3 58.1-94.6 20.8-20.7 26-26.9 27.4-33.2.8-3.5-.8-9.7-3.4-13-4.7-5.9-16.8-8.7-27.5-6.3"/></svg>';
+  var btn = null;
+  var panel = null;
+  var escBound = false;
+  var lastPlace = null;
+  var lastTargetMember = null;
+  function isOtherDialogTarget(C) {
+    if (!C || typeof Player === "undefined" || !Player) return false;
+    try {
+      if (C.IsPlayer && C.IsPlayer()) return false;
+    } catch (e) {
+    }
+    if (C === Player) return false;
+    try {
+      if (typeof C.IsNpc === "function" && C.IsNpc()) return false;
+    } catch (e2) {
+    }
+    if (typeof C.MemberNumber !== "number") return false;
+    if (C.MemberNumber === Player.MemberNumber) return false;
+    return true;
+  }
+  function dialogPoseContextOk() {
+    const mode = typeof DialogMenuMode !== "undefined" ? DialogMenuMode : "";
+    const C = typeof CurrentCharacter !== "undefined" ? CurrentCharacter : null;
+    if (!isOtherDialogTarget(C)) return false;
+    if (mode === "dialog") return true;
+    if (mode !== "items" && mode !== "activities") return false;
+    if (!C.FocusGroup) return false;
+    return true;
+  }
+  function poseIconHtml(poseId) {
+    const src = CLUB_POSE_ICON[poseId];
+    if (src) return '<img src="' + src + '" alt="" />';
+    return BELLY_SVG;
+  }
+  function ensureDom() {
+    seidrInjectPoseStyles();
+    if (!btn || !document.body.contains(btn)) {
+      btn = document.createElement("button");
+      btn.id = BTN_ID;
+      btn.type = "button";
+      btn.title = "Pose";
+      btn.setAttribute("aria-label", "Pose");
+      btn.innerHTML = '<span class="seidr-pose-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 102" focusable="false"><path fill="black" d="M23 13Q18 17 16 25L13 55Q11 66 17 70Q20 73 25 71L26 74Q25 81 21 89L69 89Q65 81 63 74L64 71Q70 73 74 68Q79 63 77 55L74 25Q71 15 64 12Q57 8 51 9L50 6L38 6L37 9Q29 9 23 13Z"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+      btn.addEventListener("click", function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        togglePanel();
+      });
+      ["pointerdown", "mousedown", "mouseup", "touchstart"].forEach(function(type) {
+        btn.addEventListener(type, function(ev) {
+          ev.stopPropagation();
+        });
+      });
+      document.body.appendChild(btn);
+      lastPlace = null;
+    }
+    if (!panel || !document.body.contains(panel)) {
+      panel = document.createElement("div");
+      panel.id = PANEL_ID;
+      panel.setAttribute("hidden", "");
+      panel.innerHTML = [
+        '<div class="seidr-pose-header">',
+        '  <div class="seidr-pose-header-title">Pose</div>',
+        '  <button type="button" class="seidr-pose-icon-btn" data-seidr-pose="settings" title="Seidr Settings" aria-label="Seidr Settings">',
+        '    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">',
+        '      <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.48.48 0 0 0 14 2h-4a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.55-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.63 8.47a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.75 14.5a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.3.59.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54c.05.24.24.41.48.41h4c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/>',
+        "    </svg>",
+        "  </button>",
+        '  <button type="button" class="seidr-pose-icon-btn" data-seidr-pose="close" title="Close">\xD7</button>',
+        "</div>",
+        '<div class="seidr-pose-body"><div class="seidr-pose-grid" id="' + GRID_ID + '"></div></div>'
+      ].join("");
+      ["pointerdown", "mousedown", "mouseup", "wheel", "touchstart"].forEach(function(type) {
+        panel.addEventListener(type, function(ev) {
+          ev.stopPropagation();
+        });
+      });
+      panel.addEventListener("click", function(ev) {
+        ev.stopPropagation();
+        const t = ev.target;
+        if (t && t.closest && t.closest('[data-seidr-pose="settings"]')) {
+          if (typeof Seidr.openSettings === "function") {
+            try {
+              Seidr.openSettings();
+            } catch (e) {
+            }
+          }
+          return;
+        }
+        if (t && t.closest && t.closest('[data-seidr-pose="close"]')) {
+          closePanel();
+          return;
+        }
+        const tile = t && t.closest ? t.closest("[data-pose-id]") : null;
+        if (!tile || tile.disabled) return;
+        const poseId = tile.getAttribute("data-pose-id");
+        if (!poseId) return;
+        const C = typeof CurrentCharacter !== "undefined" ? CurrentCharacter : null;
+        if (!isOtherDialogTarget(C)) return;
+        if (seidrApplyPoseOnOther(C, poseId)) closePanel();
+      });
+      document.body.appendChild(panel);
+    }
+    if (!escBound) {
+      escBound = true;
+      document.addEventListener("keydown", onEsc, true);
+    }
+  }
+  function onEsc(ev) {
+    if (ev.key !== "Escape") return;
+    if (!panel || !panel.classList.contains("seidr-pose-open")) return;
+    closePanel();
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  function rebuildGrid() {
+    ensureDom();
+    const grid = document.getElementById(GRID_ID);
+    if (!grid) return;
+    const C = typeof CurrentCharacter !== "undefined" ? CurrentCharacter : null;
+    if (!isOtherDialogTarget(C)) {
+      grid.innerHTML = '<div class="seidr-pose-empty">No target</div>';
+      lastTargetMember = null;
+      return;
+    }
+    lastTargetMember = typeof C.MemberNumber === "number" ? C.MemberNumber : null;
+    const parts = [];
+    for (let i = 0; i < SEIDR_ACTION_POSES.length; i++) {
+      const p = SEIDR_ACTION_POSES[i];
+      const ok = seidrPoseAvailable(C, p.id, { aided: true });
+      parts.push(
+        '<button type="button" class="seidr-pose-tile" data-pose-id="' + p.id + '"' + (ok ? "" : " disabled") + ' title="' + p.label + '">' + poseIconHtml(p.id) + '<span class="seidr-pose-tile-label">' + p.label + "</span></button>"
+      );
+    }
+    grid.innerHTML = parts.length ? parts.join("") : '<div class="seidr-pose-empty">No poses available</div>';
+  }
+  function placePanelNearButton() {
+    if (!panel || !btn) return;
+    const r = btn.getBoundingClientRect();
+    const pad = 8;
+    const pw = Math.min(window.innerWidth - pad * 2, 420);
+    const ph = Math.min(
+      Math.max(panel.offsetHeight || 0, 280),
+      window.innerHeight - pad * 2,
+      520
+    );
+    let left;
+    let top = r.bottom + 8;
+    if (r.left + pw <= window.innerWidth - pad) {
+      left = Math.max(pad, r.left);
+    } else {
+      left = Math.max(pad, Math.min(r.right - pw, window.innerWidth - pw - pad));
+    }
+    if (top + ph > window.innerHeight - pad) {
+      top = Math.max(pad, r.top - ph - 8);
+    }
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+    panel.style.right = "auto";
+    panel.style.transform = "none";
+  }
+  function isPanelOpen() {
+    return !!(panel && panel.classList.contains("seidr-pose-open"));
+  }
+  function openPanel() {
+    ensureDom();
+    rebuildGrid();
+    panel.hidden = false;
+    panel.removeAttribute("hidden");
+    panel.classList.add("seidr-pose-open");
+    placePanelNearButton();
+    requestAnimationFrame(function() {
+      if (isPanelOpen()) placePanelNearButton();
+    });
+  }
+  function closePanel() {
+    if (!panel) return;
+    panel.classList.remove("seidr-pose-open");
+    panel.setAttribute("hidden", "");
+  }
+  function togglePanel() {
+    if (isPanelOpen()) closePanel();
+    else openPanel();
+  }
+  function hideButton() {
+    if (btn) {
+      btn.classList.remove("seidr-pose-btn-visible");
+      btn.style.removeProperty("display");
+    }
+    lastPlace = null;
+    closePanel();
+  }
+  function placeButton(x, y, w, h) {
+    if (!btn) return;
+    if (lastPlace && lastPlace.x === x && lastPlace.y === y && lastPlace.w === w && lastPlace.h === h) {
+      return;
+    }
+    lastPlace = { x, y, w, h };
+    try {
+      if (typeof ElementPositionFixed === "function") {
+        ElementPositionFixed(btn, x, y, w, h);
+      } else {
+        btn.style.right = "16px";
+        btn.style.top = "16px";
+        btn.style.width = w + "px";
+        btn.style.height = h + "px";
+      }
+    } catch (e) {
+    }
+  }
+  function showAndPlaceButton() {
+    ensureDom();
+    if (!btn) return;
+    const len = Array.isArray(DialogMenuButton) ? DialogMenuButton.length : 1;
+    const x = 1885 - len * 110;
+    const y = 15;
+    btn.classList.add("seidr-pose-btn-visible");
+    placeButton(x, y, 90, 90);
+  }
+  function seidrPoseDialogTick() {
+    try {
+      if (!dialogPoseContextOk()) {
+        hideButton();
+        return;
+      }
+      showAndPlaceButton();
+      if (isPanelOpen()) {
+        const C = CurrentCharacter;
+        const mem = C && typeof C.MemberNumber === "number" ? C.MemberNumber : null;
+        if (mem !== lastTargetMember) rebuildGrid();
+      }
+    } catch (e) {
+      hideButton();
+    }
+  }
+  function seidrPoseDialogLeave() {
+    hideButton();
+  }
+  function seidrPoseDestroyUi() {
+    closePanel();
+    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+    if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+    btn = null;
+    panel = null;
+    lastPlace = null;
+    lastTargetMember = null;
+    const style = document.getElementById("seidr-pose-styles");
+    if (style && style.parentNode) style.parentNode.removeChild(style);
+  }
+
+  // src/poses/index.ts
+  var installed2 = false;
+  function tickAfter(args, next) {
+    const ret = next(args);
+    try {
+      seidrPoseDialogTick();
+    } catch (e) {
+    }
+    return ret;
+  }
+  function seidrInstallPoses() {
+    if (installed2) return;
+    installed2 = true;
+    Seidr.tryHook("DialogDraw", "DialogDraw", 5, tickAfter);
+    Seidr.tryHook("seidrPoseCharacterSetCurrent", "CharacterSetCurrent", 5, tickAfter);
+    Seidr.tryHook("seidrPoseDialogChangeMode", "DialogChangeMode", 5, tickAfter);
+    Seidr.tryHook("seidrPoseDialogChangeFocus", "DialogChangeFocusToGroup", 5, tickAfter);
+    Seidr.tryHook("seidrPoseDialogLeave", "DialogLeave", 0, function(args, next) {
+      const ret = next(args);
+      try {
+        seidrPoseDialogLeave();
+      } catch (e) {
+      }
+      return ret;
+    });
+  }
+  Seidr.installPoses = seidrInstallPoses;
+  Seidr.poseDestroyUi = seidrPoseDestroyUi;
+  Seidr.poseDialogTick = seidrPoseDialogTick;
+
   // src/fastOpen.ts
   var clickShift = false;
   var clickCtrl = false;
   var clickAlt = false;
   var clickMeta = false;
-  var installed = false;
+  var installed3 = false;
+  var mapClickHooked = false;
   var PREFERRED_ACTIVITY_GROUPS = [
     "ItemTorso",
     "ItemArms",
@@ -7103,7 +9488,24 @@
     clickAlt = false;
     clickMeta = false;
   }
-  function modifierHeld(mod) {
+  function modifierFromEvent(mod, e) {
+    if (!e || typeof e !== "object") return null;
+    if (typeof e.shiftKey !== "boolean" && typeof e.ctrlKey !== "boolean") return null;
+    switch (mod) {
+      case "Ctrl":
+        return !!e.ctrlKey;
+      case "Alt":
+        return !!e.altKey;
+      case "Meta":
+        return !!e.metaKey;
+      case "Shift":
+      default:
+        return !!e.shiftKey;
+    }
+  }
+  function modifierHeld(mod, e) {
+    const fromEvent = modifierFromEvent(mod, e);
+    if (fromEvent != null) return fromEvent;
     switch (mod) {
       case "Ctrl":
         return clickCtrl;
@@ -7181,22 +9583,73 @@
       return false;
     }
   }
+  function mapClickHitsChrome() {
+    if (typeof MouseIn !== "function") return false;
+    if (typeof ChatRoomPlayerIsAdmin === "function" && ChatRoomPlayerIsAdmin() && MouseIn(790, 860, 60, 60)) {
+      return true;
+    }
+    if (MouseIn(930, 860, 60, 60) || MouseIn(860, 860, 60, 60) || MouseIn(790, 930, 60, 60) || MouseIn(860, 930, 60, 60) || MouseIn(930, 930, 60, 60)) {
+      return true;
+    }
+    return false;
+  }
+  function mapWouldFocusCharacter() {
+    if (typeof MouseX === "undefined" || MouseX > 1e3) return false;
+    if (ChatRoomMapViewFocusedCharacter == null) return false;
+    if (ChatRoomMapViewEditMode === "Tile" || ChatRoomMapViewEditMode === "Object") return false;
+    if (ChatRoomMapViewEditStarted) return false;
+    if (mapClickHitsChrome()) return false;
+    return true;
+  }
+  function tryFastOpenFromSettings(C, e) {
+    const s = seidrGetSettings();
+    const enabled = s.fastOpenActionsEnabled !== false;
+    const mod = s.fastOpenActionsModifier || "Shift";
+    if (!enabled || !modifierHeld(mod, e)) return false;
+    return openActivitiesOn(C);
+  }
+  function installMapClickHook() {
+    if (mapClickHooked) return true;
+    const ok = Seidr.tryHook(
+      "fastOpenMapClick",
+      "ChatRoomViews.Map.Click",
+      12,
+      function(args, next) {
+        const ev = args && args[0];
+        if (ev && typeof ev === "object") rememberClickMods(ev);
+        if (mapWouldFocusCharacter() && tryFastOpenFromSettings(ChatRoomMapViewFocusedCharacter, ev)) {
+          clearClickMods();
+          return;
+        }
+        clearClickMods();
+        return next(args);
+      }
+    );
+    if (ok) mapClickHooked = true;
+    return ok;
+  }
   function seidrInstallFastOpen() {
-    if (installed) return;
-    installed = true;
+    if (installed3) return;
+    installed3 = true;
     if (typeof document !== "undefined") {
       document.addEventListener("mousedown", rememberClickMods, true);
       document.addEventListener("pointerdown", rememberClickMods, true);
     }
     Seidr.hookFunction("ChatRoomCharacterViewClickCharacter", 12, function(args, next) {
-      const s = seidrGetSettings();
-      const enabled = s.fastOpenActionsEnabled !== false;
-      const mod = s.fastOpenActionsModifier || "Shift";
-      if (enabled && modifierHeld(mod)) {
+      if (tryFastOpenFromSettings(args[0])) {
         clearClickMods();
-        if (openActivitiesOn(args[0])) return;
+        return;
       }
       clearClickMods();
+      return next(args);
+    });
+    installMapClickHook();
+    Seidr.tryHook("fastOpenMapClickRetryLoad", "ChatRoomLoad", 0, function(args, next) {
+      installMapClickHook();
+      return next(args);
+    });
+    Seidr.tryHook("fastOpenMapClickRetrySync", "ChatRoomSync", 0, function(args, next) {
+      installMapClickHook();
       return next(args);
     });
   }
@@ -7206,18 +9659,45 @@
   var SEIDR_GRACE_MS = 45e3;
   var seidrPeers = {};
   var seidrPendingGone = {};
-  function seidrSend(payload, target) {
-    if (typeof ServerSend !== "function") return;
+  var SEIDR_PROTO = 2;
+  var seidrForceProto = null;
+  function seidrMyProto() {
+    return seidrForceProto != null ? seidrForceProto : SEIDR_PROTO;
+  }
+  function seidrEnvelope(entry, target) {
     var msg = {
       Content: Seidr.HIDDEN,
       Type: "Hidden",
-      Dictionary: [{ Seidr: payload }]
+      Dictionary: [entry]
     };
     if (typeof target === "number") msg.Target = target;
+    return msg;
+  }
+  function seidrRawSend(msg) {
+    if (typeof ServerSend !== "function") return;
     try {
       ServerSend("ChatRoomChat", msg);
     } catch (e) {
     }
+  }
+  function seidrSend(payload, target) {
+    seidrRawSend(seidrEnvelope({ Seidr: payload }, target));
+  }
+  function seidrSendV2(arr, target) {
+    seidrRawSend(seidrEnvelope({ S: arr }, target));
+  }
+  function seidrFormatFor(target) {
+    if (seidrMyProto() < 2) return 1;
+    if (typeof target === "number") {
+      var peer = seidrPeers[target];
+      return peer && peer.proto >= 2 ? 2 : 1;
+    }
+    var keys = Object.keys(seidrPeers);
+    if (!keys.length) return 0;
+    for (var i = 0; i < keys.length; i++) {
+      if (!(seidrPeers[Number(keys[i])].proto >= 2)) return 1;
+    }
+    return 2;
   }
   function seidrCancelGrace(member) {
     var entry = seidrPendingGone[member];
@@ -7291,76 +9771,181 @@
       if (afterCl) consider(afterCl.hub);
     });
   }
-  function seidrPublishHub(hubMember, target) {
-    if (typeof hubMember !== "number") return;
+  function seidrPairPayload(pair, fallback) {
+    var x = pair && typeof pair.x === "number" && isFinite(pair.x) ? Math.round(pair.x) : fallback.x;
+    var y = pair && typeof pair.y === "number" && isFinite(pair.y) ? Math.round(pair.y) : fallback.y;
+    return { x, y };
+  }
+  function seidrFreeForSync(hubMember) {
+    if (typeof hubMember !== "number") return null;
+    if (!Seidr.drawAllowSync) return null;
+    if (typeof Player === "undefined" || !Player || Player.MemberNumber !== hubMember) return null;
     var hubs = Seidr.getHubs();
     var hub = hubs[hubMember];
+    if (!hub || hub.left == null && hub.right == null && hub.cuddle == null) return null;
+    var cluster = SeidrState.clusterOf(hubs, hubMember);
+    if (!cluster) return null;
+    var free = typeof Seidr.effectiveFreeDrawForSync === "function" ? Seidr.effectiveFreeDrawForSync(cluster) : null;
+    if (!free) return null;
+    var z = { x: 0, y: 0 };
+    return {
+      left: seidrPairPayload(free.left, z),
+      right: seidrPairPayload(free.right, z),
+      cuddle: seidrPairPayload(free.cuddle, z),
+      hubPose: seidrPairPayload(free.hub, z)
+    };
+  }
+  function seidrDrawArray(d) {
+    return [d.left.x, d.left.y, d.right.x, d.right.y, d.cuddle.x, d.cuddle.y, d.hubPose.x, d.hubPose.y];
+  }
+  function seidrSendDrawSyncV1(hubMember, d, target) {
     seidrSend({
-      t: "state",
+      t: "drawSync",
       v: 1,
       hub: hubMember,
-      left: hub ? hub.left : null,
-      right: hub ? hub.right : null,
-      cuddle: hub ? hub.cuddle : null
+      left: d.left,
+      right: d.right,
+      cuddle: d.cuddle,
+      hubPose: d.hubPose
     }, target);
+  }
+  function seidrOnDrawSync(from, payload) {
+    if (!Seidr.drawAllowSync) return;
+    if (!payload || typeof payload.hub !== "number") return;
+    if (typeof from !== "number" || from !== payload.hub) return;
+    if (typeof Player === "undefined" || !Player || typeof Player.MemberNumber !== "number") return;
+    var cluster = SeidrState.clusterOf(Seidr.getHubs(), Player.MemberNumber);
+    if (!cluster || cluster.hub !== payload.hub) return;
+    if (typeof Seidr.setDrawSyncOverlay !== "function") return;
+    Seidr.setDrawSyncOverlay(payload.hub, {
+      left: payload.left,
+      right: payload.right,
+      cuddle: payload.cuddle,
+      hub: payload.hubPose
+    });
+  }
+  var seidrLastBroadcast = {};
+  var seidrQueue = {};
+  var seidrFlushTimer = null;
+  function seidrQueueHub(hubMember, target, forceDraw) {
+    if (typeof hubMember !== "number") return;
+    var key = (typeof target === "number" ? target : "*") + "|" + hubMember;
+    var entry = seidrQueue[key];
+    if (entry) {
+      if (forceDraw) entry.forceDraw = true;
+    } else {
+      seidrQueue[key] = { hub: hubMember, target, forceDraw: !!forceDraw };
+    }
+    if (seidrFlushTimer == null) {
+      seidrFlushTimer = setTimeout(seidrFlushQueue, 0);
+    }
+  }
+  function seidrFlushQueue() {
+    if (seidrFlushTimer != null) {
+      clearTimeout(seidrFlushTimer);
+      seidrFlushTimer = null;
+    }
+    var pending = seidrQueue;
+    seidrQueue = {};
+    Object.keys(pending).forEach(function(key) {
+      var e = pending[key];
+      try {
+        seidrEmitHub(e.hub, e.target, e.forceDraw);
+      } catch (err) {
+      }
+    });
+  }
+  function seidrEmitHub(hubMember, target, forceDraw) {
+    var fmt = seidrFormatFor(target);
+    if (!fmt) return;
+    var hub = Seidr.getHubs()[hubMember];
+    var l = hub ? hub.left : null;
+    var r = hub ? hub.right : null;
+    var c = hub ? hub.cuddle : null;
+    var d = seidrFreeForSync(hubMember);
+    var targeted = typeof target === "number";
+    if (fmt === 2) {
+      var arr = [1, hubMember, l || 0, r || 0, c || 0];
+      if (d) {
+        var triple = l + "," + r + "," + c;
+        var sig = triple + "|" + seidrDrawArray(d).join(",");
+        if (targeted || forceDraw || seidrLastBroadcast[hubMember] !== sig) {
+          arr.push.apply(arr, seidrDrawArray(d));
+        }
+        if (!targeted) seidrLastBroadcast[hubMember] = sig;
+      } else if (!targeted) {
+        delete seidrLastBroadcast[hubMember];
+      }
+      seidrSendV2(arr, target);
+      return;
+    }
+    seidrSend({ t: "state", v: 1, hub: hubMember, left: l, right: r, cuddle: c }, target);
+    if (d) seidrSendDrawSyncV1(hubMember, d, target);
+  }
+  function seidrPublishHub(hubMember, target) {
+    seidrQueueHub(hubMember, target, false);
+  }
+  function seidrPublishDrawSync(hubMember, target) {
+    if (!seidrFreeForSync(hubMember)) return;
+    if (seidrFormatFor(target) === 2) {
+      seidrQueueHub(hubMember, target, true);
+      return;
+    }
+    var d = seidrFreeForSync(hubMember);
+    if (d) seidrSendDrawSyncV1(hubMember, d, target);
+  }
+  function seidrOwnsHub(me) {
+    var h = Seidr.getHubs()[me];
+    return !!(h && (h.left != null || h.right != null || h.cuddle != null));
   }
   function seidrPublishOurs(target) {
     if (typeof Player === "undefined" || !Player || typeof Player.MemberNumber !== "number") return;
-    var cluster = SeidrState.clusterOf(Seidr.getHubs(), Player.MemberNumber);
-    if (!cluster) return;
-    seidrPublishHub(cluster.hub, target);
+    if (seidrOwnsHub(Player.MemberNumber)) seidrPublishHub(Player.MemberNumber, target);
   }
-  function seidrPublishRelevant(joiner, target) {
-    if (typeof joiner !== "number") return;
-    var dest = typeof target === "number" ? target : joiner;
-    var hubs = Seidr.getHubs();
-    Object.keys(hubs).forEach(function(key) {
-      var hubN = Number(key);
-      var h = hubs[hubN];
-      if (!h) return;
-      if (hubN === joiner || h.left === joiner || h.right === joiner || h.cuddle === joiner) {
-        seidrPublishHub(hubN, dest);
-      }
-    });
-    seidrPublishOurs(dest);
-  }
-  function seidrHello(reply, target) {
-    seidrSend({ t: "hello", v: 1, ver: Seidr.VERSION, reply: !!reply }, target);
+  function seidrHello(want, target) {
+    var mine = seidrMyProto();
+    var fmt = typeof target === "number" ? seidrFormatFor(target) : 1;
+    if (fmt === 2) {
+      seidrSendV2([0, mine, Seidr.VERSION, want ? 1 : 0], target);
+      return;
+    }
+    var payload = { t: "hello", v: 1, ver: Seidr.VERSION, reply: !!want };
+    if (mine >= 2) payload.proto = mine;
+    seidrSend(payload, target);
   }
   function seidrSyncRequest(target) {
     seidrSend({ t: "syncRequest", v: 1 }, target);
   }
   function seidrOnSyncRequest(from) {
     if (typeof from !== "number") return;
+    seidrAnswerJoin(from);
+  }
+  function seidrAnswerJoin(joiner) {
     if (typeof Player === "undefined" || !Player || typeof Player.MemberNumber !== "number") return;
     var me = Player.MemberNumber;
+    if (seidrOwnsHub(me)) seidrPublishHub(me, joiner);
     var hubs = Seidr.getHubs();
-    var published = {};
-    function pub(hubN) {
-      if (published[hubN]) return;
-      published[hubN] = true;
-      seidrPublishHub(hubN, from);
-    }
-    if (hubs[me]) pub(me);
-    var cluster = SeidrState.clusterOf(hubs, me);
-    if (cluster) pub(cluster.hub);
-    Object.keys(hubs).forEach(function(key) {
-      var hubN = Number(key);
-      var h = hubs[hubN];
-      if (!h) return;
-      if (hubN === from || h.left === from || h.right === from || h.cuddle === from) pub(hubN);
+    var h = hubs[joiner];
+    if (!h || h.left == null && h.right == null && h.cuddle == null) return;
+    var present = seidrPresentMap();
+    var best = null;
+    [h.left, h.right, h.cuddle].forEach(function(m) {
+      if (typeof m !== "number" || m === joiner || !present[m]) return;
+      if (best == null || m < best) best = m;
     });
+    if (best === me) seidrPublishHub(joiner, joiner);
   }
   Seidr.peerHas = function(member) {
     return !!(seidrPeers && seidrPeers[member]);
   };
   function seidrOnHello(from, payload) {
     if (typeof from !== "number") return;
-    seidrPeers[from] = { at: Date.now(), ver: payload && (payload.ver || payload.v) };
-    if (payload && payload.reply) {
+    var proto = payload && typeof payload.proto === "number" ? payload.proto : 1;
+    seidrPeers[from] = { at: Date.now(), ver: payload && (payload.ver || payload.v), proto };
+    var want = payload && (payload.want != null ? payload.want : payload.reply);
+    if (want) {
       seidrHello(false, from);
-      seidrPublishOurs(from);
-      seidrPublishRelevant(from, from);
+      seidrAnswerJoin(from);
     }
     if (Seidr.badgeActivityButtons) {
       try {
@@ -7369,8 +9954,19 @@
       }
     }
   }
-  function seidrOnState(payload) {
+  var seidrOwnHubDefendAt = 0;
+  function seidrOnState(payload, from) {
     if (!payload || typeof payload.hub !== "number") return;
+    if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number" && Player.MemberNumber === payload.hub) {
+      if (typeof from === "number" && from !== payload.hub) {
+        var now2 = Date.now();
+        if (now2 - seidrOwnHubDefendAt > 500) {
+          seidrOwnHubDefendAt = now2;
+          seidrPublishHub(payload.hub);
+        }
+      }
+      return;
+    }
     Seidr.setHubs(SeidrState.replaceHub(Seidr.getHubs(), payload.hub, payload));
     seidrReconcileGrace();
   }
@@ -7418,16 +10014,22 @@
       }
     }
   }
+  function seidrSendLeaveClear(me) {
+    var fmt = seidrFormatFor();
+    if (!fmt) return;
+    if (fmt === 2) seidrSendV2([2, me]);
+    else seidrSend({ t: "leaveClear", v: 1, member: me });
+  }
   function seidrPublishLeaveClear() {
     if (typeof Player === "undefined" || !Player || typeof Player.MemberNumber !== "number") return;
     var me = Player.MemberNumber;
     var hubs = Seidr.getHubs();
     var cluster = SeidrState.clusterOf(hubs, me);
     if (!cluster) {
-      seidrSend({ t: "leaveClear", v: 1, member: me });
+      seidrSendLeaveClear(me);
       return;
     }
-    seidrSend({ t: "leaveClear", v: 1, member: me });
+    seidrSendLeaveClear(me);
     if (cluster.hub === me) {
       Seidr.setHubs(SeidrState.replaceHub(hubs, me, { left: null, right: null, cuddle: null }));
       seidrPublishHub(me);
@@ -7437,32 +10039,93 @@
     Seidr.setHubs(next);
     seidrPublishHub(cluster.hub);
   }
+  function seidrMember(v) {
+    return typeof v === "number" && isFinite(v) && v > 0 ? v : null;
+  }
+  function seidrDecodeV2(arr) {
+    if (!Array.isArray(arr) || typeof arr[0] !== "number") return null;
+    if (arr[0] === 0) {
+      return { kind: "hello", payload: { t: "hello", ver: arr[2], proto: typeof arr[1] === "number" ? arr[1] : 2, want: !!arr[3] } };
+    }
+    if (arr[0] === 1) {
+      var hub = seidrMember(arr[1]);
+      if (hub == null) return null;
+      var out = {
+        kind: "state",
+        payload: { t: "state", hub, left: seidrMember(arr[2]), right: seidrMember(arr[3]), cuddle: seidrMember(arr[4]) }
+      };
+      if (arr.length >= 13) {
+        var n = [];
+        for (var i = 5; i < 13; i++) {
+          var num2 = arr[i];
+          if (typeof num2 !== "number" || !isFinite(num2)) return out;
+          n.push(num2);
+        }
+        out.draw = {
+          t: "drawSync",
+          hub,
+          left: { x: n[0], y: n[1] },
+          right: { x: n[2], y: n[3] },
+          cuddle: { x: n[4], y: n[5] },
+          hubPose: { x: n[6], y: n[7] }
+        };
+      }
+      return out;
+    }
+    if (arr[0] === 2) {
+      var m = seidrMember(arr[1]);
+      return m == null ? null : { kind: "leaveClear", payload: { t: "leaveClear", member: m } };
+    }
+    return null;
+  }
+  function seidrDispatch(from, kind, payload, draw) {
+    if (kind === "hello") seidrOnHello(from, payload);
+    else if (kind === "state") {
+      seidrOnState(payload, from);
+      if (draw) seidrOnDrawSync(from, draw);
+    } else if (kind === "drawSync") seidrOnDrawSync(from, payload);
+    else if (kind === "leaveClear") seidrOnLeaveClear(payload, from);
+    else if (kind === "syncRequest") seidrOnSyncRequest(from);
+  }
   Seidr.installNet = function() {
     Seidr.publishHub = function(hubMember) {
       seidrPublishHub(hubMember);
     };
     Seidr.publishChanged = seidrPublishChanged;
+    Seidr.publishDrawSync = function(hubMember, target) {
+      seidrPublishDrawSync(hubMember, target);
+    };
     Seidr.hello = function(reply, target) {
       seidrHello(reply, target);
     };
     Seidr.syncRequest = function(target) {
       seidrSyncRequest(target);
     };
+    Seidr.flushNet = seidrFlushQueue;
     var prevSetHubs = Seidr.setHubs;
     Seidr.setHubs = function(hubs) {
       prevSetHubs(hubs);
       seidrReconcileGrace();
+      if (typeof Seidr.pruneDrawSyncOverlays === "function") {
+        try {
+          Seidr.pruneDrawSyncOverlays();
+        } catch (e) {
+        }
+      }
     };
     Seidr.hookFunction("ChatRoomMessage", 5, function(args, next) {
       var data = args && args[0];
       try {
         if (data && data.Type === "Hidden" && data.Content === Seidr.HIDDEN) {
-          var payload = seidrPayload(data);
           var from = typeof data.Sender === "number" ? data.Sender : null;
-          if (payload && payload.t === "hello") seidrOnHello(from, payload);
-          else if (payload && payload.t === "state") seidrOnState(payload);
-          else if (payload && payload.t === "leaveClear") seidrOnLeaveClear(payload, from);
-          else if (payload && payload.t === "syncRequest") seidrOnSyncRequest(from);
+          var s2 = seidrMyProto() >= 2 ? Seidr.dictValue(data.Dictionary, "S") : null;
+          if (s2) {
+            var dec = seidrDecodeV2(s2);
+            if (dec) seidrDispatch(from, dec.kind, dec.payload, dec.draw);
+          } else {
+            var payload = seidrPayload(data);
+            if (payload && typeof payload.t === "string") seidrDispatch(from, payload.t, payload);
+          }
         } else if (data && data.Type === "Hidden") {
           seidrYieldOnEchoSync(data);
         } else if (data && data.Type === "Activity") {
@@ -7482,7 +10145,6 @@
         });
         seidrPruneRoom();
         seidrHello(true);
-        seidrSyncRequest();
         seidrPublishOurs();
       } catch (e) {
       }
@@ -7493,11 +10155,7 @@
       try {
         var data = args && args[0];
         var joiner = data && typeof data.SourceMemberNumber === "number" ? data.SourceMemberNumber : null;
-        if (joiner != null) {
-          seidrCancelGrace(joiner);
-          seidrHello(true, joiner);
-          seidrPublishRelevant(joiner, joiner);
-        }
+        if (joiner != null) seidrCancelGrace(joiner);
       } catch (e) {
       }
       return result;
@@ -7520,14 +10178,37 @@
         seidrPublishLeaveClear();
       } catch (e) {
       }
+      try {
+        seidrFlushQueue();
+      } catch (e2) {
+      }
       seidrClearAllGrace();
       seidrPeers = {};
+      seidrLastBroadcast = {};
       Seidr.setHubs({});
+      if (typeof Seidr.clearDrawSyncOverlays === "function") {
+        try {
+          Seidr.clearDrawSyncOverlays();
+        } catch (e) {
+        }
+      }
       Object.keys(seidrNatural).forEach(function(key) {
         delete seidrNatural[Number(key)];
       });
       return next(args);
     });
+  };
+  Seidr._net = Seidr._net || {};
+  Seidr._net.onDrawSync = seidrOnDrawSync;
+  Seidr._net.publishDrawSync = seidrPublishDrawSync;
+  Seidr._net.onState = seidrOnState;
+  Seidr._net.decodeV2 = seidrDecodeV2;
+  Seidr._net.flush = seidrFlushQueue;
+  Seidr._net.peers = function() {
+    return JSON.parse(JSON.stringify(seidrPeers));
+  };
+  Seidr._net.setProto = function(n) {
+    seidrForceProto = typeof n === "number" ? n : null;
   };
 
   // src/roomManager/styles.ts
@@ -7542,11 +10223,14 @@
       "  background: rgba(36, 28, 48, 0.92); color: #f0e6d4;",
       "  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
       "  box-shadow: 0 4px 18px rgba(0,0,0,0.4); cursor: grab;",
-      "  display: none; place-items: center; font-size: 18px; padding: 0;",
+      "  display: none; place-items: center; padding: 4px; box-sizing: border-box;",
       "  right: 16px; top: 42%;",
       "}",
       "#seidr-rm-btn.seidr-rm-visible { display: grid; }",
-      "#seidr-rm-btn:hover { border-color: #d4a017; color: #d4a017; }",
+      "#seidr-rm-btn:hover { border-color: #d4a017; }",
+      "#seidr-rm-btn img {",
+      "  width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;",
+      "}",
       "#seidr-rm-panel {",
       "  pointer-events: auto; position: fixed; z-index: 117;",
       "  display: none; flex-direction: column;",
@@ -7575,8 +10259,10 @@
       ".seidr-rm-icon-btn {",
       "  width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);",
       "  background: transparent; color: inherit; cursor: pointer;",
+      "  display: inline-grid; place-items: center; padding: 0; flex-shrink: 0;",
       "}",
       ".seidr-rm-icon-btn:hover { border-color: #d4a017; color: #d4a017; }",
+      ".seidr-rm-icon-btn svg { display: block; pointer-events: none; }",
       ".seidr-rm-body {",
       "  flex: 1; min-height: 0; overflow: hidden; padding: 10px;",
       "  display: flex; flex-direction: column; gap: 10px;",
@@ -7665,19 +10351,54 @@
       "  background: rgba(0,0,0,0.88); color: #d4a017;",
       "}",
       ".seidr-rm-msg { color: #e0b15a; font-size: 12px; }",
+      /* Above Settings panel (120) so Maps-tab prompts work; below tour (140). */
       ".seidr-rm-overlay {",
-      "  pointer-events: auto; position: fixed; inset: 0; z-index: 118;",
+      "  pointer-events: auto; position: fixed; inset: 0; z-index: 130;",
       "  background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center;",
       "}",
       ".seidr-rm-dialog {",
-      "  width: min(92vw, 400px); background: rgba(36,28,48,0.98); border: 1px solid rgba(255,255,255,0.14);",
+      "  width: min(92vw, 420px); background: rgba(36,28,48,0.98); border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px;",
-      "  color: #f0e6d4;",
+      "  color: #f0e6d4; box-shadow: 0 12px 40px rgba(0,0,0,0.55);",
       "}",
       ".seidr-rm-dialog h4 { margin: 0; color: #d4a017; }",
-      ".seidr-rm-dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #a898b0; }",
+      ".seidr-rm-dialog-msg { margin: 0; font-size: 13px; line-height: 1.4; color: #f0e6d4; }",
       ".seidr-rm-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }",
-      ".seidr-rm-hidden { display: none !important; }"
+      ".seidr-rm-dialog button.seidr-rm-btn-primary {",
+      "  border-color: rgba(212,160,23,0.55); color: #d4a017;",
+      "}",
+      ".seidr-rm-dialog button.seidr-rm-btn-danger {",
+      "  border-color: rgba(220,90,90,0.65); color: #f0a0a0;",
+      "}",
+      ".seidr-rm-dialog button.seidr-rm-btn-primary:hover { border-color: #d4a017; }",
+      ".seidr-rm-dialog button.seidr-rm-btn-danger:hover { border-color: #e07070; }",
+      /* Seidr Settings-style field rows inside RM dialogs */
+      ".seidr-rm-dialog .seidr-settings-field-row {",
+      "  display: flex; flex-wrap: nowrap; gap: 8px; align-items: center;",
+      "}",
+      ".seidr-rm-dialog .seidr-settings-field-label {",
+      "  flex: 0 0 72px; font-size: 12px; color: #f0e6d4; line-height: 1.35;",
+      "}",
+      ".seidr-rm-dialog .seidr-settings-field-row input,",
+      ".seidr-rm-dialog .seidr-settings-field-row select {",
+      "  flex: 1; min-width: 0; width: 100%;",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px;",
+      "  padding: 6px 8px; font: inherit;",
+      "}",
+      ".seidr-rm-dialog #seidr-rm-prompt-input { width: 100%; }",
+      ".seidr-rm-dialog .seidr-settings-hint {",
+      "  margin: 4px 0 0; font-size: 11px; color: #a898b0; line-height: 1.35;",
+      "}",
+      ".seidr-rm-hidden { display: none !important; }",
+      ".seidr-rm-card-badge {",
+      "  position: absolute; left: 4px; top: 4px; z-index: 1;",
+      "  font-size: 9px; font-weight: 600; letter-spacing: 0.02em;",
+      "  padding: 2px 5px; border-radius: 4px;",
+      "  background: rgba(28, 22, 38, 0.9); color: #d4a017;",
+      "  border: 1px solid rgba(212,160,23,0.45); max-width: calc(100% - 8px);",
+      "  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;",
+      "}"
     ].join("\n");
   }
   function rmInjectStyles() {
@@ -7691,6 +10412,13 @@
   }
 
   // src/roomManager/roomApply.ts
+  var _lastRoomPreset = null;
+  function rmSetLastRoomPreset(preset) {
+    _lastRoomPreset = preset ? rmNormalizeRoomPreset(preset) : null;
+  }
+  function rmGetLastRoomPreset() {
+    return _lastRoomPreset;
+  }
   function rmInLiveRoom() {
     try {
       return typeof ServerPlayerIsInChatRoom === "function" && !!ServerPlayerIsInChatRoom();
@@ -7764,7 +10492,8 @@
     return null;
   }
   function rmSliceRoom(settings) {
-    return {
+    const custom = settings.Custom && typeof settings.Custom === "object" ? settings.Custom : null;
+    return rmNormalizeRoomPreset({
       Name: settings.Name,
       Language: settings.Language,
       Description: settings.Description,
@@ -7773,8 +10502,11 @@
       Game: settings.Game,
       Visibility: settings.Visibility,
       Access: settings.Access,
-      MapData: settings.MapData
-    };
+      MapData: settings.MapData,
+      Background: settings.Background,
+      customSizeMode: custom && typeof custom.SizeMode === "number" ? custom.SizeMode : rmDefaultDrawingResizeMode(),
+      customImageFilter: custom && typeof custom.ImageFilter === "string" ? custom.ImageFilter : ""
+    });
   }
   function rmSliceAccess(settings) {
     return {
@@ -7783,28 +10515,112 @@
       Ban: Array.isArray(settings.Ban) ? settings.Ban.slice() : []
     };
   }
-  function setVisibilityAccess(preset) {
-    if (typeof ChatAdminData === "undefined" || !ChatAdminData) return;
-    if (Array.isArray(preset.Visibility) && typeof ChatAdminVisibilityModeValues !== "undefined") {
-      let vi = ChatAdminVisibilityModeValues.findIndex(function(elem) {
-        return elem.length === preset.Visibility.length && elem.every(function(role) {
-          return preset.Visibility.includes(role);
-        });
-      });
-      if (vi < 0) vi = 0;
-      window.ChatAdminVisibilityModeIndex = vi;
-      ChatAdminData.Visibility = ChatAdminVisibilityModeValues[vi];
+  function currentAdminBase() {
+    let base = {};
+    if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
+      base = snapshotFromRoom(ChatAdminData);
     }
-    if (Array.isArray(preset.Access) && typeof ChatAdminAccessModeValues !== "undefined") {
-      let ai = ChatAdminAccessModeValues.findIndex(function(elem) {
-        return elem.length === preset.Access.length && elem.every(function(role) {
-          return preset.Access.includes(role);
-        });
-      });
-      if (ai < 0) ai = 0;
-      window.ChatAdminAccessModeIndex = ai;
-      ChatAdminData.Access = ChatAdminAccessModeValues[ai];
+    if (typeof ChatEditorGetAdminSettings === "function") {
+      try {
+        const full = ChatEditorGetAdminSettings();
+        if (full) base = Object.assign({}, base, full);
+      } catch (e) {
+      }
     }
+    return base;
+  }
+  function rmToAdminSettings(partial) {
+    const base = currentAdminBase();
+    const out = Object.assign({}, base, partial);
+    if (!Array.isArray(out.Admin)) out.Admin = [];
+    if (!Array.isArray(out.Whitelist)) out.Whitelist = [];
+    if (!Array.isArray(out.Ban)) out.Ban = [];
+    if (!Array.isArray(out.BlockCategory)) out.BlockCategory = [];
+    if (typeof out.Name !== "string") out.Name = String(base.Name || "");
+    if (typeof out.Description !== "string") out.Description = String(base.Description || "");
+    if (typeof out.Limit !== "number" || !Number.isFinite(out.Limit)) {
+      out.Limit = typeof base.Limit === "number" ? base.Limit : 10;
+    }
+    const md = out.MapData && typeof out.MapData === "object" ? Object.assign({}, out.MapData) : { Type: "Never" };
+    if (!md.Type) md.Type = "Never";
+    out.MapData = md;
+    if (!out.Background) out.Background = base.Background;
+    if (partial.Custom !== void 0) {
+      const baseCustom = base.Custom && typeof base.Custom === "object" ? Object.assign({}, base.Custom) : {};
+      out.Custom = Object.assign(baseCustom, partial.Custom);
+    }
+    return out;
+  }
+  function importAdminSettings(partial) {
+    if (typeof ChatEditorAdminSettingsImport !== "function") return false;
+    if (typeof ChatAdminData === "undefined" || !ChatAdminData) return false;
+    try {
+      ChatEditorAdminSettingsImport(rmToAdminSettings(partial));
+      return true;
+    } catch (e) {
+      console.warn("[Seidr RM] ChatEditorAdminSettingsImport failed", e);
+      return false;
+    }
+  }
+  function legacyApplyRoom(preset) {
+    const cad = ChatAdminData;
+    if (typeof preset.Name === "string") {
+      cad.Name = preset.Name;
+      if (document.getElementById("InputName")) ElementValue("InputName", preset.Name);
+    }
+    if (typeof preset.Description === "string") {
+      cad.Description = preset.Description;
+      if (document.getElementById("InputDescription")) ElementValue("InputDescription", preset.Description);
+    }
+    if (typeof preset.Limit === "number") {
+      cad.Limit = preset.Limit;
+      if (document.getElementById("InputSize")) ElementValue("InputSize", String(preset.Limit));
+    }
+    if (typeof preset.Language === "string") cad.Language = preset.Language;
+    if (Array.isArray(preset.BlockCategory)) cad.BlockCategory = preset.BlockCategory;
+    if (typeof preset.Game === "string") cad.Game = preset.Game;
+    if (preset.MapData && typeof preset.MapData === "object") cad.MapData = preset.MapData;
+    if (typeof preset.Background === "string") cad.Background = preset.Background;
+    if (Array.isArray(preset.Visibility)) cad.Visibility = preset.Visibility;
+    if (Array.isArray(preset.Access)) cad.Access = preset.Access;
+    const custom = cad.Custom && typeof cad.Custom === "object" ? cad.Custom : {};
+    if (typeof preset.customSizeMode === "number") custom.SizeMode = preset.customSizeMode;
+    if (typeof preset.customImageFilter === "string") custom.ImageFilter = preset.customImageFilter;
+    cad.Custom = custom;
+  }
+  function legacyApplyAccess(admin, wl, ban) {
+    if (document.getElementById("InputAdminList")) {
+      ElementValue("InputAdminList", CommonConvertArrayToString(admin));
+    }
+    if (document.getElementById("InputWhitelist")) {
+      ElementValue("InputWhitelist", CommonConvertArrayToString(wl));
+    }
+    if (document.getElementById("InputBanList")) {
+      ElementValue("InputBanList", CommonConvertArrayToString(ban));
+    }
+    if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
+      ChatAdminData.Admin = admin;
+      ChatAdminData.Whitelist = wl;
+      ChatAdminData.Ban = ban;
+    }
+  }
+  function roomPresetToPartial(preset) {
+    const partial = {};
+    if (typeof preset.Name === "string") partial.Name = preset.Name;
+    if (typeof preset.Description === "string") partial.Description = preset.Description;
+    if (typeof preset.Limit === "number") partial.Limit = preset.Limit;
+    if (typeof preset.Language === "string") partial.Language = preset.Language;
+    if (Array.isArray(preset.BlockCategory)) partial.BlockCategory = preset.BlockCategory.slice();
+    if (typeof preset.Game === "string") partial.Game = preset.Game;
+    if (Array.isArray(preset.Visibility)) partial.Visibility = preset.Visibility.slice();
+    if (Array.isArray(preset.Access)) partial.Access = preset.Access.slice();
+    if (preset.MapData && typeof preset.MapData === "object") partial.MapData = preset.MapData;
+    if (typeof preset.Background === "string") partial.Background = preset.Background;
+    const customPatch = {};
+    if (typeof preset.customSizeMode === "number") customPatch.SizeMode = preset.customSizeMode;
+    if (typeof preset.customImageFilter === "string") customPatch.ImageFilter = preset.customImageFilter;
+    if (Object.keys(customPatch).length) partial.Custom = customPatch;
+    return partial;
   }
   function mergeRoomOnto(target, preset) {
     if (typeof preset.Name === "string") target.Name = preset.Name;
@@ -7816,32 +10632,32 @@
     if (Array.isArray(preset.Visibility)) target.Visibility = preset.Visibility;
     if (Array.isArray(preset.Access)) target.Access = preset.Access;
     if (preset.MapData && typeof preset.MapData === "object") target.MapData = preset.MapData;
+    if (typeof preset.Background === "string") target.Background = preset.Background;
+    if (typeof preset.customSizeMode === "number" || typeof preset.customImageFilter === "string") {
+      if (!target.Custom || typeof target.Custom !== "object") target.Custom = {};
+      if (typeof preset.customSizeMode === "number") target.Custom.SizeMode = preset.customSizeMode;
+      if (typeof preset.customImageFilter === "string") target.Custom.ImageFilter = preset.customImageFilter;
+    }
   }
   function rmApplyRoomToEditor(preset) {
     if (!preset) return;
+    const normalized = rmNormalizeRoomPreset(preset);
+    rmSetLastRoomPreset(normalized);
     if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
-      const cad = ChatAdminData;
-      if (typeof preset.Name === "string") {
-        cad.Name = preset.Name;
-        if (document.getElementById("InputName")) ElementValue("InputName", preset.Name);
+      const partial = roomPresetToPartial(normalized);
+      if (!importAdminSettings(partial)) {
+        legacyApplyRoom(normalized);
       }
-      if (typeof preset.Description === "string") {
-        cad.Description = preset.Description;
-        if (document.getElementById("InputDescription")) ElementValue("InputDescription", preset.Description);
-      }
-      if (typeof preset.Limit === "number") {
-        cad.Limit = preset.Limit;
-        if (document.getElementById("InputSize")) ElementValue("InputSize", String(preset.Limit));
-      }
-      if (typeof preset.Language === "string") cad.Language = preset.Language;
-      if (Array.isArray(preset.BlockCategory)) cad.BlockCategory = preset.BlockCategory;
-      if (typeof preset.Game === "string") cad.Game = preset.Game;
-      if (preset.MapData && typeof preset.MapData === "object") cad.MapData = preset.MapData;
-      setVisibilityAccess(preset);
       return;
     }
     if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
-      mergeRoomOnto(ChatRoomData, preset);
+      mergeRoomOnto(ChatRoomData, normalized);
+      if (typeof Seidr.checkMapTypeChange === "function") {
+        try {
+          Seidr.checkMapTypeChange();
+        } catch (e) {
+        }
+      }
     }
   }
   function rmApplyAccessToEditor(preset) {
@@ -7850,19 +10666,8 @@
     const wl = Array.isArray(preset.Whitelist) ? preset.Whitelist.slice() : [];
     const ban = Array.isArray(preset.Ban) ? preset.Ban.slice() : [];
     if (rmOnChatAdmin()) {
-      if (document.getElementById("InputAdminList")) {
-        ElementValue("InputAdminList", CommonConvertArrayToString(admin));
-      }
-      if (document.getElementById("InputWhitelist")) {
-        ElementValue("InputWhitelist", CommonConvertArrayToString(wl));
-      }
-      if (document.getElementById("InputBanList")) {
-        ElementValue("InputBanList", CommonConvertArrayToString(ban));
-      }
-      if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
-        ChatAdminData.Admin = admin;
-        ChatAdminData.Whitelist = wl;
-        ChatAdminData.Ban = ban;
+      if (!importAdminSettings({ Admin: admin, Whitelist: wl, Ban: ban })) {
+        legacyApplyAccess(admin, wl, ban);
       }
       return;
     }
@@ -7871,6 +10676,27 @@
       ChatRoomData.Whitelist = wl;
       ChatRoomData.Ban = ban;
     }
+  }
+  function rmApplyCustomPatch(patch) {
+    if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
+      const baseCustom = ChatAdminData.Custom && typeof ChatAdminData.Custom === "object" ? Object.assign({}, ChatAdminData.Custom) : {};
+      const custom = Object.assign(baseCustom, patch);
+      if (!importAdminSettings({ Custom: custom })) {
+        ChatAdminData.Custom = custom;
+        try {
+          const btn3 = typeof ChatAdminID !== "undefined" && ChatAdminID ? document.getElementById(ChatAdminID.customization) : document.getElementById("chat-admin-customization");
+          if (btn3) btn3.classList.toggle("chat-admin-has-custom", true);
+        } catch (e) {
+        }
+      }
+      return { ok: true };
+    }
+    if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
+      if (!ChatRoomData.Custom || typeof ChatRoomData.Custom !== "object") ChatRoomData.Custom = {};
+      Object.assign(ChatRoomData.Custom, patch);
+      return rmUpdateLiveRoom();
+    }
+    return { ok: false, error: "Open ChatAdmin or join a room as admin" };
   }
   function buildLiveUpdateRoom() {
     if (!rmInLiveRoom() || typeof ChatRoomData === "undefined" || !ChatRoomData) return null;
@@ -7949,11 +10775,12 @@
       img.src = safe;
     });
   }
-  function rmSaveBackground(name, url, existingId) {
+  function rmSaveBackground(name, url, existingId, fillMode) {
     return rmValidateBackgroundUrl(url).then(function(v) {
       if (!v.ok || !v.url) return { ok: false, error: v.error || "Invalid URL" };
       const n = (name || "").trim().slice(0, 64);
       if (!n) return { ok: false, error: "Name required" };
+      const mode = rmNormalizeBgFillMode(fillMode);
       const store = rmGetStore();
       let entry;
       if (existingId) {
@@ -7961,10 +10788,10 @@
           return b.id === existingId;
         });
         if (idx < 0) return { ok: false, error: "Background not found" };
-        entry = { id: existingId, name: n, url: v.url };
+        entry = { id: existingId, name: n, url: v.url, fillMode: mode };
         store.backgrounds[idx] = entry;
       } else {
-        entry = { id: rmNewId("bg"), name: n, url: v.url };
+        entry = { id: rmNewId("bg"), name: n, url: v.url, fillMode: mode };
         store.backgrounds.push(entry);
       }
       const saved = rmSaveStore();
@@ -7981,20 +10808,37 @@
     store.backgrounds = next;
     return rmSaveStore().ok;
   }
-  function rmApplyBackgroundUrl(url) {
+  function resolveRoomDefaultSizeMode(explicit) {
+    if (typeof explicit === "number" && Number.isFinite(explicit)) {
+      return explicit;
+    }
+    const last = rmGetLastRoomPreset();
+    if (last && typeof last.customSizeMode === "number") return last.customSizeMode;
+    try {
+      if (rmOnChatAdmin() && ChatAdminData && ChatAdminData.Custom && typeof ChatAdminData.Custom.SizeMode === "number") {
+        return ChatAdminData.Custom.SizeMode;
+      }
+    } catch (e) {
+    }
+    try {
+      if (rmInLiveRoom() && ChatRoomData && ChatRoomData.Custom && typeof ChatRoomData.Custom.SizeMode === "number") {
+        return ChatRoomData.Custom.SizeMode;
+      }
+    } catch (e) {
+    }
+    return rmResolveSizeMode("fill");
+  }
+  function rmApplyBackgroundEntry(entry, roomDefault) {
+    const normalized = rmNormalizeBackgroundEntry(entry);
+    if (!normalized) return { ok: false, error: "Invalid background" };
+    const sizeMode = rmResolveSizeMode(normalized.fillMode, resolveRoomDefaultSizeMode(roomDefault));
+    return rmApplyBackgroundUrl(normalized.url, { sizeMode });
+  }
+  function rmApplyBackgroundUrl(url, opts4) {
     const trimmed = (url || "").trim();
     if (!trimmed) return { ok: false, error: "No URL" };
-    if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
-      if (!ChatAdminData.Custom || typeof ChatAdminData.Custom !== "object") ChatAdminData.Custom = {};
-      ChatAdminData.Custom.ImageURL = trimmed;
-      return { ok: true };
-    }
-    if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
-      if (!ChatRoomData.Custom || typeof ChatRoomData.Custom !== "object") ChatRoomData.Custom = {};
-      ChatRoomData.Custom.ImageURL = trimmed;
-      return rmUpdateLiveRoom();
-    }
-    return { ok: false, error: "Open ChatAdmin or join a room as admin" };
+    const sizeMode = typeof opts4?.sizeMode === "number" && Number.isFinite(opts4.sizeMode) ? opts4.sizeMode : resolveRoomDefaultSizeMode();
+    return rmApplyCustomPatch({ ImageURL: trimmed, SizeMode: sizeMode });
   }
 
   // src/roomManager/maps.ts
@@ -8920,6 +11764,134 @@
     });
   }
 
+  // src/roomManager/dialogs.ts
+  function escapeHtml4(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function removeOverlay(overlay) {
+    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+  }
+  function rmConfirm(message, opts4) {
+    rmInjectStyles();
+    const title = opts4 && opts4.title || "Confirm";
+    const okLabel = opts4 && opts4.confirmLabel || "Confirm";
+    const cancelLabel = opts4 && opts4.cancelLabel || "Cancel";
+    const danger = !!(opts4 && opts4.danger);
+    const okClass = danger ? "seidr-rm-btn-danger" : "seidr-rm-btn-primary";
+    return new Promise(function(resolve) {
+      const overlay = document.createElement("div");
+      overlay.className = "seidr-rm-overlay";
+      overlay.innerHTML = [
+        '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml4(title) + "</h4>",
+        '<p class="seidr-rm-dialog-msg">' + escapeHtml4(message) + "</p>",
+        '<div class="seidr-rm-dialog-actions">',
+        '<button type="button" data-act="cancel">' + escapeHtml4(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="' + okClass + '">' + escapeHtml4(okLabel) + "</button>",
+        "</div></div>"
+      ].join("");
+      document.body.appendChild(overlay);
+      let settled = false;
+      function finish(ok) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("keydown", onKey, true);
+        removeOverlay(overlay);
+        resolve(ok);
+      }
+      function onKey(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(false);
+        } else if (ev.key === "Enter") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(true);
+        }
+      }
+      document.addEventListener("keydown", onKey, true);
+      overlay.addEventListener("click", function(ev) {
+        if (ev.target === overlay) finish(false);
+      });
+      overlay.querySelector('[data-act="cancel"]').addEventListener("click", function() {
+        finish(false);
+      });
+      overlay.querySelector('[data-act="ok"]').addEventListener("click", function() {
+        finish(true);
+      });
+      const okBtn = overlay.querySelector('[data-act="ok"]');
+      try {
+        okBtn.focus();
+      } catch (e) {
+      }
+    });
+  }
+  function rmPrompt(title, opts4) {
+    rmInjectStyles();
+    const body = opts4 && opts4.message || "";
+    const initial = opts4 && opts4.initial || "";
+    const placeholder = opts4 && opts4.placeholder || "";
+    const okLabel = opts4 && opts4.confirmLabel || "OK";
+    const cancelLabel = opts4 && opts4.cancelLabel || "Cancel";
+    const maxlength = opts4 && opts4.maxlength || 64;
+    return new Promise(function(resolve) {
+      const overlay = document.createElement("div");
+      overlay.className = "seidr-rm-overlay";
+      overlay.innerHTML = [
+        '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml4(title) + "</h4>",
+        body ? '<p class="seidr-rm-dialog-msg">' + escapeHtml4(body) + "</p>" : "",
+        '<div class="seidr-settings-field-row">',
+        '<input type="text" id="seidr-rm-prompt-input" maxlength="' + maxlength + '"' + (placeholder ? ' placeholder="' + escapeHtml4(placeholder) + '"' : "") + " />",
+        "</div>",
+        '<div class="seidr-rm-dialog-actions">',
+        '<button type="button" data-act="cancel">' + escapeHtml4(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="seidr-rm-btn-primary">' + escapeHtml4(okLabel) + "</button>",
+        "</div></div>"
+      ].join("");
+      document.body.appendChild(overlay);
+      const input = overlay.querySelector("#seidr-rm-prompt-input");
+      input.value = initial;
+      let settled = false;
+      function finish(value) {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("keydown", onKey, true);
+        removeOverlay(overlay);
+        resolve(value);
+      }
+      function submit() {
+        const t = (input.value || "").trim();
+        finish(t || null);
+      }
+      function onKey(ev) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(null);
+        } else if (ev.key === "Enter") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          submit();
+        }
+      }
+      document.addEventListener("keydown", onKey, true);
+      overlay.addEventListener("click", function(ev) {
+        if (ev.target === overlay) finish(null);
+      });
+      overlay.querySelector('[data-act="cancel"]').addEventListener("click", function() {
+        finish(null);
+      });
+      overlay.querySelector('[data-act="ok"]').addEventListener("click", submit);
+      try {
+        input.focus();
+        input.select();
+      } catch (e) {
+      }
+    });
+  }
+
   // src/roomManager/ui.ts
   var msgTimer = null;
   function $(id) {
@@ -8955,15 +11927,6 @@
     });
     if (cur && names.indexOf(cur) >= 0) sel.value = cur;
   }
-  function promptName(title, initial) {
-    const v = window.prompt(title, initial || "");
-    if (v == null) return null;
-    const t = v.trim();
-    return t || null;
-  }
-  function confirmAct(msg) {
-    return window.confirm(msg);
-  }
   function rmUpdateApplyUi() {
     const can = rmCanApplyToRoom();
     ["seidr-rm-room-load", "seidr-rm-access-load", "seidr-rm-map-load"].forEach(function(id) {
@@ -8979,14 +11942,38 @@
       b.title = can ? "Load" : "Join a chat room or open room settings to Load";
     });
   }
+  function fillModeOptionsHtml(selected) {
+    const modes = ["default", "fill", "fillOriginalRatio", "showFullOriginalRatio"];
+    const cur = rmNormalizeBgFillMode(selected);
+    return modes.map(function(m) {
+      return '<option value="' + m + '"' + (m === cur ? " selected" : "") + ">" + rmFillModeLabel(m) + "</option>";
+    }).join("");
+  }
+  function selectedRoomPreset() {
+    const sel = $("seidr-rm-room-sel");
+    if (!sel || !sel.value) return null;
+    const store = rmGetStore();
+    return store.room[sel.value] ? rmNormalizeRoomPreset(store.room[sel.value]) : null;
+  }
   function openBgDialog(existing) {
     const overlay = document.createElement("div");
     overlay.className = "seidr-rm-overlay";
     overlay.innerHTML = [
       '<div class="seidr-rm-dialog">',
       "<h4>" + (existing ? "Edit background" : "Add background") + "</h4>",
-      '<label>Name<input type="text" id="seidr-rm-bg-name" maxlength="64" /></label>',
-      '<label>URL<input type="url" id="seidr-rm-bg-url" /></label>',
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Name</span>',
+      '<input type="text" id="seidr-rm-bg-name" maxlength="64" />',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">URL</span>',
+      '<input type="url" id="seidr-rm-bg-url" />',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Fill Mode</span>',
+      '<select id="seidr-rm-bg-fillmode">' + fillModeOptionsHtml(existing ? existing.fillMode : "default") + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Default uses the room\u2019s Custom SizeMode from Club (saved with Room Definition). Other modes override for this image.</p>',
       '<div class="seidr-rm-msg" id="seidr-rm-bg-err"></div>',
       '<div class="seidr-rm-dialog-actions">',
       '<button type="button" data-act="cancel">Cancel</button>',
@@ -8996,10 +11983,12 @@
     document.body.appendChild(overlay);
     const nameIn = overlay.querySelector("#seidr-rm-bg-name");
     const urlIn = overlay.querySelector("#seidr-rm-bg-url");
+    const fillSel = overlay.querySelector("#seidr-rm-bg-fillmode");
     const err = overlay.querySelector("#seidr-rm-bg-err");
     if (existing) {
       nameIn.value = existing.name;
       urlIn.value = existing.url;
+      fillSel.value = rmNormalizeBgFillMode(existing.fillMode);
     }
     function close() {
       if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
@@ -9010,7 +11999,8 @@
     overlay.querySelector('[data-act="cancel"]').addEventListener("click", close);
     overlay.querySelector('[data-act="save"]').addEventListener("click", function() {
       err.textContent = "Checking\u2026";
-      rmSaveBackground(nameIn.value, urlIn.value, existing && existing.id).then(function(res) {
+      const mode = rmNormalizeBgFillMode(fillSel.value);
+      rmSaveBackground(nameIn.value, urlIn.value, existing && existing.id, mode).then(function(res) {
         if (!res.ok) {
           err.textContent = res.error || "Save failed";
           return;
@@ -9123,9 +12113,11 @@
       card.className = "seidr-rm-card";
       card.dataset.id = b.id;
       if (canDrag) card.draggable = true;
+      const mode = rmNormalizeBgFillMode(b.fillMode);
       card.innerHTML = [
         '<img class="seidr-rm-card-thumb" alt="" draggable="false" />',
         '<div class="seidr-rm-card-name"></div>',
+        mode !== "default" ? '<div class="seidr-rm-card-badge"></div>' : "",
         '<div class="seidr-rm-card-actions">',
         '<button type="button" data-act="load" title="Load">\u2B07</button>',
         '<button type="button" data-act="edit" title="Edit">\u270E</button>',
@@ -9133,6 +12125,8 @@
         "</div>"
       ].join("");
       card.querySelector(".seidr-rm-card-name").textContent = b.name;
+      const badge = card.querySelector(".seidr-rm-card-badge");
+      if (badge) badge.textContent = rmFillModeLabel(mode);
       const img = card.querySelector("img");
       img.alt = b.name;
       rmEnsurePreview(b.url).then(function(src) {
@@ -9146,17 +12140,25 @@
           setMsg2("Open ChatRoom or ChatAdmin to Load");
           return;
         }
-        const r = rmApplyBackgroundUrl(b.url);
+        const room = selectedRoomPreset();
+        if (room) rmSetLastRoomPreset(room);
+        const r = rmApplyBackgroundEntry(b, room && room.customSizeMode);
         setMsg2(r.ok ? "Background applied" : r.error || "Failed");
       });
       card.querySelector('[data-act="edit"]').addEventListener("click", function() {
         openBgDialog(b);
       });
       card.querySelector('[data-act="del"]').addEventListener("click", function() {
-        if (!confirmAct("Delete background \u201C" + b.name + "\u201D?")) return;
-        const ok = rmDeleteBackground(b.id);
-        setMsg2(ok ? "Background deleted" : "Delete failed");
-        rmRefreshUi();
+        void rmConfirm("Delete background \u201C" + b.name + "\u201D?", {
+          title: "Delete background",
+          confirmLabel: "Delete",
+          danger: true
+        }).then(function(ok) {
+          if (!ok) return;
+          const deleted = rmDeleteBackground(b.id);
+          setMsg2(deleted ? "Background deleted" : "Delete failed");
+          rmRefreshUi();
+        });
       });
       grid.appendChild(card);
     });
@@ -9194,11 +12196,11 @@
     }
   }
   function renderMaps() {
-    const wrap = $("seidr-rm-maps-wrap");
+    const wrap2 = $("seidr-rm-maps-wrap");
     const sel = $("seidr-rm-map-sel");
-    if (!wrap) return;
+    if (!wrap2) return;
     const show = rmMapModeActive();
-    wrap.classList.toggle("seidr-rm-hidden", !show);
+    wrap2.classList.toggle("seidr-rm-hidden", !show);
     if (!show || !sel) return;
     const maps = rmListAllMaps();
     const prevId = sel.value;
@@ -9267,245 +12269,296 @@
       const t = ev.target.closest("[data-rm]");
       if (!t) return;
       const act2 = t.getAttribute("data-rm");
-      const store = rmGetStore();
-      if (act2 === "room-save") {
-        const name = promptName("Save room config as:");
-        if (!name) return;
-        if (store.room[name] && !confirmAct("Overwrite \u201C" + name + "\u201D?")) return;
-        const settings = rmReadSettings();
-        if (!settings) {
-          setMsg2("No room data");
-          return;
-        }
-        store.room[name] = rmSliceRoom(settings);
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Room config saved" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "room-overwrite") {
-        const sel = $("seidr-rm-room-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select a config");
-          return;
-        }
-        if (!confirmAct("Overwrite \u201C" + sel.value + "\u201D?")) return;
-        const settings = rmReadSettings();
-        if (!settings) {
-          setMsg2("No room data");
-          return;
-        }
-        store.room[sel.value] = rmSliceRoom(settings);
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "room-load") {
-        if (!rmCanApplyToRoom()) {
-          setMsg2("Open ChatRoom or ChatAdmin to Load");
-          return;
-        }
-        const sel = $("seidr-rm-room-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select a config");
-          return;
-        }
-        const preset = store.room[sel.value];
-        if (!preset) {
-          setMsg2("Not found");
-          return;
-        }
-        rmApplyRoomToEditor(preset);
-        if (rmInLiveRoom()) {
-          const u = rmUpdateLiveRoom();
-          setMsg2(u.ok ? "Room config loaded + updated" : u.error || "Applied to editor");
-        } else {
-          setMsg2("Filled ChatAdmin fields");
-        }
-      } else if (act2 === "room-delete") {
-        const sel = $("seidr-rm-room-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select a config");
-          return;
-        }
-        if (!confirmAct("Delete room config \u201C" + sel.value + "\u201D?")) return;
-        delete store.room[sel.value];
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Deleted" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "access-save") {
-        const name = promptName("Save access list as:");
-        if (!name) return;
-        if (store.access[name] && !confirmAct("Overwrite \u201C" + name + "\u201D?")) return;
-        const settings = rmReadSettings();
-        if (!settings) {
-          setMsg2("No room data");
-          return;
-        }
-        store.access[name] = rmSliceAccess(settings);
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Access saved" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "access-overwrite") {
-        const sel = $("seidr-rm-access-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select access");
-          return;
-        }
-        if (!confirmAct("Overwrite \u201C" + sel.value + "\u201D?")) return;
-        const settings = rmReadSettings();
-        if (!settings) {
-          setMsg2("No room data");
-          return;
-        }
-        store.access[sel.value] = rmSliceAccess(settings);
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "access-load") {
-        if (!rmCanApplyToRoom()) {
-          setMsg2("Open ChatRoom or ChatAdmin to Load");
-          return;
-        }
-        const sel = $("seidr-rm-access-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select access");
-          return;
-        }
-        const preset = store.access[sel.value];
-        if (!preset) {
-          setMsg2("Not found");
-          return;
-        }
-        rmApplyAccessToEditor(preset);
-        if (rmInLiveRoom()) {
-          const u = rmUpdateLiveRoom();
-          setMsg2(u.ok ? "Access loaded + room updated" : u.error || "Applied");
-        } else {
-          setMsg2("Filled access lists in ChatAdmin");
-        }
-      } else if (act2 === "access-delete") {
-        const sel = $("seidr-rm-access-sel");
-        if (!sel || !sel.value) {
-          setMsg2("Select access");
-          return;
-        }
-        if (!confirmAct("Delete access list \u201C" + sel.value + "\u201D?")) return;
-        delete store.access[sel.value];
-        const s = rmSaveStore();
-        setMsg2(s.ok ? "Deleted" : s.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "bg-add") {
-        openBgDialog();
-      } else if (act2 === "map-save-as") {
-        const name = promptName("Save map as:");
-        if (!name) return;
-        const maps = rmListAllMaps();
-        const existing = maps.find(function(m) {
-          return m.name === name;
-        });
-        if (existing) {
-          if (!confirmAct("Map \u201C" + name + "\u201D exists \u2014 overwrite Default?")) return;
-          const r2 = rmOverwriteDefault(existing.id);
-          setMsg2(r2.ok ? "Default overwritten" : r2.error || "Failed");
+      void (async function() {
+        const store = rmGetStore();
+        if (act2 === "room-save") {
+          const name = await rmPrompt("Save room config as:", { confirmLabel: "Save" });
+          if (!name) return;
+          if (store.room[name]) {
+            const ok = await rmConfirm("Overwrite \u201C" + name + "\u201D?", {
+              title: "Overwrite",
+              confirmLabel: "Overwrite"
+            });
+            if (!ok) return;
+          }
+          const settings = rmReadSettings();
+          if (!settings) {
+            setMsg2("No room data");
+            return;
+          }
+          const preset = rmSliceRoom(settings);
+          store.room[name] = preset;
+          rmSetLastRoomPreset(preset);
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Room config saved" : s.error || "Failed");
           rmRefreshUi();
-          const mapSel2 = $("seidr-rm-map-sel");
-          if (mapSel2) mapSel2.value = existing.id;
-          fillVersionSelect(existing.id, r2.version && r2.version.id);
-          return;
+        } else if (act2 === "room-overwrite") {
+          const sel = $("seidr-rm-room-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select a config");
+            return;
+          }
+          if (!await rmConfirm("Overwrite \u201C" + sel.value + "\u201D?", {
+            title: "Overwrite",
+            confirmLabel: "Overwrite"
+          })) return;
+          const settings = rmReadSettings();
+          if (!settings) {
+            setMsg2("No room data");
+            return;
+          }
+          const preset = rmSliceRoom(settings);
+          store.room[sel.value] = preset;
+          rmSetLastRoomPreset(preset);
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "room-load") {
+          if (!rmCanApplyToRoom()) {
+            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            return;
+          }
+          const sel = $("seidr-rm-room-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select a config");
+            return;
+          }
+          const preset = store.room[sel.value];
+          if (!preset) {
+            setMsg2("Not found");
+            return;
+          }
+          rmApplyRoomToEditor(preset);
+          if (rmInLiveRoom()) {
+            const u = rmUpdateLiveRoom();
+            setMsg2(u.ok ? "Room config loaded + updated" : u.error || "Applied to editor");
+          } else {
+            setMsg2("Filled ChatAdmin fields");
+          }
+        } else if (act2 === "room-delete") {
+          const sel = $("seidr-rm-room-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select a config");
+            return;
+          }
+          if (!await rmConfirm("Delete room config \u201C" + sel.value + "\u201D?", {
+            title: "Delete",
+            confirmLabel: "Delete",
+            danger: true
+          })) return;
+          delete store.room[sel.value];
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Deleted" : s.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "access-save") {
+          const name = await rmPrompt("Save access list as:", { confirmLabel: "Save" });
+          if (!name) return;
+          if (store.access[name]) {
+            const ok = await rmConfirm("Overwrite \u201C" + name + "\u201D?", {
+              title: "Overwrite",
+              confirmLabel: "Overwrite"
+            });
+            if (!ok) return;
+          }
+          const settings = rmReadSettings();
+          if (!settings) {
+            setMsg2("No room data");
+            return;
+          }
+          store.access[name] = rmSliceAccess(settings);
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Access saved" : s.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "access-overwrite") {
+          const sel = $("seidr-rm-access-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select access");
+            return;
+          }
+          if (!await rmConfirm("Overwrite \u201C" + sel.value + "\u201D?", {
+            title: "Overwrite",
+            confirmLabel: "Overwrite"
+          })) return;
+          const settings = rmReadSettings();
+          if (!settings) {
+            setMsg2("No room data");
+            return;
+          }
+          store.access[sel.value] = rmSliceAccess(settings);
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "access-load") {
+          if (!rmCanApplyToRoom()) {
+            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            return;
+          }
+          const sel = $("seidr-rm-access-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select access");
+            return;
+          }
+          const preset = store.access[sel.value];
+          if (!preset) {
+            setMsg2("Not found");
+            return;
+          }
+          rmApplyAccessToEditor(preset);
+          if (rmInLiveRoom()) {
+            const u = rmUpdateLiveRoom();
+            setMsg2(u.ok ? "Access loaded + room updated" : u.error || "Applied");
+          } else {
+            setMsg2("Filled access lists in ChatAdmin");
+          }
+        } else if (act2 === "access-delete") {
+          const sel = $("seidr-rm-access-sel");
+          if (!sel || !sel.value) {
+            setMsg2("Select access");
+            return;
+          }
+          if (!await rmConfirm("Delete access list \u201C" + sel.value + "\u201D?", {
+            title: "Delete",
+            confirmLabel: "Delete",
+            danger: true
+          })) return;
+          delete store.access[sel.value];
+          const s = rmSaveStore();
+          setMsg2(s.ok ? "Deleted" : s.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "bg-add") {
+          openBgDialog();
+        } else if (act2 === "map-save-as") {
+          const name = await rmPrompt("Save map as:", { confirmLabel: "Save" });
+          if (!name) return;
+          const maps = rmListAllMaps();
+          const existing = maps.find(function(m) {
+            return m.name === name;
+          });
+          if (existing) {
+            if (!await rmConfirm("Map \u201C" + name + "\u201D exists \u2014 overwrite Default?", {
+              title: "Overwrite Default",
+              confirmLabel: "Overwrite"
+            })) return;
+            const r2 = rmOverwriteDefault(existing.id);
+            setMsg2(r2.ok ? "Default overwritten" : r2.error || "Failed");
+            rmRefreshUi();
+            const mapSel2 = $("seidr-rm-map-sel");
+            if (mapSel2) mapSel2.value = existing.id;
+            fillVersionSelect(existing.id, r2.version && r2.version.id);
+            return;
+          }
+          const r = rmSaveNewMap(name);
+          setMsg2(r.ok ? r.fellBackLocal ? "Map saved (Local \u2014 remote full). Default created." : "Map saved (Default)" : r.error || "Failed");
+          rmRefreshUi();
+          if (r.map) {
+            const mapSel2 = $("seidr-rm-map-sel");
+            if (mapSel2) mapSel2.value = r.map.id;
+            fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
+          }
+        } else if (act2 === "map-save-ver") {
+          const mapId = selectedRmMapId();
+          if (!mapId) {
+            setMsg2("Select a map");
+            return;
+          }
+          const verName = await rmPrompt("Save new version", {
+            message: "Local version name (not Default):",
+            initial: "Development",
+            confirmLabel: "Save"
+          });
+          if (!verName) return;
+          if (verName === RM_MAP_DEFAULT_NAME) {
+            setMsg2("Use Overwrite Default to update Default");
+            return;
+          }
+          const r = rmSaveNewVersion(mapId, verName);
+          setMsg2(r.ok ? "Local version saved" : r.error || "Failed");
+          rmRefreshUi();
+          fillVersionSelect(mapId, r.version && r.version.id);
+        } else if (act2 === "map-overwrite") {
+          const mapId = selectedRmMapId();
+          if (!mapId) {
+            setMsg2("Select a map");
+            return;
+          }
+          if (!await rmConfirm("Overwrite Default with the current room map?", {
+            title: "Overwrite Default",
+            confirmLabel: "Overwrite"
+          })) return;
+          const r = rmOverwriteDefault(mapId);
+          setMsg2(r.ok ? "Default overwritten" : r.error || "Failed");
+          rmRefreshUi();
+          fillVersionSelect(mapId, r.version && r.version.id);
+        } else if (act2 === "map-load") {
+          if (!rmCanApplyToRoom()) {
+            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            return;
+          }
+          const mapId = selectedRmMapId();
+          const verId = selectedRmVersionId();
+          if (!mapId || !verId) {
+            setMsg2("Select a map and version");
+            return;
+          }
+          const maps = rmListAllMaps();
+          const map = maps.find(function(m) {
+            return m.id === mapId;
+          });
+          const ver = map && map.versions.find(function(v) {
+            return v.id === verId;
+          });
+          if (!await rmConfirm(
+            "Load \u201C" + (map ? map.name : "") + "\u201D / \u201C" + (ver ? ver.name : "") + "\u201D into this room?",
+            { title: "Load map", confirmLabel: "Load" }
+          )) return;
+          const r = rmLoadMapVersion(mapId, verId);
+          setMsg2(r.ok ? "Map version loaded" : r.error || "Failed");
+        } else if (act2 === "map-delete-ver") {
+          const mapId = selectedRmMapId();
+          const verId = selectedRmVersionId();
+          if (!mapId || !verId) {
+            setMsg2("Select a map and version");
+            return;
+          }
+          const map = rmListAllMaps().find(function(m) {
+            return m.id === mapId;
+          });
+          const ver = map && map.versions.find(function(v) {
+            return v.id === verId;
+          });
+          const isDef = ver && rmIsDefaultVersionName(ver.name);
+          const only = map && map.versions.length <= 1;
+          if (isDef && !only) {
+            setMsg2("Cannot delete Default while other versions exist \u2014 use Delete map");
+            return;
+          }
+          if (!await rmConfirm(only || isDef ? "Delete entire map \u201C" + (map ? map.name : "") + "\u201D?" : "Delete this local version?", {
+            title: "Delete",
+            confirmLabel: "Delete",
+            danger: true
+          })) return;
+          const r = rmDeleteVersion(mapId, verId);
+          setMsg2(r.ok ? only || isDef ? "Map deleted" : "Version deleted" : r.error || "Failed");
+          rmRefreshUi();
+        } else if (act2 === "map-delete") {
+          const mapId = selectedRmMapId();
+          if (!mapId) {
+            setMsg2("Select a map");
+            return;
+          }
+          const map = rmListAllMaps().find(function(m) {
+            return m.id === mapId;
+          });
+          if (!await rmConfirm("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?", {
+            title: "Delete map",
+            confirmLabel: "Delete",
+            danger: true
+          })) return;
+          const r = rmDeleteMap(mapId);
+          setMsg2(r.ok ? "Map deleted" : r.error || "Failed");
+          rmRefreshUi();
         }
-        const r = rmSaveNewMap(name);
-        setMsg2(r.ok ? r.fellBackLocal ? "Map saved (Local \u2014 remote full). Default created." : "Map saved (Default)" : r.error || "Failed");
-        rmRefreshUi();
-        if (r.map) {
-          const mapSel2 = $("seidr-rm-map-sel");
-          if (mapSel2) mapSel2.value = r.map.id;
-          fillVersionSelect(r.map.id, rmDefaultVersionId(r.map.id));
-        }
-      } else if (act2 === "map-save-ver") {
-        const mapId = selectedRmMapId();
-        if (!mapId) {
-          setMsg2("Select a map");
-          return;
-        }
-        const verName = promptName("Local version name (not Default):");
-        if (!verName) return;
-        if (verName === RM_MAP_DEFAULT_NAME) {
-          setMsg2("Use Overwrite Default to update Default");
-          return;
-        }
-        const r = rmSaveNewVersion(mapId, verName);
-        setMsg2(r.ok ? "Local version saved" : r.error || "Failed");
-        rmRefreshUi();
-        fillVersionSelect(mapId, r.version && r.version.id);
-      } else if (act2 === "map-overwrite") {
-        const mapId = selectedRmMapId();
-        if (!mapId) {
-          setMsg2("Select a map");
-          return;
-        }
-        if (!confirmAct("Overwrite Default with the current room map?")) return;
-        const r = rmOverwriteDefault(mapId);
-        setMsg2(r.ok ? "Default overwritten" : r.error || "Failed");
-        rmRefreshUi();
-        fillVersionSelect(mapId, r.version && r.version.id);
-      } else if (act2 === "map-load") {
-        if (!rmCanApplyToRoom()) {
-          setMsg2("Open ChatRoom or ChatAdmin to Load");
-          return;
-        }
-        const mapId = selectedRmMapId();
-        const verId = selectedRmVersionId();
-        if (!mapId || !verId) {
-          setMsg2("Select a map and version");
-          return;
-        }
-        const maps = rmListAllMaps();
-        const map = maps.find(function(m) {
-          return m.id === mapId;
-        });
-        const ver = map && map.versions.find(function(v) {
-          return v.id === verId;
-        });
-        if (!confirmAct(
-          "Load \u201C" + (map ? map.name : "") + "\u201D / \u201C" + (ver ? ver.name : "") + "\u201D into this room?"
-        )) return;
-        const r = rmLoadMapVersion(mapId, verId);
-        setMsg2(r.ok ? "Map version loaded" : r.error || "Failed");
-      } else if (act2 === "map-delete-ver") {
-        const mapId = selectedRmMapId();
-        const verId = selectedRmVersionId();
-        if (!mapId || !verId) {
-          setMsg2("Select a map and version");
-          return;
-        }
-        const map = rmListAllMaps().find(function(m) {
-          return m.id === mapId;
-        });
-        const ver = map && map.versions.find(function(v) {
-          return v.id === verId;
-        });
-        const isDef = ver && rmIsDefaultVersionName(ver.name);
-        const only = map && map.versions.length <= 1;
-        if (isDef && !only) {
-          setMsg2("Cannot delete Default while other versions exist \u2014 use Delete map");
-          return;
-        }
-        if (!confirmAct(only || isDef ? "Delete entire map \u201C" + (map ? map.name : "") + "\u201D?" : "Delete this local version?")) return;
-        const r = rmDeleteVersion(mapId, verId);
-        setMsg2(r.ok ? only || isDef ? "Map deleted" : "Version deleted" : r.error || "Failed");
-        rmRefreshUi();
-      } else if (act2 === "map-delete") {
-        const mapId = selectedRmMapId();
-        if (!mapId) {
-          setMsg2("Select a map");
-          return;
-        }
-        const map = rmListAllMaps().find(function(m) {
-          return m.id === mapId;
-        });
-        if (!confirmAct("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?")) return;
-        const r = rmDeleteMap(mapId);
-        setMsg2(r.ok ? "Map deleted" : r.error || "Failed");
-        rmRefreshUi();
-      }
+      })();
     });
     const mapSel = $("seidr-rm-map-sel");
     if (mapSel) {
@@ -9519,11 +12572,22 @@
         renderBgGrid();
       });
     }
+    const roomSel = $("seidr-rm-room-sel");
+    if (roomSel) {
+      roomSel.addEventListener("change", function() {
+        const preset = selectedRoomPreset();
+        if (preset) rmSetLastRoomPreset(preset);
+      });
+    }
   }
   function rmRefreshUi() {
     const store = rmGetStore();
-    fillSelect($("seidr-rm-room-sel"), Object.keys(store.room).sort());
+    const roomSel = $("seidr-rm-room-sel");
+    const prevRoom = roomSel ? roomSel.value : "";
+    fillSelect(roomSel, Object.keys(store.room).sort(), prevRoom);
     fillSelect($("seidr-rm-access-sel"), Object.keys(store.access).sort());
+    const preset = selectedRoomPreset();
+    if (preset) rmSetLastRoomPreset(preset);
     renderBgGrid();
     renderMaps();
     refreshFooter();
@@ -9534,67 +12598,116 @@
 
   // src/roomManager/shell.ts
   var root = null;
-  var btn = null;
-  var panel = null;
+  var btn2 = null;
+  var panel2 = null;
   var sessionBtnPos = null;
   var dragMoved = false;
-  var BTN = 44;
+  var chatLogObserver = null;
+  var panelObserver = null;
+  var BTN_BASE = 44;
   var PAD = 16;
+  function clubScale() {
+    try {
+      const canvas = MainCanvas && MainCanvas.canvas;
+      if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+        const scale = Math.min(canvas.clientWidth, canvas.clientHeight) / 1e3;
+        if (Number.isFinite(scale) && scale > 0) return scale;
+      }
+    } catch (e) {
+    }
+    return 1;
+  }
+  function btnSize() {
+    return Math.max(28, Math.round(BTN_BASE * clubScale()));
+  }
+  function applyBtnSize() {
+    if (!btn2) return;
+    const s = btnSize();
+    btn2.style.width = s + "px";
+    btn2.style.height = s + "px";
+  }
+  function chatLogEl() {
+    return document.getElementById("TextAreaChatLog");
+  }
   function chatLogRect() {
-    const el = document.getElementById("TextAreaChatLog");
+    const el = chatLogEl();
     if (!el) return null;
     return el.getBoundingClientRect();
   }
   function clampPanel() {
-    if (!panel) return;
+    if (!panel2) return;
     const pad = 8;
-    const w = panel.offsetWidth;
-    const h = panel.offsetHeight;
-    let left = panel.offsetLeft;
-    let top = panel.offsetTop;
-    if (panel.style.left) left = parseFloat(panel.style.left) || left;
-    if (panel.style.top) top = parseFloat(panel.style.top) || top;
+    const w = panel2.offsetWidth;
+    const h = panel2.offsetHeight;
+    let left = panel2.offsetLeft;
+    let top = panel2.offsetTop;
+    if (panel2.style.left) left = parseFloat(panel2.style.left) || left;
+    if (panel2.style.top) top = parseFloat(panel2.style.top) || top;
     const maxL = Math.max(pad, window.innerWidth - w - pad);
     const maxT = Math.max(pad, window.innerHeight - h - pad);
     left = Math.min(Math.max(pad, left), maxL);
     top = Math.min(Math.max(pad, top), maxT);
-    panel.style.left = left + "px";
-    panel.style.top = top + "px";
-    panel.style.right = "auto";
+    panel2.style.left = left + "px";
+    panel2.style.top = top + "px";
+    panel2.style.right = "auto";
+  }
+  function geomKey() {
+    const id = typeof Player !== "undefined" && Player && Player.MemberNumber != null ? Player.MemberNumber : "0";
+    return "SeidrRmUi_" + id;
+  }
+  function readLocalGeom() {
+    try {
+      const raw = localStorage.getItem(geomKey());
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
   }
   function applyDefaultPanelGeometry() {
-    if (!panel) return;
-    const store = rmGetStore();
-    const ui = store.ui || {};
+    if (!panel2) return;
+    const ui = readLocalGeom() || rmGetStore().ui || {};
     if (ui.w && ui.h && ui.x != null && ui.y != null) {
-      panel.style.width = ui.w + "px";
-      panel.style.height = ui.h + "px";
-      panel.style.left = ui.x + "px";
-      panel.style.top = ui.y + "px";
-      panel.style.right = "auto";
+      panel2.style.width = ui.w + "px";
+      panel2.style.height = ui.h + "px";
+      panel2.style.left = ui.x + "px";
+      panel2.style.top = ui.y + "px";
+      panel2.style.right = "auto";
       clampPanel();
       return;
     }
     const rect = chatLogRect();
     if (rect && rect.width > 80 && rect.height > 80) {
-      panel.style.width = Math.max(480, Math.min(rect.width, window.innerWidth - 16)) + "px";
-      panel.style.height = Math.max(360, Math.min(rect.height, window.innerHeight - 16)) + "px";
-      panel.style.left = Math.max(8, rect.left) + "px";
-      panel.style.top = Math.max(8, rect.top) + "px";
-      panel.style.right = "auto";
+      panel2.style.width = Math.max(480, Math.min(rect.width, window.innerWidth - 16)) + "px";
+      panel2.style.height = Math.max(360, Math.min(rect.height, window.innerHeight - 16)) + "px";
+      panel2.style.left = Math.max(8, rect.left) + "px";
+      panel2.style.top = Math.max(8, rect.top) + "px";
+      panel2.style.right = "auto";
     }
     clampPanel();
   }
-  function persistPanelGeometry() {
-    if (!panel || !panel.classList.contains("seidr-rm-open")) return;
-    const store = rmGetStore();
-    store.ui = {
-      x: parseFloat(panel.style.left) || panel.offsetLeft,
-      y: parseFloat(panel.style.top) || panel.offsetTop,
-      w: panel.offsetWidth,
-      h: panel.offsetHeight
+  var geomTimer = null;
+  function writePanelGeometry() {
+    geomTimer = null;
+    if (!panel2 || !panel2.classList.contains("seidr-rm-open")) return;
+    const geom = {
+      x: parseFloat(panel2.style.left) || panel2.offsetLeft,
+      y: parseFloat(panel2.style.top) || panel2.offsetTop,
+      w: panel2.offsetWidth,
+      h: panel2.offsetHeight
     };
-    rmSaveStore();
+    try {
+      localStorage.setItem(geomKey(), JSON.stringify(geom));
+    } catch (e) {
+    }
+  }
+  function persistPanelGeometry(immediate) {
+    if (immediate) {
+      if (geomTimer) clearTimeout(geomTimer);
+      writePanelGeometry();
+      return;
+    }
+    if (geomTimer) clearTimeout(geomTimer);
+    geomTimer = setTimeout(writePanelGeometry, 400);
   }
   function makeDraggable(el, onEnd) {
     let ox = 0;
@@ -9631,36 +12744,52 @@
     el.addEventListener("pointercancel", up);
   }
   function setBtnXY(x, y) {
-    if (!btn) return;
-    const maxX = Math.max(8, window.innerWidth - BTN - 8);
-    const maxY = Math.max(8, window.innerHeight - BTN - 8);
-    btn.style.left = Math.min(Math.max(8, x), maxX) + "px";
-    btn.style.top = Math.min(Math.max(8, y), maxY) + "px";
-    btn.style.right = "auto";
+    if (!btn2) return;
+    const size = btnSize();
+    const maxX = Math.max(8, window.innerWidth - size - 8);
+    const maxY = Math.max(8, window.innerHeight - size - 8);
+    btn2.style.left = Math.min(Math.max(8, x), maxX) + "px";
+    btn2.style.top = Math.min(Math.max(8, y), maxY) + "px";
+    btn2.style.right = "auto";
+  }
+  function storeSessionBtnPosFromPx(x, y) {
+    const vw = Math.max(1, window.innerWidth);
+    const vh = Math.max(1, window.innerHeight);
+    sessionBtnPos = {
+      fx: x / vw,
+      fy: y / vh
+    };
+  }
+  function placeSessionBtn() {
+    if (!btn2 || !sessionBtnPos) return;
+    const x = sessionBtnPos.fx * window.innerWidth;
+    const y = sessionBtnPos.fy * window.innerHeight;
+    setBtnXY(x, y);
   }
   function applyLauncherPosition(pos) {
-    if (!btn) return;
+    if (!btn2) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    const size = btnSize();
     const chat = chatLogRect();
     if (pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom") {
       if (chat && chat.width > 40) {
-        const x = chat.left - BTN - 8;
+        const x = chat.left - size - 8;
         let y;
         if (pos === "chatTop") y = chat.top + 8;
-        else if (pos === "chatBottom") y = chat.bottom - BTN - 8;
-        else y = chat.top + chat.height / 2 - BTN / 2;
+        else if (pos === "chatBottom") y = chat.bottom - size - 8;
+        else y = chat.top + chat.height / 2 - size / 2;
         setBtnXY(x, y);
         return;
       }
-      setBtnXY(vw - BTN - PAD, vh * 0.42);
+      setBtnXY(vw - size - PAD, vh * 0.42);
       return;
     }
     const leftX = PAD;
-    const rightX = vw - BTN - PAD;
+    const rightX = vw - size - PAD;
     const topY = PAD;
-    const bottomY = vh - BTN - PAD;
-    const midY = vh / 2 - BTN / 2;
+    const bottomY = vh - size - PAD;
+    const midY = vh / 2 - size / 2;
     switch (pos) {
       case "topLeft":
         setBtnXY(leftX, topY);
@@ -9686,13 +12815,23 @@
     }
   }
   function placeBtnDefault() {
-    if (!btn) return;
+    if (!btn2) return;
+    applyBtnSize();
     if (sessionBtnPos) {
-      setBtnXY(sessionBtnPos.x, sessionBtnPos.y);
+      placeSessionBtn();
       return;
     }
     const settings = seidrGetSettings();
     applyLauncherPosition(settings.launcherPosition || "chatTop");
+  }
+  function rmRelayoutLauncher() {
+    if (!btn2) return;
+    if (!btn2.classList.contains("seidr-rm-visible")) {
+      applyBtnSize();
+      return;
+    }
+    placeBtnDefault();
+    syncChatLogObserver();
   }
   function rmOnChatRoomScreen() {
     try {
@@ -9725,12 +12864,32 @@
     const r = chatLogRect();
     return !!(r && r.width > 40);
   }
+  function disconnectChatLogObserver() {
+    if (chatLogObserver) {
+      chatLogObserver.disconnect();
+      chatLogObserver = null;
+    }
+  }
+  function syncChatLogObserver() {
+    disconnectChatLogObserver();
+    if (!btn2 || !btn2.classList.contains("seidr-rm-visible")) return;
+    if (sessionBtnPos) return;
+    const pos = seidrGetSettings().launcherPosition || "chatTop";
+    if (!isChatAnchorPos(pos)) return;
+    const el = chatLogEl();
+    if (!el || typeof ResizeObserver === "undefined") return;
+    chatLogObserver = new ResizeObserver(function() {
+      if (sessionBtnPos) return;
+      placeBtnDefault();
+    });
+    chatLogObserver.observe(el);
+  }
   function rmEnterLiveRoomPlacement() {
     clearEnterPlaceTimers();
     rmClearSessionBtnPos();
     rmEnsureShell();
     rmUpdateLauncherVisibility();
-    placeBtnDefault();
+    rmRelayoutLauncher();
     const pos = seidrGetSettings().launcherPosition || "chatTop";
     if (!isChatAnchorPos(pos) || chatLogReady()) return;
     const delays = [100, 300, 800];
@@ -9742,7 +12901,7 @@
         }
         const last = i === delays.length - 1;
         if (!chatLogReady() && !last) return;
-        placeBtnDefault();
+        rmRelayoutLauncher();
         if (chatLogReady() || last) clearEnterPlaceTimers();
       }, ms));
     });
@@ -9757,17 +12916,27 @@
     if (root && document.body.contains(root)) return;
     root = document.createElement("div");
     root.id = "seidr-rm-root";
-    btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = "seidr-rm-btn";
-    btn.title = "Room Manager";
-    btn.setAttribute("aria-label", "Room Manager");
-    btn.textContent = "\u2302";
-    panel = document.createElement("div");
-    panel.id = "seidr-rm-panel";
-    panel.innerHTML = [
+    btn2 = document.createElement("button");
+    btn2.type = "button";
+    btn2.id = "seidr-rm-btn";
+    btn2.title = "Room Manager";
+    btn2.setAttribute("aria-label", "Room Manager");
+    const logo = document.createElement("img");
+    logo.src = Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
+    logo.alt = "";
+    logo.draggable = false;
+    btn2.appendChild(logo);
+    applyBtnSize();
+    panel2 = document.createElement("div");
+    panel2.id = "seidr-rm-panel";
+    panel2.innerHTML = [
       '<div class="seidr-rm-header">',
       '  <div class="seidr-rm-header-title">Room Manager<span>Dev</span></div>',
+      '  <button type="button" class="seidr-rm-icon-btn" data-rm="settings" title="Seidr Settings" aria-label="Seidr Settings">',
+      '    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">',
+      '      <path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.2 7.2 0 0 0-1.63-.94l-.36-2.54A.48.48 0 0 0 14 2h-4a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.55-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.63 8.47a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.75 14.5a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.3.59.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54c.05.24.24.41.48.41h4c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/>',
+      "    </svg>",
+      "  </button>",
       '  <button type="button" class="seidr-rm-icon-btn" data-rm="close" title="Close">\xD7</button>',
       "</div>",
       '<div class="seidr-rm-body" id="seidr-rm-body"></div>',
@@ -9776,28 +12945,28 @@
       '  <span class="seidr-rm-footer-usage" id="seidr-rm-footer-usage">Storage: \u2014</span>',
       "</div>"
     ].join("");
-    root.appendChild(btn);
-    root.appendChild(panel);
+    root.appendChild(btn2);
+    root.appendChild(panel2);
     document.body.appendChild(root);
     ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
       root.addEventListener(type, function(ev) {
         ev.stopPropagation();
       });
     });
-    makeDraggable(btn, function() {
-      if (!btn) return;
-      sessionBtnPos = {
-        x: parseFloat(btn.style.left) || btn.offsetLeft,
-        y: parseFloat(btn.style.top) || btn.offsetTop
-      };
+    makeDraggable(btn2, function() {
+      if (!btn2) return;
+      const x = parseFloat(btn2.style.left) || btn2.offsetLeft;
+      const y = parseFloat(btn2.style.top) || btn2.offsetTop;
+      storeSessionBtnPosFromPx(x, y);
+      disconnectChatLogObserver();
     });
-    const header = panel.querySelector(".seidr-rm-header");
+    const header = panel2.querySelector(".seidr-rm-header");
     (function() {
       let ox = 0;
       let oy = 0;
       header.addEventListener("pointerdown", function(ev) {
         if (ev.target.closest("button")) return;
-        const r = panel.getBoundingClientRect();
+        const r = panel2.getBoundingClientRect();
         ox = ev.clientX - r.left;
         oy = ev.clientY - r.top;
         header.setPointerCapture(ev.pointerId);
@@ -9805,55 +12974,75 @@
       });
       header.addEventListener("pointermove", function(ev) {
         if (!header.hasPointerCapture(ev.pointerId)) return;
-        panel.style.left = ev.clientX - ox + "px";
-        panel.style.top = ev.clientY - oy + "px";
-        panel.style.right = "auto";
+        panel2.style.left = ev.clientX - ox + "px";
+        panel2.style.top = ev.clientY - oy + "px";
+        panel2.style.right = "auto";
       });
       header.addEventListener("pointerup", function(ev) {
         if (!header.hasPointerCapture(ev.pointerId)) return;
         header.releasePointerCapture(ev.pointerId);
         clampPanel();
-        persistPanelGeometry();
+        persistPanelGeometry(true);
       });
     })();
-    btn.addEventListener("pointerup", function() {
+    btn2.addEventListener("pointerup", function() {
       if (dragMoved) return;
       rmTogglePanel();
     });
-    panel.querySelector('[data-rm="close"]').addEventListener("click", function() {
+    panel2.querySelector('[data-rm="settings"]').addEventListener("click", function() {
+      if (typeof Seidr.openSettings === "function") {
+        try {
+          Seidr.openSettings();
+        } catch (e) {
+        }
+      }
+    });
+    panel2.querySelector('[data-rm="close"]').addEventListener("click", function() {
       rmClosePanel();
     });
-    const ro = new ResizeObserver(function() {
-      clampPanel();
-      persistPanelGeometry();
-    });
-    ro.observe(panel);
+    if (typeof ResizeObserver !== "undefined") {
+      panelObserver = new ResizeObserver(function() {
+        clampPanel();
+        persistPanelGeometry();
+      });
+      panelObserver.observe(panel2);
+    }
     rmBuildPanelBody();
+  }
+  function fbmFloatChatActive() {
+    try {
+      const el = document.getElementById("fbm-float-chat");
+      return !!(el && !el.hidden);
+    } catch (e) {
+      return false;
+    }
   }
   function rmUpdateLauncherVisibility() {
     const s = seidrGetSettings();
     const enabled = s.roomManagerEnabled !== false;
     const quickmenu = s.showQuickmenuButton !== false;
     if (!Seidr.SHOW_ROOM_MANAGER || !enabled || !quickmenu) {
-      if (btn) btn.classList.remove("seidr-rm-visible");
+      if (btn2) btn2.classList.remove("seidr-rm-visible");
+      disconnectChatLogObserver();
       return;
     }
     rmEnsureShell();
-    const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog();
-    if (btn) {
-      btn.classList.toggle("seidr-rm-visible", show);
-      if (show) placeBtnDefault();
+    const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog() && !fbmFloatChatActive();
+    if (btn2) {
+      btn2.classList.toggle("seidr-rm-visible", show);
+      if (show) rmRelayoutLauncher();
+      else disconnectChatLogObserver();
     }
   }
   function rmOpenPanel() {
     rmEnsureShell();
-    if (!panel) return;
+    if (!panel2) return;
     try {
       applyDefaultPanelGeometry();
     } catch (e) {
     }
-    panel.classList.add("seidr-rm-open");
-    panel.removeAttribute("hidden");
+    panel2.classList.add("seidr-rm-open");
+    panel2.removeAttribute("hidden");
     try {
       rmRefreshUi();
     } catch (e) {
@@ -9865,19 +13054,25 @@
     }
   }
   function rmClosePanel() {
-    if (!panel) return;
-    persistPanelGeometry();
-    panel.classList.remove("seidr-rm-open");
-    panel.setAttribute("hidden", "true");
+    if (!panel2) return;
+    persistPanelGeometry(true);
+    panel2.classList.remove("seidr-rm-open");
+    panel2.setAttribute("hidden", "true");
   }
   function rmTogglePanel() {
-    if (panel && panel.classList.contains("seidr-rm-open")) rmClosePanel();
+    if (panel2 && panel2.classList.contains("seidr-rm-open")) rmClosePanel();
     else rmOpenPanel();
   }
   function rmDestroyShell() {
+    clearEnterPlaceTimers();
+    disconnectChatLogObserver();
+    if (panelObserver) {
+      panelObserver.disconnect();
+      panelObserver = null;
+    }
     rmClosePanel();
     if (root && root.parentNode) root.parentNode.removeChild(root);
-    root = btn = panel = null;
+    root = btn2 = panel2 = null;
     const st = document.getElementById("seidr-rm-styles");
     if (st && st.parentNode) st.parentNode.removeChild(st);
   }
@@ -9886,106 +13081,209 @@
   Seidr.rmOnSettingsChanged = rmOnSettingsChanged;
   Seidr.rmClearSessionBtnPos = rmClearSessionBtnPos;
   Seidr.rmEnterLiveRoomPlacement = rmEnterLiveRoomPlacement;
+  Seidr.rmRelayoutLauncher = rmRelayoutLauncher;
 
   // src/roomManager/chatAdminBtn.ts
-  function hasBcx() {
+  var BTN_ID2 = "seidr-chat-admin-rm";
+  var MENU_ID = "chat-admin-screen-menu";
+  var EXPORT_ID = "chat-admin-room-export";
+  var SCREEN_ID = "chat-admin-screen";
+  function wrap(id) {
     try {
-      return typeof window.bcx !== "undefined" && window.bcx != null;
+      if (typeof ElementWrap === "function") return ElementWrap(id);
     } catch (e) {
-      return false;
     }
-  }
-  function getEntryButtonRect() {
-    const size = 64;
-    const y = 132 + Math.floor((90 - size) / 2);
-    if (hasBcx()) return { x: 222, y, w: size, h: size };
-    return { x: 124, y, w: size, h: size };
-  }
-  function nativeChatAdminVisible() {
-    try {
-      if (typeof CurrentScreen !== "undefined" && CurrentScreen !== "ChatAdmin") return false;
-      if (typeof ChatAdminPreviewBackgroundMode !== "undefined" && ChatAdminPreviewBackgroundMode) {
-        return false;
-      }
-    } catch (e) {
-      return false;
-    }
-    const el = document.getElementById("InputName");
-    if (!el) return false;
-    if (el.hasAttribute("hidden")) return false;
-    if (el.style && el.style.display === "none") return false;
-    return true;
+    return document.getElementById(id);
   }
   function rmChatAdminBtnAllowed() {
     if (!rmIsShown()) return false;
     if (seidrGetSettings().roomManagerEnabled === false) return false;
-    return nativeChatAdminVisible();
+    if (wrap(SCREEN_ID) || wrap(MENU_ID) || wrap(EXPORT_ID)) return true;
+    try {
+      return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatAdmin";
+    } catch (e) {
+      return false;
+    }
   }
-  function rmChatAdminDrawButton() {
+  function logoUrl() {
+    return Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
+  }
+  function findMenubar() {
+    const menu = wrap(MENU_ID);
+    if (menu) return menu;
+    const exportBtn = wrap(EXPORT_ID);
+    if (exportBtn && exportBtn.parentElement) return exportBtn.parentElement;
+    const screen = wrap(SCREEN_ID);
+    if (screen) {
+      const bar = screen.querySelector('[role="menubar"]');
+      if (bar instanceof HTMLElement) return bar;
+      const header = screen.querySelector(".screen-header, header");
+      const headerBar = header && header.querySelector('[role="menubar"], .menubar');
+      if (headerBar instanceof HTMLElement) return headerBar;
+    }
+    const loose = document.querySelector(`#${EXPORT_ID}`);
+    if (loose && loose.parentElement) return loose.parentElement;
+    return null;
+  }
+  function rmChatAdminMountButton() {
     if (!rmChatAdminBtnAllowed()) return;
-    if (typeof DrawButton !== "function") return;
-    const r = getEntryButtonRect();
-    DrawButton(r.x, r.y, r.w, r.h, "", "White", "Icons/Preference.png");
+    if (document.getElementById(BTN_ID2)) return;
+    const host = findMenubar();
+    if (!host) return;
     try {
-      if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h) && typeof DrawButtonHover === "function") {
-        DrawButtonHover(r.x, r.y, r.w, r.h, "Room Manager");
-      }
+      rmInjectStyles();
     } catch (e) {
     }
-  }
-  function rmChatAdminClickButton() {
-    if (!rmChatAdminBtnAllowed()) return false;
-    try {
-      const r = getEntryButtonRect();
-      if (typeof MouseIn === "function" && MouseIn(r.x, r.y, r.w, r.h)) {
-        rmOpenPanel();
-        return true;
-      }
-    } catch (e) {
+    if (typeof ElementButton === "undefined" || !ElementButton || typeof ElementButton.Create !== "function") {
+      return;
     }
-    return false;
+    let button;
+    try {
+      button = ElementButton.Create(
+        BTN_ID2,
+        function() {
+          rmOpenPanel();
+        },
+        {
+          image: logoUrl(),
+          tooltip: "Room Manager"
+        }
+      );
+    } catch (e) {
+      console.warn("[Seidr] ChatAdmin RM button create failed", e);
+      return;
+    }
+    const menu = wrap(MENU_ID);
+    if (menu) {
+      ElementWrap(MENU_ID)?.append(button);
+    } else {
+      host.append(button);
+    }
   }
-  Seidr.rmChatAdminDrawButton = rmChatAdminDrawButton;
-  Seidr.rmChatAdminClickButton = rmChatAdminClickButton;
+  function rmChatAdminMountButtonSoon() {
+    rmChatAdminMountButton();
+    queueMicrotask(function() {
+      rmChatAdminMountButton();
+    });
+    setTimeout(function() {
+      rmChatAdminMountButton();
+    }, 0);
+    setTimeout(function() {
+      rmChatAdminMountButton();
+    }, 50);
+    setTimeout(function() {
+      rmChatAdminMountButton();
+    }, 200);
+  }
+  Seidr.rmChatAdminMountButton = rmChatAdminMountButton;
+  Seidr.rmChatAdminMountButtonSoon = rmChatAdminMountButtonSoon;
 
   // src/roomManager/index.ts
-  var installed2 = false;
+  var installed4 = false;
   var tick = null;
+  var lastTickKey = "";
+  function onWindowResize() {
+    try {
+      rmRelayoutLauncher();
+    } catch (e) {
+    }
+  }
+  function detachResizeListeners() {
+    window.removeEventListener("resize", onWindowResize);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", onWindowResize);
+      window.visualViewport.removeEventListener("scroll", onWindowResize);
+    }
+  }
+  function attachResizeListeners() {
+    detachResizeListeners();
+    window.addEventListener("resize", onWindowResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", onWindowResize);
+      window.visualViewport.addEventListener("scroll", onWindowResize);
+    }
+  }
+  function tickStateKey() {
+    let screen = "";
+    let dialog = "0";
+    let admin = "0";
+    let fbm = "0";
+    try {
+      if (typeof CurrentScreen !== "undefined") screen = String(CurrentScreen || "");
+    } catch (e) {
+    }
+    try {
+      dialog = typeof CurrentCharacter !== "undefined" && CurrentCharacter != null ? "1" : "0";
+    } catch (e) {
+    }
+    try {
+      admin = rmIsAdmin() ? "1" : "0";
+    } catch (e) {
+    }
+    try {
+      const el = document.getElementById("fbm-float-chat");
+      fbm = el && !el.hidden ? "1" : "0";
+    } catch (e) {
+    }
+    return screen + "|" + dialog + "|" + admin + "|" + fbm;
+  }
   function onScreenTick() {
-    rmUpdateLauncherVisibility();
+    const key = tickStateKey();
+    if (key !== lastTickKey) {
+      lastTickKey = key;
+      rmUpdateLauncherVisibility();
+    }
     try {
       rmUpdateApplyUi();
+    } catch (e) {
+    }
+    try {
+      rmChatAdminMountButton();
     } catch (e) {
     }
   }
   function rmInstall() {
     if (!rmIsShown()) return;
-    if (installed2) {
+    if (installed4) {
       rmUpdateLauncherVisibility();
       return;
     }
-    installed2 = true;
+    installed4 = true;
     rmInvalidateStore();
     rmEnsureShell();
     rmUpdateLauncherVisibility();
+    lastTickKey = tickStateKey();
+    Seidr.tryHook("ChatAdminLoad", "ChatAdminLoad", 12, function(args, next) {
+      const ret = next(args);
+      const after = function() {
+        try {
+          rmChatAdminMountButtonSoon();
+        } catch (e) {
+        }
+        try {
+          rmUpdateLauncherVisibility();
+        } catch (e) {
+        }
+      };
+      if (ret && typeof ret.then === "function") {
+        return ret.then(function(v) {
+          after();
+          return v;
+        }, function(err) {
+          after();
+          throw err;
+        });
+      }
+      after();
+      return ret;
+    });
     Seidr.tryHook("ChatAdminRun", "ChatAdminRun", 12, function(args, next) {
       const ret = next(args);
       try {
-        rmChatAdminDrawButton();
-      } catch (e) {
-      }
-      try {
-        rmUpdateLauncherVisibility();
+        rmChatAdminMountButton();
       } catch (e) {
       }
       return ret;
-    });
-    Seidr.tryHook("ChatAdminClick", "ChatAdminClick", 20, function(args, next) {
-      try {
-        if (rmChatAdminClickButton()) return;
-      } catch (e) {
-      }
-      return next(args);
     });
     Seidr.tryHook("ChatAdminExit", "ChatAdminExit", 0, function(args, next) {
       const ret = next(args);
@@ -10031,25 +13329,122 @@
       }
       return ret;
     });
-    if (tick) clearInterval(tick);
-    tick = setInterval(onScreenTick, 1e3);
-    window.addEventListener("resize", function() {
+    Seidr.tryHook("commonSetScreen", "CommonSetScreen", 0, function(args, next) {
+      const ret = next(args);
       try {
+        lastTickKey = tickStateKey();
         rmUpdateLauncherVisibility();
       } catch (e) {
       }
+      try {
+        rmUpdateApplyUi();
+      } catch (e) {
+      }
+      return ret;
     });
+    Seidr.tryHook("ChatRoomResize", "ChatRoomResize", 2, function(args, next) {
+      const ret = next(args);
+      try {
+        rmRelayoutLauncher();
+      } catch (e) {
+      }
+      return ret;
+    });
+    if (tick) clearInterval(tick);
+    tick = setInterval(onScreenTick, 1e3);
+    attachResizeListeners();
   }
   function rmUninstall() {
     if (tick) {
       clearInterval(tick);
       tick = null;
     }
+    detachResizeListeners();
+    lastTickKey = "";
     rmDestroyShell();
-    installed2 = false;
+    installed4 = false;
   }
   Seidr.installRoomManager = rmInstall;
   Seidr.uninstallRoomManager = rmUninstall;
+  Seidr.rmUpdateLauncherVisibility = rmUpdateLauncherVisibility;
+  Seidr.rmRelayoutLauncher = rmRelayoutLauncher;
+
+  // src/settings/chatFont.ts
+  var STYLE_ID = "seidr-chat-font";
+  var TEXT_SELECTORS = "#TextAreaChatLog, #InputChat";
+  var resizeHooked = false;
+  function clubFontFallback() {
+    try {
+      if (typeof CommonGetFontName === "function") {
+        const stack = CommonGetFontName();
+        if (typeof stack === "string" && stack.trim()) return stack.trim();
+      }
+    } catch (e) {
+    }
+    return '"Arial", sans-serif';
+  }
+  function clubScaledPx(base) {
+    try {
+      const canvas = MainCanvas && MainCanvas.canvas;
+      if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+        const scale = Math.min(canvas.clientWidth, canvas.clientHeight) / 1e3;
+        const px = base * scale;
+        if (Number.isFinite(px) && px > 0) return Math.round(px * 100) / 100;
+      }
+    } catch (e) {
+    }
+    return base;
+  }
+  function removeChatFontStyle() {
+    const el = document.getElementById(STYLE_ID);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+  function seidrApplyChatFont() {
+    if (typeof document === "undefined") return;
+    const s = seidrGetSettings();
+    const font = seidrNormalizeChatFont(s.chatFont);
+    const size = seidrNormalizeChatFontSize(s.chatFontSize);
+    if (!font && !size) {
+      removeChatFontStyle();
+      return;
+    }
+    const rules = [];
+    if (font) {
+      rules.push('  font-family: "' + font + '", ' + clubFontFallback() + " !important;");
+    }
+    if (size) {
+      rules.push("  font-size: " + clubScaledPx(size) + "px !important;");
+    }
+    const css = TEXT_SELECTORS + " {\n" + rules.join("\n") + "\n}";
+    let el = document.getElementById(STYLE_ID);
+    if (!el) {
+      el = document.createElement("style");
+      el.id = STYLE_ID;
+      (document.head || document.documentElement).appendChild(el);
+    }
+    el.textContent = css;
+  }
+  function seidrInstallChatFont() {
+    seidrApplyChatFont();
+    if (resizeHooked) return;
+    resizeHooked = true;
+    const hook = function(args, next) {
+      const ret = next(args);
+      try {
+        seidrApplyChatFont();
+      } catch (e) {
+      }
+      return ret;
+    };
+    try {
+      if (typeof Seidr.tryHook === "function") {
+        Seidr.tryHook("ChatRoomResize", "ChatRoomResize", 2, hook);
+      } else if (typeof Seidr.hookFunction === "function") {
+        Seidr.hookFunction("ChatRoomResize", 2, hook);
+      }
+    } catch (e) {
+    }
+  }
 
   // src/settings/drawOffsets.ts
   function seidrApplyDrawOffsets(raw) {
@@ -10057,12 +13452,65 @@
     Seidr.drawOffsets = seidrCloneDrawOffsets(next);
     return Seidr.drawOffsets;
   }
+  function seidrApplyDrawAdvancedOffsets(raw) {
+    const next = seidrNormalizeDrawAdvancedOffsets(raw);
+    Seidr.drawAdvancedOffsets = seidrCloneDrawAdvancedOffsets(next);
+    return Seidr.drawAdvancedOffsets;
+  }
+  function seidrApplyDrawAdvancedMode(on) {
+    Seidr.drawAdvancedMode = !!on;
+    return Seidr.drawAdvancedMode;
+  }
+  function seidrApplyDrawAllowSync(on) {
+    const next = !!on;
+    Seidr.drawAllowSync = next;
+    if (!next && Seidr.clearDrawSyncOverlays) {
+      try {
+        Seidr.clearDrawSyncOverlays();
+      } catch (e) {
+      }
+    }
+    return Seidr.drawAllowSync;
+  }
   function seidrLoadCommittedDrawOffsets() {
-    return seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+    const s = seidrGetSettings();
+    seidrApplyDrawAdvancedMode(s.drawAdvancedMode);
+    seidrApplyDrawAllowSync(s.drawAllowSync);
+    seidrApplyDrawAdvancedOffsets(s.drawAdvancedOffsets);
+    return seidrApplyDrawOffsets(s.drawOffsets);
+  }
+  function seidrApplyMapDrawOffsets(raw) {
+    const next = seidrNormalizeDrawOffsets(raw);
+    Seidr.mapDrawOffsets = seidrCloneDrawOffsets(next);
+    return Seidr.mapDrawOffsets;
+  }
+  function seidrApplyMapDrawAdvancedOffsets(raw) {
+    const next = seidrNormalizeDrawAdvancedOffsets(raw);
+    Seidr.mapDrawAdvancedOffsets = seidrCloneDrawAdvancedOffsets(next);
+    return Seidr.mapDrawAdvancedOffsets;
+  }
+  function seidrApplyMapDrawAdvancedMode(on) {
+    Seidr.mapDrawAdvancedMode = !!on;
+    return Seidr.mapDrawAdvancedMode;
+  }
+  function seidrLoadCommittedMapDrawOffsets() {
+    const s = seidrGetSettings();
+    seidrApplyMapDrawAdvancedMode(false);
+    seidrApplyMapDrawAdvancedOffsets(seidrDefaultDrawAdvancedOffsets());
+    return seidrApplyMapDrawOffsets(s.mapDrawOffsets);
   }
   Seidr.seidrDefaultDrawOffsets = seidrDefaultDrawOffsets;
+  Seidr.seidrDefaultMapDrawOffsets = seidrDefaultMapDrawOffsets;
+  Seidr.seidrDefaultDrawAdvancedOffsets = seidrDefaultDrawAdvancedOffsets;
   Seidr.seidrApplyDrawOffsets = seidrApplyDrawOffsets;
+  Seidr.seidrApplyDrawAdvancedOffsets = seidrApplyDrawAdvancedOffsets;
+  Seidr.seidrApplyDrawAdvancedMode = seidrApplyDrawAdvancedMode;
+  Seidr.seidrApplyDrawAllowSync = seidrApplyDrawAllowSync;
   Seidr.seidrLoadCommittedDrawOffsets = seidrLoadCommittedDrawOffsets;
+  Seidr.seidrApplyMapDrawOffsets = seidrApplyMapDrawOffsets;
+  Seidr.seidrApplyMapDrawAdvancedOffsets = seidrApplyMapDrawAdvancedOffsets;
+  Seidr.seidrApplyMapDrawAdvancedMode = seidrApplyMapDrawAdvancedMode;
+  Seidr.seidrLoadCommittedMapDrawOffsets = seidrLoadCommittedMapDrawOffsets;
 
   // src/settings/styles.ts
   function seidrSettingsCss() {
@@ -10229,13 +13677,29 @@
       ".seidr-settings-draw-field .seidr-num-wrap:focus-within input {",
       "  border-color: #d4a017;",
       "}",
-      ".seidr-settings-draw-row > button[data-draw-reset] {",
+      ".seidr-settings-draw-row > button[data-draw-reset],",
+      ".seidr-settings-draw-row > button[data-draw-adv-reset],",
+      ".seidr-settings-draw-row > button[data-map-draw-reset] {",
       "  background: rgba(60,48,80,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14);",
       "  border-radius: 4px; padding: 4px 10px; cursor: pointer;",
+      "  font: inherit;",
       "}",
-      ".seidr-settings-draw-row > button[data-draw-reset]:hover { border-color: #d4a017; }",
+      ".seidr-settings-draw-row > button[data-draw-reset]:hover,",
+      ".seidr-settings-draw-row > button[data-draw-adv-reset]:hover,",
+      ".seidr-settings-draw-row > button[data-map-draw-reset]:hover { border-color: #d4a017; }",
       ".seidr-settings-draw-actions { margin-top: 10px; }",
+      ".seidr-settings-draw-block { margin-top: 4px; }",
+      ".seidr-settings-draw-disabled {",
+      "  opacity: 0.45; pointer-events: none;",
+      "}",
+      ".seidr-settings-draw-warn {",
+      "  color: #d4a017 !important; margin-top: 8px;",
+      "}",
+      ".seidr-settings-check {",
+      "  display: inline-flex; align-items: center; gap: 8px;",
+      "  font-size: 12px; color: #f0e6d4; cursor: pointer;",
+      "}",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
       "}",
@@ -10666,17 +14130,17 @@
   function $2(id) {
     return document.getElementById(id);
   }
-  function escapeHtml4(s) {
+  function escapeHtml5(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml4(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml4(o.label) + "</option>";
+      return '<option value="' + escapeHtml5(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml5(o.label) + "</option>";
     }).join("");
   }
   function stringOpts(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml4(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml4(o) + "</option>";
+      return '<option value="' + escapeHtml5(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml5(o) + "</option>";
     }).join("");
   }
   function arousalResultsHtml(selected, filter) {
@@ -10689,10 +14153,10 @@
         return a.label.toLowerCase().indexOf(q) >= 0 || a.id.toLowerCase().indexOf(q) >= 0;
       });
       if (!rows.length) return;
-      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml4(g.label) + "</div>");
+      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml5(g.label) + "</div>");
       rows.forEach(function(a) {
         parts.push(
-          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml4(a.id) + '">' + escapeHtml4(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml4(a.id) + "</span></button>"
+          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml5(a.id) + '">' + escapeHtml5(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml5(a.id) + "</span></button>"
         );
       });
     });
@@ -10706,10 +14170,10 @@
     const open = arousalPickerOpen;
     return [
       '<div class="seidr-act-arousal-picker' + (open ? " seidr-act-arousal-open" : "") + '">',
-      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml4(id) + '" />',
+      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml5(id) + '" />',
       '<button type="button" class="seidr-act-arousal-toggle" id="seidr-act-arousal-toggle" title="Choose Club arousal template">',
       '<span class="seidr-act-arousal-toggle-lab">Template</span>',
-      '<strong id="seidr-act-arousal-label">' + escapeHtml4(seidrArousalActivityLabel(id)) + "</strong>",
+      '<strong id="seidr-act-arousal-label">' + escapeHtml5(seidrArousalActivityLabel(id)) + "</strong>",
       '<span class="seidr-act-arousal-caret" aria-hidden="true">' + (open ? "\u25B4" : "\u25BE") + "</span>",
       "</button>",
       '<div class="seidr-act-arousal-dropdown" id="seidr-act-arousal-dropdown"' + (open ? "" : " hidden") + ">",
@@ -10787,10 +14251,10 @@
       const on = selected.some(function(it) {
         return it.slot === slot && it.name === r.name;
       });
-      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml4(slot) + '" data-item-add-name="' + escapeHtml4(r.name) + '">' + escapeHtml4(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml4(r.name) + "</span></button>";
+      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml5(slot) + '" data-item-add-name="' + escapeHtml5(r.name) + '">' + escapeHtml5(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml5(r.name) + "</span></button>";
     }).join("");
   }
-  function itemsBlockHtml(items) {
+  function itemsBlockHtml(items, itemsOnTarget, itemsOnSource) {
     const list = items || [];
     const slots = seidrRestraintSlots();
     if (!slots.some(function(s) {
@@ -10799,11 +14263,18 @@
       itemsPickerSlot = slots[0] ? slots[0].id : "ItemMouth";
     }
     const chips = list.length ? list.map(function(it, idx) {
-      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml4(itemRefLabel(it)) + " \xD7</button>";
+      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml5(itemRefLabel(it)) + " \xD7</button>";
     }).join("") : '<span class="seidr-settings-hint">None \u2014 action shows without a specific restraint.</span>';
     const open = itemsPickerOpen;
+    const onTarget = itemsOnTarget !== false;
+    const onSource = !!itemsOnSource;
     return [
-      '<p class="seidr-settings-hint" style="margin-top:10px;">Items (optional \u2014 acted must wear one listed restraint)</p>',
+      '<p class="seidr-settings-hint" style="margin-top:10px;">Items (optional)</p>',
+      '<div class="seidr-settings-row" style="gap:12px;flex-wrap:wrap;margin-bottom:6px;">',
+      '<label><input type="checkbox" id="seidr-act-items-on-target"' + (onTarget ? " checked" : "") + ' /> Them <span class="seidr-settings-hint">(acted)</span></label>',
+      '<label><input type="checkbox" id="seidr-act-items-on-source"' + (onSource ? " checked" : "") + ' /> Me <span class="seidr-settings-hint">(you)</span></label>',
+      "</div>",
+      '<p class="seidr-settings-hint">Listed asset must be worn on checked side(s) \u2014 catalog slot or any of this action\u2019s zones (e.g. Mouth / Mouth2 / Mouth3).</p>',
       '<div class="seidr-act-items" id="seidr-act-items">' + chips + "</div>",
       '<div class="seidr-act-items-picker' + (open ? " seidr-act-items-open" : "") + '">',
       '<button type="button" class="seidr-act-btn" id="seidr-act-items-toggle" title="Browse Club restraints">',
@@ -10811,7 +14282,7 @@
       '<div class="seidr-act-items-dropdown" id="seidr-act-items-dropdown"' + (open ? "" : " hidden") + ">",
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;">',
       '<select id="seidr-act-items-slot">' + opts2(slots, itemsPickerSlot) + "</select>",
-      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml4(itemsPickerFilter) + '" />',
+      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml5(itemsPickerFilter) + '" />',
       "</div>",
       '<div class="seidr-act-items-results" id="seidr-act-items-results">' + itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, list) + "</div>",
       "</div>",
@@ -10821,7 +14292,7 @@
   function slotChips(selected) {
     return SEIDR_ACTION_SLOTS.map(function(s) {
       const on = selected.indexOf(s.id) >= 0;
-      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml4(s.id) + '">' + escapeHtml4(s.label) + "</button>";
+      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml5(s.id) + '">' + escapeHtml5(s.label) + "</button>";
     }).join("");
   }
   function ruleRowHtml(rule, index) {
@@ -10848,7 +14319,7 @@
       '<option value="1"' + (rule.not ? " selected" : "") + ">is not</option>",
       "</select>",
       "<select data-rule-type>" + SEIDR_COND_TYPES.map(function(t) {
-        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml4(t.label) + "</option>";
+        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml5(t.label) + "</option>";
       }).join("") + "</select>",
       extraHtml,
       '<button type="button" class="seidr-act-btn seidr-act-btn-icon" data-rule-del="' + index + '" title="Remove rule">\xD7</button>',
@@ -10874,7 +14345,7 @@
   }
   function chatTokenChips() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml4(t.token) + '" title="' + escapeHtml4(t.hint) + '">' + escapeHtml4(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml5(t.token) + '" title="' + escapeHtml5(t.hint) + '">' + escapeHtml5(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken(ta, token) {
@@ -10904,7 +14375,7 @@
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId === a.id ? " selected" : "") + ">" + escapeHtml4(a.name) + " (" + escapeHtml4(a.slots.join(", ")) + ")</option>";
+      return '<option value="' + a.id + '"' + (editId === a.id ? " selected" : "") + ">" + escapeHtml5(a.name) + " (" + escapeHtml5(a.slots.join(", ")) + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -10914,41 +14385,43 @@
     ].join("");
   }
   function renderEditor(root3) {
-    const wrap = root3.querySelector("#seidr-act-editor");
-    if (!wrap) return;
+    const wrap2 = root3.querySelector("#seidr-act-editor");
+    if (!wrap2) return;
     if (!draft) {
-      wrap.innerHTML = '<p class="seidr-settings-hint">Select an action or add a new one.</p>';
+      wrap2.innerHTML = '<p class="seidr-settings-hint">Select an action or add a new one.</p>';
       return;
     }
     const a = draft;
-    const arousal = a.effects.arousal || { enabled: false, activity: "Caress" };
+    const arousal = a.effects.arousal || { enabled: false, activity: "Caress", reverse: false };
     const sound = a.effects.sound || { enabled: false, sound: SEIDR_ACTION_SOUNDS[0] };
     const pose = a.effects.pose || { enabled: false, pose: "Kneel" };
     const chatOther2 = a.chatOther || seidrDefaultChatOther(a.name);
     const chatSelf2 = a.chatSelf || seidrDefaultChatSelf(a.name);
     if (!a.icon) a.icon = seidrDefaultActionIcon();
+    if (a.itemsOnTarget == null) a.itemsOnTarget = true;
+    if (a.itemsOnSource == null) a.itemsOnSource = false;
     const icon = seidrNormalizeActionIcon(a.icon);
     const iconUrl = seidrResolveIconRef(icon);
     const iconLab = seidrIconLabel(icon);
-    wrap.innerHTML = [
+    wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml4(a.name) + '" />',
+      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml5(a.name) + '" />',
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Who</span>',
       '<select id="seidr-act-audience">' + opts2(SEIDR_ACTION_AUDIENCES, a.audience) + "</select>",
       "</div>",
       '<div class="seidr-act-icon-row" style="margin-top:10px;">',
-      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml4(iconUrl) + '" alt="" width="40" height="40" />',
+      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml5(iconUrl) + '" alt="" width="40" height="40" />',
       "<div>",
-      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml4(iconLab) + "</p>",
+      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml5(iconLab) + "</p>",
       '<button type="button" class="seidr-act-btn" id="seidr-act-icon-pick">Select icon</button>',
       "</div>",
       "</div>",
       '<p class="seidr-settings-hint" style="margin-top:10px;">Slots (Activity Menu zones)</p>',
       '<div class="seidr-act-slots" id="seidr-act-slots">' + slotChips(a.slots) + "</div>",
-      itemsBlockHtml(a.items || []),
+      itemsBlockHtml(a.items || [], a.itemsOnTarget !== false, !!a.itemsOnSource),
       '<p class="seidr-settings-hint" style="margin-top:10px;">When visible</p>',
       '<div id="seidr-act-conds">' + groupsHtml(a.conditions.groups) + "</div>",
       '<div class="seidr-settings-row" style="margin-top:8px;">',
@@ -10958,17 +14431,20 @@
       '<div class="seidr-act-ph-row" id="seidr-act-ph">' + chatTokenChips() + "</div>",
       `<p class="seidr-settings-hint">Club style: SourceCharacter kisses TargetCharacter's lips. / SourceCharacter touches PronounPossessive arms.</p>`,
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Other</label>',
-      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml4(chatOther2) + "</textarea>",
+      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatOther2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-other-count">' + chatOther2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Self</label>',
-      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml4(chatSelf2) + "</textarea>",
+      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatSelf2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-self-count">' + chatSelf2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<p class="seidr-settings-hint" style="margin-top:10px;">Effects</p>',
       '<div class="seidr-settings-row">',
       '<label><input type="checkbox" id="seidr-act-arousal-on"' + (arousal.enabled ? " checked" : "") + " /> Add arousal</label>",
       "</div>",
       arousalPickerHtml(arousal.activity || "Caress"),
-      '<p class="seidr-settings-hint">Click Template to search Club activities. Chat text stays your action name.</p>',
+      '<div class="seidr-settings-row" style="margin-top:6px;">',
+      '<label><input type="checkbox" id="seidr-act-arousal-reverse"' + (arousal.reverse ? " checked" : "") + " /> Reverse give/receive</label>",
+      "</div>",
+      '<p class="seidr-settings-hint">Click Template to search Club activities. Chat text stays your action name. Reverse flips Club Self (receiving) / Other (giving) for this action.</p>',
       '<div class="seidr-settings-row" style="margin-top:8px;">',
       '<label><input type="checkbox" id="seidr-act-sound-on"' + (sound.enabled ? " checked" : "") + " /> Play sound</label>",
       '<select id="seidr-act-sound">' + stringOpts(SEIDR_ACTION_SOUNDS, sound.sound) + "</select>",
@@ -10991,6 +14467,8 @@
     const chatOtherEl = root3.querySelector("#seidr-act-chat-other");
     const chatSelfEl = root3.querySelector("#seidr-act-chat-self");
     const name = nameEl && nameEl.value.trim() ? nameEl.value.trim() : draft.name;
+    const itemsOnTargetEl = root3.querySelector("#seidr-act-items-on-target");
+    const itemsOnSourceEl = root3.querySelector("#seidr-act-items-on-source");
     const next = {
       id: draft.id,
       name,
@@ -11000,13 +14478,15 @@
       chatSelf: chatSelfEl && chatSelfEl.value.trim() ? chatSelfEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatSelf(name),
       icon: seidrNormalizeActionIcon(draft.icon || seidrDefaultActionIcon()),
       items: (draft.items || []).slice(),
+      itemsOnTarget: itemsOnTargetEl ? !!itemsOnTargetEl.checked : draft.itemsOnTarget !== false,
+      itemsOnSource: itemsOnSourceEl ? !!itemsOnSourceEl.checked : !!draft.itemsOnSource,
       conditions: { groups: [] },
       effects: {}
     };
     const slotBtns = root3.querySelectorAll(".seidr-act-slot-on");
     const slots = [];
-    slotBtns.forEach(function(btn2) {
-      const s = btn2.getAttribute("data-slot");
+    slotBtns.forEach(function(btn3) {
+      const s = btn3.getAttribute("data-slot");
       if (s && slots.indexOf(s) < 0) slots.push(s);
     });
     if (slots.length) next.slots = slots;
@@ -11035,10 +14515,12 @@
     next.conditions = { groups };
     const aOn = root3.querySelector("#seidr-act-arousal-on");
     const aAct = root3.querySelector("#seidr-act-arousal-act");
+    const aRev = root3.querySelector("#seidr-act-arousal-reverse");
     const actVal = aAct && aAct.value || "Caress";
     next.effects.arousal = {
       enabled: !!(aOn && aOn.checked),
-      activity: SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(actVal) >= 0 ? actVal : "Caress"
+      activity: SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(actVal) >= 0 ? actVal : "Caress",
+      reverse: !!(aRev && aRev.checked)
     };
     const sOn = root3.querySelector("#seidr-act-sound-on");
     const sSel = root3.querySelector("#seidr-act-sound");
@@ -11116,16 +14598,19 @@
     }
     if (results) {
       results.addEventListener("click", function(ev) {
-        const btn2 = ev.target.closest("[data-arousal-id]");
-        if (!btn2 || !hidden) return;
-        const id = btn2.getAttribute("data-arousal-id");
+        const btn3 = ev.target.closest("[data-arousal-id]");
+        if (!btn3 || !hidden) return;
+        const id = btn3.getAttribute("data-arousal-id");
         if (!id || SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(id) < 0) return;
         hidden.value = id;
         if (labelEl) labelEl.textContent = seidrArousalActivityLabel(id);
         if (draft) {
           if (!draft.effects) draft.effects = {};
-          if (!draft.effects.arousal) draft.effects.arousal = { enabled: false, activity: id };
-          else draft.effects.arousal.activity = id;
+          if (!draft.effects.arousal) {
+            draft.effects.arousal = { enabled: false, activity: id, reverse: false };
+          } else {
+            draft.effects.arousal.activity = id;
+          }
         }
         setOpen(false);
       });
@@ -11174,9 +14659,9 @@
     function refreshResults() {
       if (!results || !draft) return;
       results.innerHTML = itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, draft.items || []);
-      results.querySelectorAll("[data-item-add-name]").forEach(function(btn2) {
-        btn2.addEventListener("click", function() {
-          const el = btn2;
+      results.querySelectorAll("[data-item-add-name]").forEach(function(btn3) {
+        btn3.addEventListener("click", function() {
+          const el = btn3;
           addItemRef(
             root3,
             el.getAttribute("data-item-add-slot") || "",
@@ -11207,11 +14692,11 @@
       refreshResults();
     });
     if (itemsPickerOpen) refreshResults();
-    root3.querySelectorAll("[data-item-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-item-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const idx = parseInt(btn2.getAttribute("data-item-del") || "", 10);
+        const idx = parseInt(btn3.getAttribute("data-item-del") || "", 10);
         if (!Number.isFinite(idx) || !draft.items) return;
         draft.items.splice(idx, 1);
         renderEditor(root3);
@@ -11237,17 +14722,17 @@
     if (!grid) return;
     seidrListActions().forEach(function(action) {
       const name = seidrActionActivityName(action.id);
-      const btn2 = grid.querySelector('button[name="' + name + '"]');
-      if (!btn2) return;
+      const btn3 = grid.querySelector('button[name="' + name + '"]');
+      if (!btn3) return;
       const url = seidrResolveActionIconUrl(action);
       try {
         if (typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.SetImage === "function") {
-          ElementButton.SetImage(btn2, url);
+          ElementButton.SetImage(btn3, url);
           return;
         }
       } catch (e) {
       }
-      const img = btn2.querySelector(".button-image");
+      const img = btn3.querySelector(".button-image");
       if (img && img instanceof HTMLImageElement) img.src = url;
       else if (img) {
         const css = url.indexOf("data:image") === 0 || url.indexOf("http") === 0 ? 'url("' + url + '")' : 'url("./' + url + '")';
@@ -11260,7 +14745,7 @@
     if (!draft) return;
     closeIconModal();
     readDraftFromDom(root3);
-    const panel3 = document.getElementById("seidr-settings-panel") || document.body;
+    const panel4 = document.getElementById("seidr-settings-panel") || document.body;
     const modal = document.createElement("div");
     modal.id = "seidr-act-icon-modal";
     modal.className = "seidr-act-icon-modal";
@@ -11276,7 +14761,7 @@
       "</div>",
       "</div>"
     ].join("");
-    panel3.appendChild(modal);
+    panel4.appendChild(modal);
     modal.addEventListener("wheel", function(ev) {
       ev.stopPropagation();
     }, { passive: true });
@@ -11303,27 +14788,27 @@
       const parts = [];
       function pushSection(title, cells) {
         if (!cells) return;
-        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml4(title) + "</div>");
+        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml5(title) + "</div>");
         parts.push('<div class="seidr-act-icon-sec-grid">' + cells + "</div>");
       }
       const seidrCells = SEIDR_BUILTIN_ICONS.filter(function(b) {
         if (!q) return true;
         return b.label.toLowerCase().indexOf(q) >= 0 || b.id.toLowerCase().indexOf(q) >= 0;
       }).map(function(b) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml4(b.id) + '" title="' + escapeHtml4(b.label) + '"><img src="' + escapeHtml4(b.url) + '" alt="" /><span>' + escapeHtml4(b.label) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml5(b.id) + '" title="' + escapeHtml5(b.label) + '"><img src="' + escapeHtml5(b.url) + '" alt="" /><span>' + escapeHtml5(b.label) + "</span></button>";
       }).join("");
       pushSection("Seidr", seidrCells);
       const actCells = SEIDR_ACTIVITY_ICON_IDS.filter(function(id) {
         if (!q) return true;
         return id.toLowerCase().indexOf(q) >= 0;
       }).map(function(id) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml4(id) + '" title="' + escapeHtml4(id) + '"><img src="' + escapeHtml4(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml4(id) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml5(id) + '" title="' + escapeHtml5(id) + '"><img src="' + escapeHtml5(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml5(id) + "</span></button>";
       }).join("");
       pushSection("Club Activity", actCells);
       grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
-      grid.querySelectorAll("[data-icon-id]").forEach(function(btn2) {
-        btn2.addEventListener("click", function() {
-          const el = btn2;
+      grid.querySelectorAll("[data-icon-id]").forEach(function(btn3) {
+        btn3.addEventListener("click", function() {
+          const el = btn3;
           const source = el.getAttribute("data-icon-source");
           const id = el.getAttribute("data-icon-id") || "";
           if (!source || !id) return;
@@ -11356,9 +14841,9 @@
       });
     });
     root3.querySelector("#seidr-act-ph")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-chat-token]");
-      if (!btn2) return;
-      const token = btn2.getAttribute("data-chat-token");
+      const btn3 = ev.target.closest("[data-chat-token]");
+      if (!btn3) return;
+      const token = btn3.getAttribute("data-chat-token");
       if (!token) return;
       const other = root3.querySelector("#seidr-act-chat-other");
       const self = root3.querySelector("#seidr-act-chat-self");
@@ -11371,9 +14856,9 @@
       }
     });
     root3.querySelector("#seidr-act-slots")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-slot]");
-      if (!btn2 || !draft) return;
-      const slot = btn2.getAttribute("data-slot");
+      const btn3 = ev.target.closest("[data-slot]");
+      if (!btn3 || !draft) return;
+      const slot = btn3.getAttribute("data-slot");
       if (!slot) return;
       const i = draft.slots.indexOf(slot);
       if (i >= 0) {
@@ -11393,22 +14878,22 @@
       renderEditor(root3);
       bindEditor(root3);
     });
-    root3.querySelectorAll("[data-group-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-group-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const gi = parseInt(btn2.getAttribute("data-group-del") || "", 10);
+        const gi = parseInt(btn3.getAttribute("data-group-del") || "", 10);
         if (!Number.isFinite(gi)) return;
         draft.conditions.groups.splice(gi, 1);
         renderEditor(root3);
         bindEditor(root3);
       });
     });
-    root3.querySelectorAll("[data-rule-add]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-rule-add]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const gi = parseInt(btn2.getAttribute("data-rule-add") || "", 10);
+        const gi = parseInt(btn3.getAttribute("data-rule-add") || "", 10);
         const g = draft.conditions.groups[gi];
         if (!g) return;
         g.rules.push({ who: "target", type: "isGagged", not: false });
@@ -11416,11 +14901,11 @@
         bindEditor(root3);
       });
     });
-    root3.querySelectorAll("[data-rule-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-rule-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const key = parseInt(btn2.getAttribute("data-rule-del") || "", 10);
+        const key = parseInt(btn3.getAttribute("data-rule-del") || "", 10);
         const gi = Math.floor(key / 100);
         const ri = key % 100;
         const g = draft.conditions.groups[gi];
@@ -11506,7 +14991,7 @@
     }
     host.hidden = false;
     const rows = importCandidates.map(function(a, idx) {
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml4(a.name) + "</label>";
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml5(a.name) + "</label>";
     }).join("");
     host.innerHTML = [
       '<p class="seidr-settings-hint">Select actions to import (new ids; skips when at the ' + SEIDR_ACTIONS_MAX + " limit).</p>",
@@ -11544,8 +15029,8 @@
       importCandidates = null;
       const paste = container.querySelector("#seidr-act-import-paste");
       if (paste) paste.value = "";
-      const panel3 = container.querySelector("#seidr-act-import-panel");
-      if (panel3) panel3.hidden = true;
+      const panel4 = container.querySelector("#seidr-act-import-panel");
+      if (panel4) panel4.hidden = true;
       renderImportPicker(container);
       editId = null;
       draft = null;
@@ -11712,17 +15197,17 @@
   // src/animations/ui.ts
   var editId2 = null;
   var draft2 = null;
-  function escapeHtml5(s) {
+  function escapeHtml6(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts3(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml5(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml5(o.label) + "</option>";
+      return '<option value="' + escapeHtml6(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml6(o.label) + "</option>";
     }).join("");
   }
   function stringOpts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml5(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml5(o || "(clear)") + "</option>";
+      return '<option value="' + escapeHtml6(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml6(o || "(clear)") + "</option>";
     }).join("");
   }
   function setMsg4(root3, text) {
@@ -11731,7 +15216,7 @@
   }
   function chatTokenChips2() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml5(t.token) + '" title="' + escapeHtml5(t.hint) + '">' + escapeHtml5(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml6(t.token) + '" title="' + escapeHtml6(t.hint) + '">' + escapeHtml6(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken2(ta, token) {
@@ -11765,7 +15250,7 @@
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml5(a.name) + " (" + a.steps.length + ")</option>";
+      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml6(a.name) + " (" + a.steps.length + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -11781,7 +15266,7 @@
   function waitStepperHtml(wait2) {
     return [
       '<div class="seidr-num-wrap">',
-      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml5(String(wait2)) + '" />',
+      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml6(String(wait2)) + '" />',
       '<div class="seidr-num-spin" aria-hidden="true">',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="1" tabindex="-1" title="Increase">\u25B2</button>',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="-1" tabindex="-1" title="Decrease">\u25BC</button>',
@@ -11795,7 +15280,7 @@
       const poseName = seidrPoseLabel(step.pose);
       return [
         '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-        "<summary>Pose \xB7 " + escapeHtml5(poseName) + "</summary>",
+        "<summary>Pose \xB7 " + escapeHtml6(poseName) + "</summary>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Pose</span>',
         "<select data-anim-pose>" + opts3(SEIDR_ACTION_POSES, step.pose) + "</select>",
@@ -11814,7 +15299,7 @@
     const exprs = [""].concat(SEIDR_ANIM_FACE_MAP[feature] || []);
     return [
       '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-      "<summary>Face \xB7 " + escapeHtml5(faceSummaryLabel(step)) + "</summary>",
+      "<summary>Face \xB7 " + escapeHtml6(faceSummaryLabel(step)) + "</summary>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Feature</span>',
       "<select data-anim-feature>" + stringOpts2(Object.keys(SEIDR_ANIM_FACE_MAP), feature) + "</select>",
@@ -11869,18 +15354,18 @@
     return { id: draft2.id, name, steps, chatText };
   }
   function renderEditor2(root3) {
-    const wrap = root3.querySelector("#seidr-anim-editor");
-    if (!wrap) return;
+    const wrap2 = root3.querySelector("#seidr-anim-editor");
+    if (!wrap2) return;
     if (!draft2) {
-      wrap.innerHTML = '<p class="seidr-settings-hint">Select an animation or add a new one.</p>';
+      wrap2.innerHTML = '<p class="seidr-settings-hint">Select an animation or add a new one.</p>';
       return;
     }
     const total = seidrAnimWaitTotal(draft2.steps);
     const chatText = draft2.chatText || "";
-    wrap.innerHTML = [
+    wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml5(draft2.name) + '" />',
+      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml6(draft2.name) + '" />',
       "</div>",
       '<p class="seidr-settings-hint" style="margin-top:8px;">Steps ' + draft2.steps.length + "/" + SEIDR_ANIM_STEPS_MAX + " \xB7 Wait total " + total.toFixed(2) + "s / " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s</p>",
       '<div id="seidr-anim-steps">' + draft2.steps.map(stepCardHtml).join("") + "</div>",
@@ -11891,7 +15376,7 @@
       '<p class="seidr-settings-hint" style="margin-top:10px;">Action text (optional, posted when play starts; Club tags, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
       '<div class="seidr-act-ph-row" id="seidr-anim-ph">' + chatTokenChips2() + "</div>",
       '<p class="seidr-settings-hint">Club style: SourceCharacter raises PronounPossessive hands.</p>',
-      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatText) + "</textarea>",
+      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatText) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-anim-chat-count">' + chatText.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
@@ -11952,11 +15437,11 @@
       draft2 = cur;
       renderEditor2(root3);
     });
-    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         const cur = readDraftFromDom2(root3) || draft2;
         if (!cur) return;
-        const idx = parseInt(btn2.getAttribute("data-anim-del-step") || "-1", 10);
+        const idx = parseInt(btn3.getAttribute("data-anim-del-step") || "-1", 10);
         if (idx < 0) return;
         cur.steps.splice(idx, 1);
         draft2 = cur;
@@ -11973,14 +15458,14 @@
     root3.querySelectorAll("[data-anim-feature], [data-anim-pose], [data-anim-expr]").forEach(function(sel) {
       sel.addEventListener("change", refreshFromDom);
     });
-    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn2) {
-      btn2.addEventListener("click", function(ev) {
+    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap = btn2.closest(".seidr-num-wrap");
-        const input = wrap ? wrap.querySelector("[data-anim-wait]") : null;
+        const wrap2 = btn3.closest(".seidr-num-wrap");
+        const input = wrap2 ? wrap2.querySelector("[data-anim-wait]") : null;
         if (!input) return;
-        const dir = parseInt(btn2.getAttribute("data-anim-wait-dir") || "0", 10);
+        const dir = parseInt(btn3.getAttribute("data-anim-wait-dir") || "0", 10);
         if (!dir) return;
         let n = parseFloat(input.value);
         if (!Number.isFinite(n)) n = 0.5;
@@ -11995,9 +15480,9 @@
       syncAnimChatCount(root3);
     });
     root3.querySelector("#seidr-anim-ph")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-anim-chat-token]");
-      if (!btn2) return;
-      const token = btn2.getAttribute("data-anim-chat-token");
+      const btn3 = ev.target.closest("[data-anim-chat-token]");
+      if (!btn3) return;
+      const token = btn3.getAttribute("data-anim-chat-token");
       if (!token) return;
       const ta = root3.querySelector("#seidr-anim-chat");
       if (!ta) return;
@@ -12080,7 +15565,7 @@
   var editVersionId = null;
   var importCandidates2 = null;
   var importFileName = "";
-  function escapeHtml6(s) {
+  function escapeHtml7(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function setMsg5(root3, text) {
@@ -12131,7 +15616,7 @@
     const pickOpts = maps.length ? maps.map(function(m) {
       const loc = m.location === "local" ? "Local" : "Remote";
       const n = m.versions.length;
-      return '<option value="' + escapeHtml6(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml6(m.name) + " (" + loc + ", " + n + "v)</option>";
+      return '<option value="' + escapeHtml7(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml7(m.name) + " (" + loc + ", " + n + "v)</option>";
     }).join("") : '<option value="">No maps yet</option>';
     let editorHtml = "";
     if (!map) {
@@ -12155,7 +15640,7 @@
       const verOpts = vers.map(function(v) {
         const when = v.savedAt ? new Date(v.savedAt).toLocaleString() : "";
         const tag = rmIsDefaultVersionName(v.name) ? " \xB7 remote-capable" : " \xB7 local only";
-        return '<option value="' + escapeHtml6(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml6(v.name) + tag + (when ? " \xB7 " + escapeHtml6(when) : "") + "</option>";
+        return '<option value="' + escapeHtml7(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml7(v.name) + tag + (when ? " \xB7 " + escapeHtml7(when) : "") + "</option>";
       }).join("");
       const curVer = vers.find(function(v) {
         return v.id === editVersionId;
@@ -12169,7 +15654,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Name</span>',
-        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml6(map.name) + '" />',
+        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml7(map.name) + '" />',
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Location</span>',
@@ -12185,7 +15670,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Ver. name</span>',
-        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml6(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
+        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml7(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
         "</div>",
         '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
         '<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
@@ -12242,7 +15727,7 @@
     host.hidden = false;
     const rows = importCandidates2.map(function(m, idx) {
       const n = m.versions.length;
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml6(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml7(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
     }).join("");
     host.innerHTML = [
       '<p class="seidr-settings-hint">Select maps to import (always Local only).</p>',
@@ -12337,10 +15822,10 @@
       refreshAll(root3);
       setMsg5(root3, "Saved names");
     });
-    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!editMapId) return;
-        const loc = btn2.getAttribute("data-seidr-map-loc");
+        const loc = btn3.getAttribute("data-seidr-map-loc");
         if (loc !== "local" && loc !== "remote") return;
         const r = rmSetMapLocation(editMapId, loc);
         if (!r.ok) {
@@ -12353,91 +15838,127 @@
     });
     root3.querySelector("#seidr-maps-load")?.addEventListener("click", function() {
       if (!editMapId || !editVersionId) return;
+      const mapId = editMapId;
+      const verId = editVersionId;
       const map = selectedMap();
       const ver = map && map.versions.find(function(v) {
-        return v.id === editVersionId;
+        return v.id === verId;
       });
-      if (!confirm("Load version \u201C" + (ver ? ver.name : "") + "\u201D into this room?")) return;
-      const r = rmLoadMapVersion(editMapId, editVersionId);
-      setMsg5(root3, r.ok ? "Map version loaded" : r.error || "Load failed");
+      void rmConfirm("Load version \u201C" + (ver ? ver.name : "") + "\u201D into this room?", {
+        title: "Load map",
+        confirmLabel: "Load"
+      }).then(function(ok) {
+        if (!ok) return;
+        const r = rmLoadMapVersion(mapId, verId);
+        setMsg5(root3, r.ok ? "Map version loaded" : r.error || "Load failed");
+      });
     });
     root3.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function() {
       if (!editMapId) return;
-      if (!confirm("Overwrite Default with the current room map?")) return;
-      const r = rmOverwriteDefault(editMapId);
-      if (!r.ok) {
-        setMsg5(root3, r.error || "Overwrite failed");
-        return;
-      }
-      editVersionId = r.version ? r.version.id : rmDefaultVersionId(editMapId);
-      refreshAll(root3);
-      setMsg5(root3, "Default overwritten");
+      const mapId = editMapId;
+      void rmConfirm("Overwrite Default with the current room map?", {
+        title: "Overwrite Default",
+        confirmLabel: "Overwrite"
+      }).then(function(ok) {
+        if (!ok) return;
+        const r = rmOverwriteDefault(mapId);
+        if (!r.ok) {
+          setMsg5(root3, r.error || "Overwrite failed");
+          return;
+        }
+        editVersionId = r.version ? r.version.id : rmDefaultVersionId(mapId);
+        refreshAll(root3);
+        setMsg5(root3, "Default overwritten");
+      });
     });
     root3.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function() {
       if (!editMapId) return;
-      const verNameEl = root3.querySelector("#seidr-maps-ver-name");
-      let verName = verNameEl && verNameEl.value.trim() || "";
-      if (!verName || verName === RM_MAP_DEFAULT_NAME) {
-        verName = window.prompt("Local version name (not Default):", "Development") || "";
-      }
-      if (!verName.trim()) {
-        setMsg5(root3, "Enter a version name");
-        return;
-      }
-      if (verName.trim() === RM_MAP_DEFAULT_NAME) {
-        setMsg5(root3, "Use Overwrite Default to update Default");
-        return;
-      }
-      const r = rmSaveNewVersion(editMapId, verName);
-      if (!r.ok) {
-        setMsg5(root3, r.error || "Save version failed");
-        return;
-      }
-      editVersionId = r.version ? r.version.id : null;
-      refreshAll(root3);
-      setMsg5(root3, "Local version saved");
+      const mapId = editMapId;
+      void (async function() {
+        const verNameEl = root3.querySelector("#seidr-maps-ver-name");
+        let verName = verNameEl && verNameEl.value.trim() || "";
+        if (!verName || verName === RM_MAP_DEFAULT_NAME) {
+          const prompted = await rmPrompt("Save new version", {
+            message: "Local version name (not Default):",
+            initial: "Development",
+            confirmLabel: "Save"
+          });
+          verName = prompted || "";
+        }
+        if (!verName.trim()) {
+          setMsg5(root3, "Enter a version name");
+          return;
+        }
+        if (verName.trim() === RM_MAP_DEFAULT_NAME) {
+          setMsg5(root3, "Use Overwrite Default to update Default");
+          return;
+        }
+        const r = rmSaveNewVersion(mapId, verName);
+        if (!r.ok) {
+          setMsg5(root3, r.error || "Save version failed");
+          return;
+        }
+        editVersionId = r.version ? r.version.id : null;
+        refreshAll(root3);
+        setMsg5(root3, "Local version saved");
+      })();
     });
     root3.querySelector("#seidr-maps-del-ver")?.addEventListener("click", function() {
       if (!editMapId || !editVersionId) return;
+      const mapId = editMapId;
+      const verId = editVersionId;
       const map = selectedMap();
       const ver = map && map.versions.find(function(v) {
-        return v.id === editVersionId;
+        return v.id === verId;
       });
-      const isDef = ver && rmIsDefaultVersionName(ver.name);
-      const only = map && map.versions.length <= 1;
-      const msg = isDef && only ? "Delete the entire map?" : isDef ? "Cannot delete Default while other versions exist. Delete the map instead?" : "Delete this local version?";
+      const isDef = !!(ver && rmIsDefaultVersionName(ver.name));
+      const only = !!(map && map.versions.length <= 1);
       if (isDef && !only) {
         setMsg5(root3, "Cannot delete Default while other versions exist \u2014 use Delete map");
         return;
       }
-      if (!confirm(msg)) return;
-      const r = rmDeleteVersion(editMapId, editVersionId);
-      if (!r.ok) {
-        setMsg5(root3, r.error || "Delete failed");
-        return;
-      }
-      if (only || isDef) {
-        editMapId = null;
-        editVersionId = null;
-      } else {
-        editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
-      }
-      refreshAll(root3);
-      setMsg5(root3, only || isDef ? "Map deleted" : "Version deleted");
+      const msg = only || isDef ? "Delete the entire map?" : "Delete this local version?";
+      void rmConfirm(msg, {
+        title: "Delete",
+        confirmLabel: "Delete",
+        danger: true
+      }).then(function(ok) {
+        if (!ok) return;
+        const r = rmDeleteVersion(mapId, verId);
+        if (!r.ok) {
+          setMsg5(root3, r.error || "Delete failed");
+          return;
+        }
+        if (only || isDef) {
+          editMapId = null;
+          editVersionId = null;
+        } else {
+          editVersionId = rmDefaultVersionId(mapId);
+        }
+        refreshAll(root3);
+        setMsg5(root3, only || isDef ? "Map deleted" : "Version deleted");
+      });
     });
     root3.querySelector("#seidr-maps-del-map")?.addEventListener("click", function() {
       if (!editMapId) return;
+      const mapId = editMapId;
       const map = selectedMap();
-      if (!confirm("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?")) return;
-      const r = rmDeleteMap(editMapId);
-      if (!r.ok) {
-        setMsg5(root3, r.error || "Delete failed");
-        return;
-      }
-      editMapId = null;
-      editVersionId = null;
-      refreshAll(root3);
-      setMsg5(root3, "Map deleted");
+      void rmConfirm("Delete map \u201C" + (map ? map.name : "") + "\u201D and all versions?", {
+        title: "Delete map",
+        confirmLabel: "Delete",
+        danger: true
+      }).then(function(ok) {
+        if (!ok) return;
+        const r = rmDeleteMap(mapId);
+        if (!r.ok) {
+          setMsg5(root3, r.error || "Delete failed");
+          return;
+        }
+        editMapId = null;
+        editVersionId = null;
+        refreshAll(root3);
+        setMsg5(root3, "Map deleted");
+      });
     });
   }
   function wireIo(root3) {
@@ -12579,7 +16100,7 @@
   var ABOUT_FEATURES = [
     {
       title: "Holds",
-      blurb: "Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso \u2014 shared poses when both of you run Seidr. Void disconnect keeps seats about 45s so a quick rejoin can restore the pile.",
+      blurb: "Pull Left / Right, Cuddle, Go Left / Right, Cuddle Into, Remove, and Leave on Item Torso \u2014 shared poses when both of you run Seidr. Void disconnect keeps seats about 45s; map rooms use seat tiles plus a 60s walk-back grace.",
       docPath: "/docs/view.html#HOLDS"
     },
     {
@@ -12599,12 +16120,12 @@
     },
     {
       title: "Chat Commands",
-      blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete and optional Fast Select (letter + Tab) speed things up.",
+      blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
       docPath: "/docs/view.html#COMMANDS"
     },
     {
       title: "Fast Open",
-      blurb: "Hold a modifier and click a room character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
+      blurb: "Hold a modifier and click a room or map character to open Club Activity View on your preferred Item* slot. Change the modifier if FAM also uses Shift-click.",
       docPath: "/docs/view.html#SETTINGS"
     },
     {
@@ -12619,11 +16140,11 @@
     },
     {
       title: "Drawing, Arousal & Storage",
-      blurb: "Pull/cuddle drawing offsets, cluster Names modes (Hitbox/Hover/Hide), arousal bar modes, and ExtensionSettings usage vs the soft cap.",
+      blurb: "Pull/cuddle Drawing (+ Advanced/Sync), Map Cuddle for map rooms, Names/Who, optional chat font, arousal bar modes, and ExtensionSettings usage vs the soft cap.",
       docPath: "/docs/view.html#SETTINGS"
     }
   ];
-  function escapeHtml7(s) {
+  function escapeHtml8(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function docsBase() {
@@ -12639,10 +16160,10 @@
     return [
       '<div class="seidr-settings-sec seidr-about-feature">',
       '<div class="seidr-about-feature-head">',
-      '<span class="seidr-about-feature-title">' + escapeHtml7(f.title) + "</span>",
-      '<a class="seidr-act-btn" href="' + escapeHtml7(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
+      '<span class="seidr-about-feature-title">' + escapeHtml8(f.title) + "</span>",
+      '<a class="seidr-act-btn" href="' + escapeHtml8(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
       "</div>",
-      '<p class="seidr-settings-hint">' + escapeHtml7(f.blurb) + "</p>",
+      '<p class="seidr-settings-hint">' + escapeHtml8(f.blurb) + "</p>",
       "</div>"
     ].join("");
   }
@@ -12654,12 +16175,12 @@
     const repo = typeof Seidr.REPO_URL === "string" && Seidr.REPO_URL ? Seidr.REPO_URL : "https://github.com/Freya-BC/Freyas-Seidr";
     container.innerHTML = [
       '<div class="seidr-settings-sec seidr-about-header">',
-      logo ? '<img class="seidr-about-logo" src="' + escapeHtml7(logo) + '" alt="" width="56" height="56" />' : "",
+      logo ? '<img class="seidr-about-logo" src="' + escapeHtml8(logo) + '" alt="" width="56" height="56" />' : "",
       '<div class="seidr-about-header-text">',
-      '<p class="seidr-about-name">' + escapeHtml7(name) + "</p>",
+      '<p class="seidr-about-name">' + escapeHtml8(name) + "</p>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Version</span>',
-      "<span>" + escapeHtml7(version) + "</span>",
+      "<span>" + escapeHtml8(version) + "</span>",
       "</div>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Developer</span>',
@@ -12667,8 +16188,8 @@
       "</div>",
       '<div class="seidr-about-links">',
       '<button type="button" class="seidr-act-btn" id="seidr-about-tutorial">Tutorial</button>',
-      '<a class="seidr-act-btn" href="' + escapeHtml7(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
-      '<a class="seidr-act-btn" href="' + escapeHtml7(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml8(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml8(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
       "</div>",
       "</div>",
       "</div>",
@@ -12691,7 +16212,19 @@
     return document.getElementById(id);
   }
   var drawDraft = null;
+  var drawAdvDraft = null;
+  var drawAdvancedModeDraft = false;
+  var drawAllowSyncDraft = false;
   var drawDirty = false;
+  var mapDrawDraft = null;
+  var mapDrawDirty = false;
+  var ADV_ROLES = ["left", "right", "cuddle", "hub"];
+  var ADV_ROLE_LABELS = {
+    left: "Left",
+    right: "Right",
+    cuddle: "Cuddle",
+    hub: "Hub"
+  };
   function drawNumInput(id, min, max) {
     return [
       '<span class="seidr-num-wrap">',
@@ -12719,6 +16252,38 @@
       "</div>"
     ].join("");
   }
+  function advPoseRow(id, label) {
+    const min = String(SEIDR_DRAW_OFFSET_MIN);
+    const max = String(SEIDR_DRAW_OFFSET_MAX);
+    return [
+      '<div class="seidr-settings-draw-row" data-adv-pose="' + id + '">',
+      '<span class="seidr-settings-draw-label">' + label + "</span>",
+      '<label class="seidr-settings-draw-field">X',
+      drawNumInput("seidr-set-draw-adv-" + id + "-x", min, max),
+      "</label>",
+      '<label class="seidr-settings-draw-field">Y',
+      drawNumInput("seidr-set-draw-adv-" + id + "-y", min, max),
+      "</label>",
+      '<button type="button" data-draw-adv-reset="' + id + '">Reset</button>',
+      "</div>"
+    ].join("");
+  }
+  function mapPoseRow(id, label) {
+    const xMin = id === "pull" ? "0" : String(SEIDR_DRAW_OFFSET_MIN);
+    const max = String(SEIDR_DRAW_OFFSET_MAX);
+    return [
+      '<div class="seidr-settings-draw-row" data-map-pose="' + id + '">',
+      '<span class="seidr-settings-draw-label">' + label + "</span>",
+      '<label class="seidr-settings-draw-field">X',
+      drawNumInput("seidr-set-map-draw-" + id + "-x", xMin, max),
+      "</label>",
+      '<label class="seidr-settings-draw-field">Y',
+      drawNumInput("seidr-set-map-draw-" + id + "-y", String(SEIDR_DRAW_OFFSET_MIN), max),
+      "</label>",
+      '<button type="button" data-map-draw-reset="' + id + '">Reset</button>',
+      "</div>"
+    ].join("");
+  }
   function seidrBuildGeneralHtml() {
     const opts4 = RM_LAUNCHER_POSITIONS.map(function(p) {
       return '<option value="' + p.id + '">' + p.label + "</option>";
@@ -12731,6 +16296,9 @@
     }).join("");
     const nameOpts = CLUSTER_NAME_MODES.map(function(m) {
       return '<option value="' + m.id + '">' + m.label + "</option>";
+    }).join("");
+    const nameScopeOpts = CLUSTER_NAME_SCOPES.map(function(s) {
+      return '<option value="' + s.id + '">' + s.label + "</option>";
     }).join("");
     const modOpts = FAST_OPEN_MODIFIERS.map(function(m) {
       return '<option value="' + m.id + '">' + m.label + "</option>";
@@ -12752,7 +16320,7 @@
       '<span class="seidr-settings-field-label">Default slot</span>',
       '<select id="seidr-set-fast-open-slot">' + slotOpts + "</select>",
       "</div>",
-      '<p class="seidr-settings-hint">Hold the modifier and click a room character to open Club Activity View on the default slot (falls back if that zone has no activities). If FAM Shift-click is installed, pick another modifier or disable this.</p>',
+      '<p class="seidr-settings-hint">Hold the modifier and click a room or map character to open Club Activity View on the default slot (falls back if that zone has no activities). If FAM Shift-click is installed, pick another modifier or disable this.</p>',
       "</details>",
       '<details class="seidr-settings-sec">',
       "<summary>Room Manager</summary>",
@@ -12779,17 +16347,52 @@
       '<details class="seidr-settings-sec">',
       "<summary>Drawing</summary>",
       '<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only \u2014 hitboxes stay put. Save Drawing to keep.</p>',
+      '<div id="seidr-set-draw-normal" class="seidr-settings-draw-block">',
       poseRow("pull", "Pull"),
       poseRow("cuddle", "Cuddle"),
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:12px;">',
+      '<label class="seidr-settings-check"><input type="checkbox" id="seidr-set-draw-advanced" /> Advanced Mode</label>',
+      "</div>",
+      '<p class="seidr-settings-hint seidr-settings-draw-warn">Advanced Mode and Sync are expert tools for private rooms, screenshots, and posed scenes. Do not use them in public rooms \u2014 they will look wrong or confusing to others.</p>',
+      '<div id="seidr-set-draw-advanced-block" class="seidr-settings-draw-block seidr-settings-draw-disabled">',
+      '<p class="seidr-settings-hint">Free-draw each role from the shared center (X/Y). When Advanced is on, normal Pull/Cuddle above is ignored.</p>',
+      advPoseRow("left", ADV_ROLE_LABELS.left),
+      advPoseRow("right", ADV_ROLE_LABELS.right),
+      advPoseRow("cuddle", ADV_ROLE_LABELS.cuddle),
+      advPoseRow("hub", ADV_ROLE_LABELS.hub),
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:12px;">',
+      '<label class="seidr-settings-check"><input type="checkbox" id="seidr-set-draw-allow-sync" /> Allow Sync</label>',
+      '<button type="button" id="seidr-set-draw-sync" disabled>Sync</button>',
+      "</div>",
+      '<p class="seidr-settings-hint">Allow Sync: apply hub draw overlays while you are in that cuddle (session only \u2014 does not change your saved Drawing). As hub, Sync (and auto-send on hold changes) broadcasts your current layout. Spoofed non-hub messages are ignored.</p>',
+      '<p class="seidr-settings-hint" id="seidr-set-draw-sync-hint"></p>',
       '<div class="seidr-settings-field-row" style="margin-top:10px;">',
       '<span class="seidr-settings-field-label">Names</span>',
       '<select id="seidr-set-cluster-names">' + nameOpts + "</select>",
       "</div>",
-      '<p class="seidr-settings-hint">Cuddle / pull nicknames only (raised and centered over the arousal bar). Hitbox always shows; Hover shows only while the cursor is on that seat; Hide never. Does not change status icons or art.</p>',
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Who</span>',
+      '<select id="seidr-set-cluster-name-scope">' + nameScopeOpts + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Nickname DrawText only (raised and centered over the arousal bar). Seidr holds = hub / pull / cuddle. Everyone = all seats including Echo pairs. Hitbox always shows; Hover only while the cursor is on that natural seat; Hide never. Does not change status icons or art.</p>',
       '<div class="seidr-settings-row seidr-settings-draw-actions">',
       '<button type="button" id="seidr-set-draw-save">Save Drawing</button>',
       "</div>",
       '<p class="seidr-settings-hint" id="seidr-set-draw-msg"></p>',
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Map Cuddle</summary>",
+      '<p class="seidr-settings-hint">Map-room only. Pull / Cuddle offsets (\u2212400\u2026400), scaled by map zoom. Hub stays on its tile. No Advanced Mode or Sync. Activity / restraint menus are unchanged. Save Map Cuddle to keep.</p>',
+      '<div id="seidr-set-map-draw-normal" class="seidr-settings-draw-block">',
+      mapPoseRow("pull", "Pull"),
+      mapPoseRow("cuddle", "Cuddle"),
+      "</div>",
+      '<div class="seidr-settings-row seidr-settings-draw-actions">',
+      '<button type="button" id="seidr-set-map-draw-save">Save Map Cuddle</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-set-map-draw-msg"></p>',
       "</details>",
       '<details class="seidr-settings-sec">',
       "<summary>Arousal bars</summary>",
@@ -12804,12 +16407,40 @@
       "</div>",
       '<p class="seidr-settings-hint">Seidr holds = hub, pull left/right, or cuddle. Show on change: bar appears when arousal moves, hides 1s after. Bottom bar: under each name inside the character hitbox (two slots; BCTweaks fills both).</p>',
       "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Chat font</summary>",
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Font</span>',
+      '<input type="text" id="seidr-set-chat-font" maxlength="64" autocomplete="off" spellcheck="false" placeholder="e.g. Georgia (empty = Club default)" />',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Size</span>',
+      '<span class="seidr-num-wrap">',
+      '<input type="number" class="seidr-settings-num" id="seidr-set-chat-font-size" min="0" max="' + SEIDR_CHAT_FONT_SIZE_MAX + '" step="1" placeholder="0 = Club" />',
+      '<span class="seidr-num-spin" aria-hidden="true">',
+      '<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="1" data-seidr-chat-font-size tabindex="-1" title="Increase">\u25B2</button>',
+      '<button type="button" class="seidr-num-spin-btn" data-seidr-num-dir="-1" data-seidr-chat-font-size tabindex="-1" title="Decrease">\u25BC</button>',
+      "</span>",
+      "</span>",
+      "</div>",
+      '<p class="seidr-settings-hint">Typeface and size for Club chat log and compose box. Empty font uses Preference \u2192 Graphics \u2192 Font (unavailable names fall back to that). Size uses Club base units \u2014 Small 28 / Medium 36 / Large 44; <code>0</code> or empty uses Preference \u2192 Chat \u2192 Font Size. Does not change canvas nicknames or menus.</p>',
+      "</details>",
       '<details class="seidr-settings-sec" data-seidr-tour="commands-enable">',
       "<summary>Commands</summary>",
       '<p class="seidr-settings-hint">Enable or disable Seidr chat commands. Off = not registered / ignored.</p>',
       '<div id="seidr-set-cmd-enable">' + SEIDR_CMD_ENABLE_LABELS.map(function(row) {
         return '<div class="seidr-settings-row"><label><input type="checkbox" data-seidr-cmd-en="' + row.key + '" /> ' + row.label + "</label></div>";
       }).join("") + "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:12px;">Club chat assist \u2014 Tab autocomplete for vanilla commands, and hover Reply on beep rows in Club chat (not the FBM float panel).</p>',
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-ac-whisper" /> Autocompletion /whisper</label>',
+      "</div>",
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-ac-beep" /> Autocompletion /beep</label>',
+      "</div>",
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-beep-reply" /> Activate Reply to Beep</label>',
+      "</div>",
       Seidr.SHOW_CMD_FAST_SELECT !== false ? [
         '<p class="seidr-settings-hint" style="margin-top:12px;">Fast Select (Dev) \u2014 letter + Tab in chat. Last successful /a /strip /poses target is preselected in member autocomplete.</p>',
         '<div class="seidr-settings-row">',
@@ -12928,9 +16559,9 @@
     const aboutPane = $3("seidr-settings-pane-about");
     if (aboutPane) seidrBuildAboutTab(aboutPane);
     const tabRoot = tabs || body;
-    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const tab = btn2.getAttribute("data-seidr-tab");
+    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const tab = btn3.getAttribute("data-seidr-tab");
         if (tab) seidrSelectSettingsTab(tab);
       });
     });
@@ -12957,10 +16588,66 @@
     const el = $3("seidr-set-draw-msg");
     if (el) el.textContent = text || "";
   }
+  function setMapDrawMsg(text) {
+    const el = $3("seidr-set-map-draw-msg");
+    if (el) el.textContent = text || "";
+  }
+  function setDrawSyncHint(text) {
+    const el = $3("seidr-set-draw-sync-hint");
+    if (el) el.textContent = text || "";
+  }
+  function setBlockDisabled(blockId, disabled) {
+    const block = $3(blockId);
+    if (!block) return;
+    if (disabled) block.classList.add("seidr-settings-draw-disabled");
+    else block.classList.remove("seidr-settings-draw-disabled");
+    block.querySelectorAll("input, button").forEach(function(el) {
+      el.disabled = disabled;
+    });
+  }
+  function updateDrawModeUi() {
+    const adv = !!drawAdvancedModeDraft;
+    setBlockDisabled("seidr-set-draw-normal", adv);
+    setBlockDisabled("seidr-set-draw-advanced-block", !adv);
+    const advCheck = $3("seidr-set-draw-advanced");
+    if (advCheck) advCheck.disabled = false;
+    updateDrawSyncButton();
+  }
+  function localPlayerIsHub() {
+    try {
+      if (typeof Player === "undefined" || !Player || typeof Player.MemberNumber !== "number") {
+        return false;
+      }
+      const hubs = Seidr.getHubs ? Seidr.getHubs() : {};
+      const cluster = SeidrState.clusterOf(hubs, Player.MemberNumber);
+      if (!cluster || cluster.hub !== Player.MemberNumber) return false;
+      return cluster.left != null || cluster.right != null || cluster.cuddle != null;
+    } catch (e) {
+      return false;
+    }
+  }
+  function updateDrawSyncButton() {
+    const btn3 = $3("seidr-set-draw-sync");
+    if (!btn3) return;
+    const allow = !!drawAllowSyncDraft;
+    const isHub = localPlayerIsHub();
+    btn3.disabled = !allow || !isHub;
+    if (!allow) setDrawSyncHint("Turn on Allow Sync to receive hub layouts or broadcast as hub.");
+    else if (!isHub) setDrawSyncHint("Sync is available when you are the hub of an active cuddle/pull.");
+    else setDrawSyncHint("Press Sync to send your current Drawing layout to this cuddle.");
+  }
   function fillDrawInputs(o) {
     ["pull", "cuddle"].forEach(function(pose) {
       const x = $3("seidr-set-draw-" + pose + "-x");
       const y = $3("seidr-set-draw-" + pose + "-y");
+      if (x) x.value = String(o[pose].x);
+      if (y) y.value = String(o[pose].y);
+    });
+  }
+  function fillAdvDrawInputs(o) {
+    ADV_ROLES.forEach(function(pose) {
+      const x = $3("seidr-set-draw-adv-" + pose + "-x");
+      const y = $3("seidr-set-draw-adv-" + pose + "-y");
       if (x) x.value = String(o[pose].x);
       if (y) y.value = String(o[pose].y);
     });
@@ -12978,27 +16665,106 @@
       }
     }, fallback);
   }
+  function readAdvDrawDraftFromInputs() {
+    const fallback = drawAdvDraft ? drawAdvDraft : seidrDefaultDrawAdvancedOffsets();
+    const raw = {};
+    ADV_ROLES.forEach(function(pose) {
+      raw[pose] = {
+        x: $3("seidr-set-draw-adv-" + pose + "-x")?.value,
+        y: $3("seidr-set-draw-adv-" + pose + "-y")?.value
+      };
+    });
+    return seidrNormalizeDrawAdvancedOffsets(raw, fallback);
+  }
   function liveApplyDraft() {
-    if (!drawDraft) return;
-    seidrApplyDrawOffsets(drawDraft);
+    if (drawDraft) seidrApplyDrawOffsets(drawDraft);
+    if (drawAdvDraft) seidrApplyDrawAdvancedOffsets(drawAdvDraft);
+    seidrApplyDrawAdvancedMode(drawAdvancedModeDraft);
+    seidrApplyDrawAllowSync(drawAllowSyncDraft);
+  }
+  function restoreCommittedDrawRuntime() {
+    const s = seidrGetSettings();
+    seidrApplyDrawOffsets(s.drawOffsets);
+    seidrApplyDrawAdvancedOffsets(s.drawAdvancedOffsets);
+    seidrApplyDrawAdvancedMode(s.drawAdvancedMode);
+    seidrApplyDrawAllowSync(s.drawAllowSync);
+  }
+  function fillMapDrawInputs(o) {
+    ["pull", "cuddle"].forEach(function(pose) {
+      const x = $3("seidr-set-map-draw-" + pose + "-x");
+      const y = $3("seidr-set-map-draw-" + pose + "-y");
+      if (x) x.value = String(o[pose].x);
+      if (y) y.value = String(o[pose].y);
+    });
+  }
+  function readMapDrawDraftFromInputs() {
+    const fallback = mapDrawDraft ? mapDrawDraft : seidrDefaultMapDrawOffsets();
+    return seidrNormalizeDrawOffsets({
+      pull: {
+        x: $3("seidr-set-map-draw-pull-x")?.value,
+        y: $3("seidr-set-map-draw-pull-y")?.value
+      },
+      cuddle: {
+        x: $3("seidr-set-map-draw-cuddle-x")?.value,
+        y: $3("seidr-set-map-draw-cuddle-y")?.value
+      }
+    }, fallback);
+  }
+  function liveApplyMapDraft() {
+    if (mapDrawDraft) seidrApplyMapDrawOffsets(mapDrawDraft);
+  }
+  function restoreCommittedMapDrawRuntime() {
+    const s = seidrGetSettings();
+    seidrApplyMapDrawOffsets(s.mapDrawOffsets);
   }
   function seidrBeginDrawDraft() {
-    drawDraft = seidrCloneDrawOffsets(seidrGetSettings().drawOffsets);
+    const s = seidrGetSettings();
+    drawDraft = seidrCloneDrawOffsets(s.drawOffsets);
+    drawAdvDraft = seidrCloneDrawAdvancedOffsets(s.drawAdvancedOffsets);
+    drawAdvancedModeDraft = !!s.drawAdvancedMode;
+    drawAllowSyncDraft = !!s.drawAllowSync;
     drawDirty = false;
     fillDrawInputs(drawDraft);
-    seidrApplyDrawOffsets(drawDraft);
+    fillAdvDrawInputs(drawAdvDraft);
+    const adv = $3("seidr-set-draw-advanced");
+    const sync = $3("seidr-set-draw-allow-sync");
+    if (adv) adv.checked = drawAdvancedModeDraft;
+    if (sync) sync.checked = drawAllowSyncDraft;
+    updateDrawModeUi();
+    liveApplyDraft();
     setDrawMsg("");
   }
+  function seidrBeginMapDrawDraft() {
+    const s = seidrGetSettings();
+    mapDrawDraft = seidrCloneDrawOffsets(s.mapDrawOffsets || seidrDefaultMapDrawOffsets());
+    mapDrawDirty = false;
+    fillMapDrawInputs(mapDrawDraft);
+    liveApplyMapDraft();
+    setMapDrawMsg("");
+  }
   function seidrDiscardDrawDraft() {
-    if (!drawDirty && !drawDraft) {
-      seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+    if (!drawDirty && !drawDraft && !drawAdvDraft) {
+      restoreCommittedDrawRuntime();
       drawDraft = null;
+      drawAdvDraft = null;
       return;
     }
     drawDraft = null;
+    drawAdvDraft = null;
     drawDirty = false;
-    seidrApplyDrawOffsets(seidrGetSettings().drawOffsets);
+    restoreCommittedDrawRuntime();
     setDrawMsg("");
+  }
+  function seidrDiscardMapDrawDraft() {
+    if (!mapDrawDirty && !mapDrawDraft) {
+      restoreCommittedMapDrawRuntime();
+      mapDrawDraft = null;
+      return;
+    }
+    mapDrawDraft = null;
+    mapDrawDirty = false;
+    restoreCommittedMapDrawRuntime();
+    setMapDrawMsg("");
   }
   function seidrRefreshSettingsUi() {
     const s = seidrGetSettings();
@@ -13008,19 +16774,26 @@
     const am = $3("seidr-set-arousal-mode");
     const as = $3("seidr-set-arousal-scope");
     const cn = $3("seidr-set-cluster-names");
+    const cns = $3("seidr-set-cluster-name-scope");
     const fo = $3("seidr-set-fast-open");
     const fom = $3("seidr-set-fast-open-mod");
     const fos = $3("seidr-set-fast-open-slot");
+    const cf = $3("seidr-set-chat-font");
+    const cfs = $3("seidr-set-chat-font-size");
     if (en) en.checked = !!s.roomManagerEnabled;
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
     if (am) am.value = s.arousalBarMode;
     if (as) as.value = s.arousalBarScope;
     if (cn) cn.value = s.clusterNameMode || "hitbox";
+    if (cns) cns.value = s.clusterNameScope || "seidrCluster";
     if (fo) fo.checked = s.fastOpenActionsEnabled !== false;
     if (fom) fom.value = s.fastOpenActionsModifier || "Shift";
     if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
+    if (cf) cf.value = s.chatFont || "";
+    if (cfs) cfs.value = s.chatFontSize > 0 ? String(s.chatFontSize) : "";
     seidrBeginDrawDraft();
+    seidrBeginMapDrawDraft();
     seidrRefreshStorageUi();
     try {
       const bag = seidrGetCommandsBag();
@@ -13033,6 +16806,12 @@
       const fse = $3("seidr-set-fast-select-empty");
       if (fs) fs.checked = bag.fastSelectEnabled !== false;
       if (fse) fse.value = bag.fastSelectEmpty || "disabled";
+      const acW = $3("seidr-set-ac-whisper");
+      const acB = $3("seidr-set-ac-beep");
+      const br = $3("seidr-set-beep-reply");
+      if (acW) acW.checked = bag.acWhisper !== false;
+      if (acB) acB.checked = bag.acBeep !== false;
+      if (br) br.checked = bag.beepReply !== false;
       const keys = bag.fastSelectKeys || seidrNormalizeFastSelectKeys(null);
       document.querySelectorAll("[data-seidr-fs-key]").forEach(function(el) {
         const key = el.getAttribute("data-seidr-fs-key");
@@ -13054,9 +16833,12 @@
     const am = $3("seidr-set-arousal-mode");
     const ascope = $3("seidr-set-arousal-scope");
     const cn = $3("seidr-set-cluster-names");
+    const cns = $3("seidr-set-cluster-name-scope");
     const fo = $3("seidr-set-fast-open");
     const fom = $3("seidr-set-fast-open-mod");
     const fos = $3("seidr-set-fast-open-slot");
+    const cf = $3("seidr-set-chat-font");
+    const cfs = $3("seidr-set-chat-font-size");
     const openRm = $3("seidr-set-open-rm");
     const openMsg = $3("seidr-set-open-rm-msg");
     function persist() {
@@ -13067,11 +16849,20 @@
         arousalBarMode: am && am.value ? am.value : "off",
         arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster",
         clusterNameMode: cn && cn.value ? cn.value : "hitbox",
+        clusterNameScope: cns && cns.value ? cns.value : "seidrCluster",
         fastOpenActionsEnabled: !!(fo && fo.checked),
         fastOpenActionsModifier: fom && fom.value ? fom.value : "Shift",
-        fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso"
+        fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso",
+        chatFont: cf ? cf.value : "",
+        chatFontSize: seidrNormalizeChatFontSize(cfs ? cfs.value : 0)
       };
-      seidrSaveSettings(patch);
+      const saved = seidrSaveSettings(patch);
+      if (saved.ok) {
+        const next = seidrGetSettings();
+        if (cf && cf.value !== (next.chatFont || "")) cf.value = next.chatFont || "";
+        if (cfs) cfs.value = next.chatFontSize > 0 ? String(next.chatFontSize) : "";
+        seidrApplyChatFont();
+      }
       if (onChange) onChange();
     }
     if (en) en.addEventListener("change", persist);
@@ -13079,10 +16870,36 @@
     if (pos) pos.addEventListener("change", persist);
     if (am) am.addEventListener("change", persist);
     if (ascope) ascope.addEventListener("change", persist);
+    if (cns) cns.addEventListener("change", persist);
     if (cn) cn.addEventListener("change", persist);
     if (fo) fo.addEventListener("change", persist);
     if (fos) fos.addEventListener("change", persist);
     if (fom) fom.addEventListener("change", persist);
+    if (cf) {
+      cf.addEventListener("change", persist);
+      cf.addEventListener("blur", persist);
+    }
+    if (cfs) {
+      cfs.addEventListener("change", persist);
+      cfs.addEventListener("blur", persist);
+    }
+    document.querySelectorAll("[data-seidr-chat-font-size][data-seidr-num-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!cfs) return;
+        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
+        if (!dir) return;
+        let n = parseFloat(cfs.value);
+        if (!Number.isFinite(n) || n <= 0) n = 36;
+        n = Math.round(n + dir);
+        if (n < 0) n = 0;
+        if (n > 0 && n < SEIDR_CHAT_FONT_SIZE_MIN) n = dir > 0 ? SEIDR_CHAT_FONT_SIZE_MIN : 0;
+        if (n > SEIDR_CHAT_FONT_SIZE_MAX) n = SEIDR_CHAT_FONT_SIZE_MAX;
+        cfs.value = n > 0 ? String(n) : "";
+        persist();
+      });
+    });
     function persistCmdEnable() {
       const bag = seidrGetCommandsBag();
       const raw = {};
@@ -13105,11 +16922,22 @@
         keyRaw[key] = !!el.checked;
       });
       bag.fastSelectKeys = seidrNormalizeFastSelectKeys(keyRaw);
+      const acW = $3("seidr-set-ac-whisper");
+      const acB = $3("seidr-set-ac-beep");
+      const br = $3("seidr-set-beep-reply");
+      if (acW) bag.acWhisper = !!acW.checked;
+      if (acB) bag.acBeep = !!acB.checked;
+      if (br) bag.beepReply = !!br.checked;
       const saved = seidrSaveCommandsBag(bag);
       const msg = $3("seidr-set-cmd-en-msg");
       if (msg) msg.textContent = saved.ok ? "Saved \u2014 reload chat commands applied" : saved.error || "Save failed";
       try {
         if (typeof Seidr.registerCommands === "function") Seidr.registerCommands();
+      } catch (e) {
+      }
+      try {
+        if (bag.beepReply !== false) seidrBeepReplyRescan();
+        else seidrBeepReplyStrip();
       } catch (e) {
       }
       if (onChange) onChange();
@@ -13124,6 +16952,12 @@
     const fseEl = $3("seidr-set-fast-select-empty");
     if (fsEl) fsEl.addEventListener("change", persistCmdEnable);
     if (fseEl) fseEl.addEventListener("change", persistCmdEnable);
+    const acWEl = $3("seidr-set-ac-whisper");
+    const acBEl = $3("seidr-set-ac-beep");
+    const brEl = $3("seidr-set-beep-reply");
+    if (acWEl) acWEl.addEventListener("change", persistCmdEnable);
+    if (acBEl) acBEl.addEventListener("change", persistCmdEnable);
+    if (brEl) brEl.addEventListener("change", persistCmdEnable);
     if (openRm) {
       openRm.addEventListener("click", function() {
         const s = seidrGetSettings();
@@ -13151,6 +16985,21 @@
       liveApplyDraft();
       setDrawMsg("Preview \u2014 Save Drawing to keep");
     }
+    function onAdvDrawLive() {
+      const next = readAdvDrawDraftFromInputs();
+      drawAdvDraft = next;
+      drawDirty = true;
+      liveApplyDraft();
+      setDrawMsg("Preview \u2014 Save Drawing to keep");
+    }
+    function onAdvDrawCommit() {
+      const next = readAdvDrawDraftFromInputs();
+      drawAdvDraft = next;
+      drawDirty = true;
+      fillAdvDrawInputs(next);
+      liveApplyDraft();
+      setDrawMsg("Preview \u2014 Save Drawing to keep");
+    }
     ["pull", "cuddle"].forEach(function(pose) {
       const x = $3("seidr-set-draw-" + pose + "-x");
       const y = $3("seidr-set-draw-" + pose + "-y");
@@ -13163,14 +17012,26 @@
         y.addEventListener("change", onDrawCommit);
       }
     });
-    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn2) {
-      btn2.addEventListener("click", function(ev) {
+    ADV_ROLES.forEach(function(pose) {
+      const x = $3("seidr-set-draw-adv-" + pose + "-x");
+      const y = $3("seidr-set-draw-adv-" + pose + "-y");
+      if (x) {
+        x.addEventListener("input", onAdvDrawLive);
+        x.addEventListener("change", onAdvDrawCommit);
+      }
+      if (y) {
+        y.addEventListener("input", onAdvDrawLive);
+        y.addEventListener("change", onAdvDrawCommit);
+      }
+    });
+    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap = btn2.closest(".seidr-num-wrap");
-        const input = wrap ? wrap.querySelector('input[type="number"]') : null;
-        if (!input) return;
-        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
+        const wrap2 = btn3.closest(".seidr-num-wrap");
+        const input = wrap2 ? wrap2.querySelector('input[type="number"]') : null;
+        if (!input || input.disabled) return;
+        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
         if (!dir) return;
         const step = parseFloat(input.step) || 1;
         const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
@@ -13185,9 +17046,9 @@
         input.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
-    document.querySelectorAll("[data-draw-reset]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const pose = btn2.getAttribute("data-draw-reset");
+    document.querySelectorAll("[data-draw-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-draw-reset");
         if (!pose || !drawDraft) return;
         const def = seidrDefaultDrawOffsets();
         drawDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -13197,53 +17058,178 @@
         setDrawMsg("Reset to default \u2014 Save Drawing to keep");
       });
     });
+    document.querySelectorAll("[data-draw-adv-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-draw-adv-reset");
+        if (!pose || !drawAdvDraft) return;
+        const def = seidrDefaultDrawAdvancedOffsets();
+        drawAdvDraft[pose] = { x: def[pose].x, y: def[pose].y };
+        drawDirty = true;
+        fillAdvDrawInputs(drawAdvDraft);
+        liveApplyDraft();
+        setDrawMsg("Reset to default \u2014 Save Drawing to keep");
+      });
+    });
+    const advToggle = $3("seidr-set-draw-advanced");
+    if (advToggle) {
+      advToggle.addEventListener("change", function() {
+        drawAdvancedModeDraft = !!advToggle.checked;
+        drawDirty = true;
+        updateDrawModeUi();
+        liveApplyDraft();
+        setDrawMsg("Preview \u2014 Save Drawing to keep");
+      });
+    }
+    const allowSyncToggle = $3("seidr-set-draw-allow-sync");
+    if (allowSyncToggle) {
+      allowSyncToggle.addEventListener("change", function() {
+        drawAllowSyncDraft = !!allowSyncToggle.checked;
+        drawDirty = true;
+        updateDrawSyncButton();
+        liveApplyDraft();
+        setDrawMsg("Preview \u2014 Save Drawing to keep");
+      });
+    }
+    const syncBtn = $3("seidr-set-draw-sync");
+    if (syncBtn) {
+      syncBtn.addEventListener("click", function() {
+        if (!drawAllowSyncDraft) {
+          setDrawSyncHint("Turn on Allow Sync first.");
+          return;
+        }
+        if (!localPlayerIsHub()) {
+          setDrawSyncHint("You must be the hub of an active cuddle/pull to Sync.");
+          updateDrawSyncButton();
+          return;
+        }
+        if (typeof Seidr.publishDrawSync !== "function") {
+          setDrawSyncHint("Sync unavailable.");
+          return;
+        }
+        try {
+          Seidr.publishDrawSync(Player.MemberNumber);
+          setDrawSyncHint("Draw Sync sent to this cuddle.");
+        } catch (e) {
+          setDrawSyncHint("Sync failed.");
+        }
+      });
+    }
     const saveBtn = $3("seidr-set-draw-save");
     if (saveBtn) {
       saveBtn.addEventListener("click", function() {
         const next = readDrawDraftFromInputs();
+        const nextAdv = readAdvDrawDraftFromInputs();
         drawDraft = next;
-        const saved = seidrSaveSettings({ drawOffsets: next });
+        drawAdvDraft = nextAdv;
+        drawAdvancedModeDraft = !!(advToggle && advToggle.checked);
+        drawAllowSyncDraft = !!(allowSyncToggle && allowSyncToggle.checked);
+        const saved = seidrSaveSettings({
+          drawOffsets: next,
+          drawAdvancedOffsets: nextAdv,
+          drawAdvancedMode: drawAdvancedModeDraft,
+          drawAllowSync: drawAllowSyncDraft
+        });
         if (!saved.ok) {
           setDrawMsg(saved.error || "Save failed");
           return;
         }
         drawDirty = false;
-        seidrApplyDrawOffsets(next);
+        liveApplyDraft();
         fillDrawInputs(next);
+        fillAdvDrawInputs(nextAdv);
+        updateDrawModeUi();
         setDrawMsg("Drawing saved");
+      });
+    }
+    function onMapDrawLive() {
+      const next = readMapDrawDraftFromInputs();
+      mapDrawDraft = next;
+      mapDrawDirty = true;
+      liveApplyMapDraft();
+      setMapDrawMsg("Preview \u2014 Save Map Cuddle to keep");
+    }
+    function onMapDrawCommit() {
+      const next = readMapDrawDraftFromInputs();
+      mapDrawDraft = next;
+      mapDrawDirty = true;
+      fillMapDrawInputs(next);
+      liveApplyMapDraft();
+      setMapDrawMsg("Preview \u2014 Save Map Cuddle to keep");
+    }
+    ["pull", "cuddle"].forEach(function(pose) {
+      const x = $3("seidr-set-map-draw-" + pose + "-x");
+      const y = $3("seidr-set-map-draw-" + pose + "-y");
+      if (x) {
+        x.addEventListener("input", onMapDrawLive);
+        x.addEventListener("change", onMapDrawCommit);
+      }
+      if (y) {
+        y.addEventListener("input", onMapDrawLive);
+        y.addEventListener("change", onMapDrawCommit);
+      }
+    });
+    document.querySelectorAll("[data-map-draw-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-map-draw-reset");
+        if (!pose || !mapDrawDraft) return;
+        const def = seidrDefaultMapDrawOffsets();
+        mapDrawDraft[pose] = { x: def[pose].x, y: def[pose].y };
+        mapDrawDirty = true;
+        fillMapDrawInputs(mapDrawDraft);
+        liveApplyMapDraft();
+        setMapDrawMsg("Reset to default \u2014 Save Map Cuddle to keep");
+      });
+    });
+    const mapSaveBtn = $3("seidr-set-map-draw-save");
+    if (mapSaveBtn) {
+      mapSaveBtn.addEventListener("click", function() {
+        const next = readMapDrawDraftFromInputs();
+        mapDrawDraft = next;
+        const saved = seidrSaveSettings({
+          mapDrawOffsets: next,
+          mapDrawAdvancedMode: false
+        });
+        if (!saved.ok) {
+          setMapDrawMsg(saved.error || "Save failed");
+          return;
+        }
+        mapDrawDirty = false;
+        liveApplyMapDraft();
+        fillMapDrawInputs(next);
+        setMapDrawMsg("Map Cuddle saved");
       });
     }
   }
 
   // src/settings/shell.ts
   var root2 = null;
-  var panel2 = null;
+  var panel3 = null;
   function clampPanel2() {
-    if (!panel2) return;
+    if (!panel3) return;
     const pad = 8;
-    const w = panel2.offsetWidth;
-    const h = panel2.offsetHeight;
-    let left = panel2.offsetLeft;
-    let top = panel2.offsetTop;
-    if (panel2.style.left) left = parseFloat(panel2.style.left) || left;
-    if (panel2.style.top) top = parseFloat(panel2.style.top) || top;
+    const w = panel3.offsetWidth;
+    const h = panel3.offsetHeight;
+    let left = panel3.offsetLeft;
+    let top = panel3.offsetTop;
+    if (panel3.style.left) left = parseFloat(panel3.style.left) || left;
+    if (panel3.style.top) top = parseFloat(panel3.style.top) || top;
     const maxL = Math.max(pad, window.innerWidth - w - pad);
     const maxT = Math.max(pad, window.innerHeight - h - pad);
     left = Math.min(Math.max(pad, left), maxL);
     top = Math.min(Math.max(pad, top), maxT);
-    panel2.style.left = left + "px";
-    panel2.style.top = top + "px";
-    panel2.style.right = "auto";
-    panel2.style.transform = "none";
+    panel3.style.left = left + "px";
+    panel3.style.top = top + "px";
+    panel3.style.right = "auto";
+    panel3.style.transform = "none";
   }
   function seidrEnsureSettingsShell() {
     seidrInjectSettingsStyles();
     if (root2 && document.body.contains(root2)) return;
     root2 = document.createElement("div");
     root2.id = "seidr-settings-root";
-    panel2 = document.createElement("div");
-    panel2.id = "seidr-settings-panel";
-    panel2.innerHTML = [
+    panel3 = document.createElement("div");
+    panel3.id = "seidr-settings-panel";
+    panel3.innerHTML = [
       '<div class="seidr-settings-header">',
       '  <div class="seidr-settings-header-title">Seidr<span>Settings</span></div>',
       '  <button type="button" class="seidr-settings-icon-btn" data-seidr="close" title="Close">\xD7</button>',
@@ -13251,31 +17237,31 @@
       '<div class="seidr-settings-tabs" id="seidr-settings-tabs" role="tablist"></div>',
       '<div class="seidr-settings-body" id="seidr-settings-body"></div>'
     ].join("");
-    root2.appendChild(panel2);
+    root2.appendChild(panel3);
     document.body.appendChild(root2);
     ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
       root2.addEventListener(type, function(ev) {
         ev.stopPropagation();
       });
     });
-    const header = panel2.querySelector(".seidr-settings-header");
+    const header = panel3.querySelector(".seidr-settings-header");
     (function() {
       let ox = 0;
       let oy = 0;
       header.addEventListener("pointerdown", function(ev) {
         if (ev.target.closest("button")) return;
-        const r = panel2.getBoundingClientRect();
+        const r = panel3.getBoundingClientRect();
         ox = ev.clientX - r.left;
         oy = ev.clientY - r.top;
-        panel2.style.transform = "none";
+        panel3.style.transform = "none";
         header.setPointerCapture(ev.pointerId);
         ev.preventDefault();
       });
       header.addEventListener("pointermove", function(ev) {
         if (!header.hasPointerCapture(ev.pointerId)) return;
-        panel2.style.left = ev.clientX - ox + "px";
-        panel2.style.top = ev.clientY - oy + "px";
-        panel2.style.right = "auto";
+        panel3.style.left = ev.clientX - ox + "px";
+        panel3.style.top = ev.clientY - oy + "px";
+        panel3.style.right = "auto";
       });
       header.addEventListener("pointerup", function(ev) {
         if (!header.hasPointerCapture(ev.pointerId)) return;
@@ -13283,7 +17269,7 @@
         clampPanel2();
       });
     })();
-    panel2.querySelector('[data-seidr="close"]').addEventListener("click", function() {
+    panel3.querySelector('[data-seidr="close"]').addEventListener("click", function() {
       seidrCloseSettings();
     });
     seidrBuildSettingsBody();
@@ -13298,22 +17284,26 @@
   }
   function seidrOpenSettings() {
     seidrEnsureSettingsShell();
-    if (!panel2) return;
+    if (!panel3) return;
     seidrRefreshSettingsUi();
-    panel2.querySelectorAll("details").forEach(function(d) {
+    panel3.querySelectorAll("details").forEach(function(d) {
       d.removeAttribute("open");
     });
-    panel2.classList.add("seidr-settings-open");
-    panel2.removeAttribute("hidden");
+    panel3.classList.add("seidr-settings-open");
+    panel3.removeAttribute("hidden");
   }
   function seidrCloseSettings() {
-    if (!panel2) return;
+    if (!panel3) return;
     try {
       seidrDiscardDrawDraft();
     } catch (e) {
     }
-    panel2.classList.remove("seidr-settings-open");
-    panel2.setAttribute("hidden", "true");
+    try {
+      seidrDiscardMapDrawDraft();
+    } catch (e) {
+    }
+    panel3.classList.remove("seidr-settings-open");
+    panel3.setAttribute("hidden", "true");
     if (typeof Seidr.stopTutorial === "function" && !(typeof Seidr.tourIsQuietClose === "function" && Seidr.tourIsQuietClose())) {
       try {
         Seidr.stopTutorial();
@@ -13350,7 +17340,7 @@
     PreferenceRegisterExtensionSetting({
       Identifier: "Seidr",
       ButtonText: "Seidr",
-      Image: Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/freyas-seidr-logo.png",
+      Image: Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png",
       load: function() {
         seidrOpenSettings();
         seidrLeavePreferenceToGame();
@@ -13430,7 +17420,7 @@
     }
     tourPrefill = null;
   }
-  function escapeHtml8(s) {
+  function escapeHtml9(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function ensureTourDom() {
@@ -13508,7 +17498,7 @@
         blocks: [
           "Fast Open jumps straight into Club Activity View without hunting the character menu.",
           "Enable it, pick a keyboard modifier (Shift/Ctrl/Alt/Cmd) and a default Item* slot (e.g. Item Torso).",
-          "Hold that modifier and click someone in the room. If FAM also uses Shift-click, pick a different modifier here."
+          "Hold that modifier and click someone in the room or on the map. If FAM also uses Shift-click, pick a different modifier here."
         ],
         prepare: function() {
           seidrOpenSettings();
@@ -13775,7 +17765,7 @@
     if (title) title.textContent = step.title;
     if (body) {
       body.innerHTML = (step.blocks || []).map(function(b) {
-        return '<p class="seidr-tour-card-block">' + escapeHtml8(b) + "</p>";
+        return '<p class="seidr-tour-card-block">' + escapeHtml9(b) + "</p>";
       }).join("");
     }
     if (stepEl) stepEl.textContent = tourIndex + 1 + " / " + tourSteps.length;
@@ -13882,9 +17872,6 @@
   var WELCOME_DEFER_MS = 400;
   var seidrWelcomeHooked = false;
   var seidrWelcomeTimer = null;
-  function escapeHtml9(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
   function seidrInLiveChatRoom() {
     try {
       if (typeof ServerPlayerIsInChatRoom === "function" && !ServerPlayerIsInChatRoom()) return false;
@@ -13903,7 +17890,7 @@
   }
   function seidrWelcomeHtml() {
     const text = "Welcome to Seidr. Holds (pull/cuddle), undress, custom actions, animations, and chat commands live here. Open settings with /seidr. For a guided walkthrough, open About \u2192 Tutorial.";
-    return '<span style="color:#d4a017;">[Seidr]</span> <span style="color:#f0e6d4;">' + escapeHtml9(text) + "</span>";
+    return seidrLocalChatHtml(text);
   }
   function seidrMaybeSendWelcome() {
     try {
@@ -13964,6 +17951,14 @@
       seidrLoadCommittedDrawOffsets();
     } catch (e) {
     }
+    try {
+      seidrLoadCommittedMapDrawOffsets();
+    } catch (e) {
+    }
+    try {
+      seidrInstallChatFont();
+    } catch (e) {
+    }
     seidrRegisterPreference();
     try {
       seidrInstallWelcome();
@@ -13971,6 +17966,87 @@
     }
   }
   Seidr.installSeidrSettings = installSeidrSettings;
+
+  // src/testSurface.ts
+  Seidr._test = Object.assign(Seidr._test || {}, {
+    getSettings: seidrGetSettings,
+    saveSettings: seidrSaveSettings,
+    upsertAnimation: seidrUpsertAnimation,
+    playAnimation: seidrPlayAnimation,
+    deleteAnimation: seidrDeleteAnimation,
+    findAnimationByName: seidrFindAnimationByName,
+    poseIds: function() {
+      return SEIDR_ACTION_POSES.map(function(p) {
+        return p.id;
+      });
+    },
+    rmGetStore,
+    rmSaveStore,
+    rmInvalidateStore,
+    rmFlushStore,
+    rmResetStorageCaches
+  });
+
+  // src/netStats.ts
+  var seidrNetStatsOn = false;
+  var seidrNetStatsAt = 0;
+  var seidrNetStatsOut = {};
+  function seidrUtf8Len(text) {
+    try {
+      if (typeof TextEncoder === "function") return new TextEncoder().encode(text).length;
+    } catch (e) {
+    }
+    return text.length;
+  }
+  function seidrNetStatsKeys(msg, data) {
+    var keys = [msg];
+    if (msg === "ChatRoomChat" && data && typeof data === "object") {
+      var type = data.Type || "?";
+      keys.push(msg + "/" + type);
+      if (type === "Hidden" && data.Content === Seidr.HIDDEN) {
+        var v2 = Array.isArray(data.Dictionary) && data.Dictionary[0] && data.Dictionary[0].S;
+        keys.push(msg + "/Hidden:Seidr");
+        keys.push(msg + "/Hidden:Seidr:" + (v2 ? "v2" : "v1"));
+      }
+    }
+    return keys;
+  }
+  function seidrNetStatsCount(msg, data) {
+    var bytes = 0;
+    try {
+      bytes = seidrUtf8Len("42" + JSON.stringify([msg, data === void 0 ? "" : data]));
+    } catch (e) {
+    }
+    seidrNetStatsKeys(msg, data).forEach(function(key) {
+      var bucket = seidrNetStatsOut[key] || (seidrNetStatsOut[key] = { n: 0, b: 0 });
+      bucket.n++;
+      bucket.b += bytes;
+    });
+  }
+  Seidr._netStats = {
+    reset: function() {
+      seidrNetStatsOn = true;
+      seidrNetStatsAt = Date.now();
+      seidrNetStatsOut = {};
+    },
+    stop: function() {
+      seidrNetStatsOn = false;
+    },
+    snapshot: function() {
+      return { on: seidrNetStatsOn, ms: Date.now() - seidrNetStatsAt, out: JSON.parse(JSON.stringify(seidrNetStatsOut)) };
+    }
+  };
+  Seidr.installNetStats = function() {
+    Seidr.tryHook("NetStats:ServerSend", "ServerSend", 1, function(args, next) {
+      if (seidrNetStatsOn) {
+        try {
+          seidrNetStatsCount(String(args[0]), args[1]);
+        } catch (e) {
+        }
+      }
+      return next(args);
+    });
+  };
 
   // src/main.ts
   var session = window.__SeidrSession = window.__SeidrSession || { hubs: {} };
@@ -13981,6 +18057,12 @@
     session.hubs = hubs || {};
   };
   Seidr.prepareReload = function() {
+    if (typeof Seidr.rmFlushStore === "function") {
+      try {
+        Seidr.rmFlushStore();
+      } catch (e) {
+      }
+    }
     if (typeof Seidr.restoreFallbackHooks === "function") {
       try {
         Seidr.restoreFallbackHooks();
@@ -13989,14 +18071,20 @@
     }
     Seidr._booted = false;
     Seidr._hookState = {};
-    ["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles"].forEach(function(id) {
+    ["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function(id) {
       const node = document.getElementById(id);
       if (node && node.parentNode) node.parentNode.removeChild(node);
     });
-    ["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour"].forEach(function(id) {
+    ["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function(id) {
       const node = document.getElementById(id);
       if (node && node.parentNode) node.parentNode.removeChild(node);
     });
+    if (typeof Seidr.poseDestroyUi === "function") {
+      try {
+        Seidr.poseDestroyUi();
+      } catch (ePose) {
+      }
+    }
     window.__SeidrPageLoaded = false;
   };
   function injectStyle() {
@@ -14079,7 +18167,35 @@
         console.warn("[Seidr] Commands", e);
       }
     }
+    if (typeof Seidr.installPoses === "function") {
+      try {
+        Seidr.installPoses();
+      } catch (e) {
+        console.warn("[Seidr] Poses", e);
+      }
+    }
     Seidr.installNet();
+    if (typeof Seidr.installNetStats === "function") {
+      try {
+        Seidr.installNetStats();
+      } catch (e) {
+        console.warn("[Seidr] NetStats", e);
+      }
+    }
+    if (typeof Seidr.installStorageFlush === "function") {
+      try {
+        Seidr.installStorageFlush();
+      } catch (e) {
+        console.warn("[Seidr] Storage flush", e);
+      }
+    }
+    if (typeof Seidr.installMapHolds === "function") {
+      try {
+        Seidr.installMapHolds();
+      } catch (e) {
+        console.warn("[Seidr] Map holds", e);
+      }
+    }
     if (typeof Seidr.installRoomManager === "function") {
       try {
         Seidr.installRoomManager();
@@ -14108,12 +18224,6 @@
       try {
         Seidr.hello(true);
       } catch (e) {
-      }
-      if (typeof Seidr.syncRequest === "function") {
-        try {
-          Seidr.syncRequest();
-        } catch (eSync) {
-        }
       }
     }
     try {

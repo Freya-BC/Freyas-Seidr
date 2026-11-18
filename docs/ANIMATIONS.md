@@ -77,7 +77,7 @@ Fast Select (when enabled) can map letter `d` + Tab to `/animation `.
 
 ## Storage
 
-Animations live in `ExtensionSettings.SeidrRoomManager` → `settings.animations` (same synced LZ bag as Actions / Room Manager). See [SETTINGS.md](SETTINGS.md).
+Animations live in their own synced key `ExtensionSettings.SeidrAnimations`. See [SETTINGS.md](SETTINGS.md).
 
 ## Related
 

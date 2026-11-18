@@ -15,6 +15,7 @@ Run Seidr helpers from the Club chat box with short slash commands. Each command
 | **`/animation`** / **`/ani`** | Play one of **your** Animations (local Player only) |
 | **`/seidr`** | Open Seidr Settings |
 | **`/roommanager`** | Open Room Manager (when activated) |
+| **`/beep`** / **`/whisper`** | Club commands — Seidr only adds Tab autocomplete (and beep **Reply**) |
 
 **Important:** **Commands → Actions** (this page) are chat shortcuts for `/a`. **Settings → Actions** is a different feature — custom entries in the Club Activity Menu. See [ACTIONS.md](ACTIONS.md).
 
@@ -196,7 +197,7 @@ Messages appear **only for you** in the chat log (local), then disappear:
 
 ## Tab autocomplete
 
-While the chat input is focused and the line starts with a Seidr command:
+While the chat input is focused and the line starts with a Seidr command **or** Club **`/beep`** / **`/whisper`**:
 
 | Key | Effect |
 |-----|--------|
@@ -207,17 +208,25 @@ While the chat input is focused and the line starts with a Seidr command:
 | **Esc** | Close |
 
 - Placed over the chat input (Seidr styling).
-- **Member** suggestions show name/nick and ID; accepting inserts the **Member ID** (unambiguous).
+- **Member** suggestions for Seidr commands show name/nick and ID; accepting inserts the **Member ID** (unambiguous).
+- **`/beep`**: online friends as **`Name (ID)`** (Club still sends the beep). Toggle: **Settings → General → Commands → Autocompletion /beep**.
+- **`/whisper`**: other people in the current room as **`Name (ID)`** — you are excluded (Club still sends the whisper). Toggle: **Autocompletion /whisper**.
 - **`/a` action** suggestions only list bindings available on the resolved member.
 - **`/stripe` / `/strip`**, **`/poses`**, **`/animation`** follow the tables above.
 
 While the list is open, W / S / E are used for navigation (they do not type into chat).
+
+### Beep Reply
+
+Incoming beep rows in Club chat also get a hover **Reply** (in addition to Club’s ↩) when **Activate Reply to Beep** is on (default). It shows the normal reply bar and prefills **`/beep {id}`** so you can answer immediately. Escape clears the reply bar. This toggle does **not** affect Freyas Better Maps float chat ↩.
 
 ---
 
 ## Enable toggles
 
 **Settings → General → Commands** — one checkbox per slash tag. Off = not registered / ignored. Keep **`/seidr`** enabled so you can always reopen Settings.
+
+Same block also has **Autocompletion /whisper**, **Autocompletion /beep**, and **Activate Reply to Beep** (defaults on). Those only assist Club chat — they do not register new Seidr slash commands.
 
 ---
 
@@ -241,7 +250,7 @@ Per-letter checkboxes can turn individual shortcuts off. Any other chat text kee
 
 ## Storage
 
-Saved in the shared Seidr bag: `ExtensionSettings.SeidrRoomManager` → `settings.commands` (same ~180 KB soft cap as Room Manager / Actions).
+Saved in `ExtensionSettings.SeidrCommands` (same ~180 KB soft cap as Room Manager / Actions).
 
 ## Related
 

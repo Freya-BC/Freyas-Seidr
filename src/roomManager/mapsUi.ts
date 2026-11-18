@@ -30,6 +30,7 @@ import {
 	type RmMapLocation,
 	type RmMapSeries,
 } from "./model";
+import { rmConfirm, rmPrompt } from "./dialogs";
 
 let editMapId: string | null = null;
 let editVersionId: string | null = null;
@@ -362,95 +363,129 @@ function wireMapSection(root: HTMLElement) {
 
 	root.querySelector("#seidr-maps-load")?.addEventListener("click", function () {
 		if (!editMapId || !editVersionId) return;
+		const mapId = editMapId;
+		const verId = editVersionId;
 		const map = selectedMap();
-		const ver = map && map.versions.find(function (v) { return v.id === editVersionId; });
-		if (!confirm("Load version “" + (ver ? ver.name : "") + "” into this room?")) return;
-		const r = rmLoadMapVersion(editMapId, editVersionId);
-		setMsg(root, r.ok ? "Map version loaded" : (r.error || "Load failed"));
+		const ver = map && map.versions.find(function (v) { return v.id === verId; });
+		void rmConfirm("Load version “" + (ver ? ver.name : "") + "” into this room?", {
+			title: "Load map",
+			confirmLabel: "Load",
+		}).then(function (ok) {
+			if (!ok) return;
+			const r = rmLoadMapVersion(mapId, verId);
+			setMsg(root, r.ok ? "Map version loaded" : (r.error || "Load failed"));
+		});
 	});
 
 	root.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function () {
 		if (!editMapId) return;
-		if (!confirm("Overwrite Default with the current room map?")) return;
-		const r = rmOverwriteDefault(editMapId);
-		if (!r.ok) {
-			setMsg(root, r.error || "Overwrite failed");
-			return;
-		}
-		editVersionId = r.version ? r.version.id : rmDefaultVersionId(editMapId);
-		refreshAll(root);
-		setMsg(root, "Default overwritten");
+		const mapId = editMapId;
+		void rmConfirm("Overwrite Default with the current room map?", {
+			title: "Overwrite Default",
+			confirmLabel: "Overwrite",
+		}).then(function (ok) {
+			if (!ok) return;
+			const r = rmOverwriteDefault(mapId);
+			if (!r.ok) {
+				setMsg(root, r.error || "Overwrite failed");
+				return;
+			}
+			editVersionId = r.version ? r.version.id : rmDefaultVersionId(mapId);
+			refreshAll(root);
+			setMsg(root, "Default overwritten");
+		});
 	});
 
 	root.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function () {
 		if (!editMapId) return;
-		const verNameEl = root.querySelector("#seidr-maps-ver-name") as HTMLInputElement | null;
-		let verName = (verNameEl && verNameEl.value.trim()) || "";
-		if (!verName || verName === RM_MAP_DEFAULT_NAME) {
-			verName = window.prompt("Local version name (not Default):", "Development") || "";
-		}
-		if (!verName.trim()) {
-			setMsg(root, "Enter a version name");
-			return;
-		}
-		if (verName.trim() === RM_MAP_DEFAULT_NAME) {
-			setMsg(root, "Use Overwrite Default to update Default");
-			return;
-		}
-		const r = rmSaveNewVersion(editMapId, verName);
-		if (!r.ok) {
-			setMsg(root, r.error || "Save version failed");
-			return;
-		}
-		editVersionId = r.version ? r.version.id : null;
-		refreshAll(root);
-		setMsg(root, "Local version saved");
+		const mapId = editMapId;
+		void (async function () {
+			const verNameEl = root.querySelector("#seidr-maps-ver-name") as HTMLInputElement | null;
+			let verName = (verNameEl && verNameEl.value.trim()) || "";
+			if (!verName || verName === RM_MAP_DEFAULT_NAME) {
+				const prompted = await rmPrompt("Save new version", {
+					message: "Local version name (not Default):",
+					initial: "Development",
+					confirmLabel: "Save",
+				});
+				verName = prompted || "";
+			}
+			if (!verName.trim()) {
+				setMsg(root, "Enter a version name");
+				return;
+			}
+			if (verName.trim() === RM_MAP_DEFAULT_NAME) {
+				setMsg(root, "Use Overwrite Default to update Default");
+				return;
+			}
+			const r = rmSaveNewVersion(mapId, verName);
+			if (!r.ok) {
+				setMsg(root, r.error || "Save version failed");
+				return;
+			}
+			editVersionId = r.version ? r.version.id : null;
+			refreshAll(root);
+			setMsg(root, "Local version saved");
+		})();
 	});
 
 	root.querySelector("#seidr-maps-del-ver")?.addEventListener("click", function () {
 		if (!editMapId || !editVersionId) return;
+		const mapId = editMapId;
+		const verId = editVersionId;
 		const map = selectedMap();
-		const ver = map && map.versions.find(function (v) { return v.id === editVersionId; });
-		const isDef = ver && rmIsDefaultVersionName(ver.name);
-		const only = map && map.versions.length <= 1;
-		const msg = isDef && only
-			? "Delete the entire map?"
-			: isDef
-				? "Cannot delete Default while other versions exist. Delete the map instead?"
-				: "Delete this local version?";
+		const ver = map && map.versions.find(function (v) { return v.id === verId; });
+		const isDef = !!(ver && rmIsDefaultVersionName(ver.name));
+		const only = !!(map && map.versions.length <= 1);
 		if (isDef && !only) {
 			setMsg(root, "Cannot delete Default while other versions exist — use Delete map");
 			return;
 		}
-		if (!confirm(msg)) return;
-		const r = rmDeleteVersion(editMapId, editVersionId);
-		if (!r.ok) {
-			setMsg(root, r.error || "Delete failed");
-			return;
-		}
-		if (only || isDef) {
-			editMapId = null;
-			editVersionId = null;
-		} else {
-			editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
-		}
-		refreshAll(root);
-		setMsg(root, only || isDef ? "Map deleted" : "Version deleted");
+		const msg = only || isDef
+			? "Delete the entire map?"
+			: "Delete this local version?";
+		void rmConfirm(msg, {
+			title: "Delete",
+			confirmLabel: "Delete",
+			danger: true,
+		}).then(function (ok) {
+			if (!ok) return;
+			const r = rmDeleteVersion(mapId, verId);
+			if (!r.ok) {
+				setMsg(root, r.error || "Delete failed");
+				return;
+			}
+			if (only || isDef) {
+				editMapId = null;
+				editVersionId = null;
+			} else {
+				editVersionId = rmDefaultVersionId(mapId);
+			}
+			refreshAll(root);
+			setMsg(root, only || isDef ? "Map deleted" : "Version deleted");
+		});
 	});
 
 	root.querySelector("#seidr-maps-del-map")?.addEventListener("click", function () {
 		if (!editMapId) return;
+		const mapId = editMapId;
 		const map = selectedMap();
-		if (!confirm("Delete map “" + (map ? map.name : "") + "” and all versions?")) return;
-		const r = rmDeleteMap(editMapId);
-		if (!r.ok) {
-			setMsg(root, r.error || "Delete failed");
-			return;
-		}
-		editMapId = null;
-		editVersionId = null;
-		refreshAll(root);
-		setMsg(root, "Map deleted");
+		void rmConfirm("Delete map “" + (map ? map.name : "") + "” and all versions?", {
+			title: "Delete map",
+			confirmLabel: "Delete",
+			danger: true,
+		}).then(function (ok) {
+			if (!ok) return;
+			const r = rmDeleteMap(mapId);
+			if (!r.ok) {
+				setMsg(root, r.error || "Delete failed");
+				return;
+			}
+			editMapId = null;
+			editVersionId = null;
+			refreshAll(root);
+			setMsg(root, "Map deleted");
+		});
 	});
 }
 

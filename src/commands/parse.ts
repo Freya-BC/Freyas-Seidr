@@ -98,6 +98,127 @@ export function seidrCmdStartsWithTag(msg: string): boolean {
 	return new RegExp("^\\s*/(" + TAG_ALT + ")", "i").test(String(msg || ""));
 }
 
+/** Club tags Seidr assists with Tab AC only — never execute / intercept send. */
+export type SeidrCmdAssistTag = "beep" | "whisper";
+
+const ASSIST_TAG_ALT = "whisper|beep";
+const ASSIST_TAG_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(?:\\s|$)", "i");
+const ASSIST_TAG_LINE_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(?:\\s+(.*))?$", "i");
+const ASSIST_TAG_TOKEN_RE = new RegExp("^/(" + ASSIST_TAG_ALT + ")(\\s+)?", "i");
+
+function normalizeAssistTag(raw: string): SeidrCmdAssistTag {
+	return String(raw || "").toLowerCase() === "whisper" ? "whisper" : "beep";
+}
+
+export function seidrCmdIsAssistLine(msg: string): boolean {
+	return ASSIST_TAG_RE.test(String(msg || "").trim());
+}
+
+export function seidrCmdAssistTagFromLine(msg: string): SeidrCmdAssistTag | null {
+	const m = String(msg || "").trim().match(ASSIST_TAG_RE);
+	if (!m) return null;
+	return normalizeAssistTag(m[1]);
+}
+
+export function seidrCmdStartsWithAssistTag(msg: string): boolean {
+	return new RegExp("^\\s*/(" + ASSIST_TAG_ALT + ")", "i").test(String(msg || ""));
+}
+
+export function seidrCmdPeekAssistLine(msg: string): {
+	tag: SeidrCmdAssistTag;
+	memberRaw: string;
+	memberQuoted: boolean;
+	secondRaw: string;
+} | null {
+	const raw = String(msg || "").trim();
+	const m = raw.match(ASSIST_TAG_LINE_RE);
+	if (!m) return null;
+	const tag = normalizeAssistTag(m[1]);
+	const rest = (m[2] || "").trim();
+	if (!rest) {
+		return { tag: tag, memberRaw: "", memberQuoted: false, secondRaw: "" };
+	}
+	const parts = parseMemberAndRest(rest);
+	return {
+		tag: tag,
+		memberRaw: parts.memberRaw,
+		memberQuoted: parts.memberQuoted,
+		secondRaw: parts.secondRaw,
+	};
+}
+
+/**
+ * Token under caret for /beep and /whisper — member only (message is free text).
+ */
+export function seidrCmdAssistTokenAtCaret(value: string, caret: number): SeidrCmdTokenFocus {
+	const text = String(value || "");
+	const pos = Math.max(0, Math.min(caret || 0, text.length));
+	const trimmedStart = text.match(/^\s*/);
+	const startOffset = trimmedStart ? trimmedStart[0].length : 0;
+	const body = text.slice(startOffset);
+	const bodyCaret = pos - startOffset;
+	if (bodyCaret < 0) return { kind: "none" };
+
+	const tagMatch = body.match(ASSIST_TAG_TOKEN_RE);
+	if (!tagMatch) return { kind: "none" };
+	const tagEnd = tagMatch[0].length;
+
+	if (bodyCaret <= tagEnd && !tagMatch[2]) return { kind: "tag" };
+	if (bodyCaret <= tagEnd) {
+		return {
+			kind: "member",
+			prefix: "",
+			quoted: false,
+			start: startOffset + tagEnd,
+			end: startOffset + tagEnd,
+		};
+	}
+
+	const rest = body.slice(tagEnd);
+	const restCaret = bodyCaret - tagEnd;
+	const q = rest.charAt(0);
+	if (q === '"' || q === "'") {
+		let i = 1;
+		let closed = false;
+		while (i < rest.length) {
+			if (rest.charAt(i) === "\\" && i + 1 < rest.length) {
+				i += 2;
+				continue;
+			}
+			if (rest.charAt(i) === q) {
+				closed = true;
+				i += 1;
+				break;
+			}
+			i += 1;
+		}
+		const memberEnd = closed ? i : rest.length;
+		if (restCaret <= memberEnd) {
+			const inner = rest.slice(1, Math.min(restCaret, closed ? i - 1 : rest.length));
+			return {
+				kind: "member",
+				prefix: inner.replace(/\\(.)/g, "$1"),
+				quoted: true,
+				start: startOffset + tagEnd,
+				end: startOffset + tagEnd + memberEnd,
+			};
+		}
+		return { kind: "none" };
+	}
+
+	const sp = rest.search(/\s/);
+	if (sp < 0 || restCaret <= sp) {
+		return {
+			kind: "member",
+			prefix: rest.slice(0, restCaret),
+			quoted: false,
+			start: startOffset + tagEnd,
+			end: startOffset + tagEnd + (sp < 0 ? rest.length : sp),
+		};
+	}
+	return { kind: "none" };
+}
+
 function parseMemberAndRest(rest: string): {
 	memberRaw: string;
 	memberQuoted: boolean;

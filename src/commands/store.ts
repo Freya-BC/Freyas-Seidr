@@ -18,6 +18,21 @@ export function seidrGetCommandsBag(): SeidrCommandsBag {
 	return seidrNormalizeCommandsBag(s.commands);
 }
 
+/** Club /whisper Tab AC (default on). */
+export function seidrCmdAcWhisperEnabled(): boolean {
+	return seidrGetCommandsBag().acWhisper !== false;
+}
+
+/** Club /beep Tab AC (default on). */
+export function seidrCmdAcBeepEnabled(): boolean {
+	return seidrGetCommandsBag().acBeep !== false;
+}
+
+/** Club chat hover Reply on beeps (default on). Does not gate FBM float ↩. */
+export function seidrCmdBeepReplyEnabled(): boolean {
+	return seidrGetCommandsBag().beepReply !== false;
+}
+
 export function seidrSaveCommandsBag(bag: SeidrCommandsBag): { ok: boolean; error?: string } {
 	const normalized = seidrNormalizeCommandsBag(bag);
 	return seidrSaveSettings({ commands: normalized } as any);

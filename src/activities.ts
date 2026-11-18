@@ -2,13 +2,14 @@
 import { Seidr } from "./seidr";
 import { SeidrState } from "./state";
 import { seidrAllowAct, seidrCharName, seidrInEcho } from "./room";
+import { seidrCmdWarn } from "./commands/warn";
 
 var SEIDR_HOLD_ACTIVITIES: any[] = [
 	{
 		name: "Seidr_PullLeft",
 		slot: "left",
 		prereq: "Seidr_CanPullLeft",
-		needsHands: true,
+		needsHands: false,
 		label: "Pull Left",
 		chat: "SourceCharacter pulls TargetCharacter to the left.",
 	},
@@ -16,7 +17,7 @@ var SEIDR_HOLD_ACTIVITIES: any[] = [
 		name: "Seidr_PullRight",
 		slot: "right",
 		prereq: "Seidr_CanPullRight",
-		needsHands: true,
+		needsHands: false,
 		label: "Pull Right",
 		chat: "SourceCharacter pulls TargetCharacter to the right.",
 	},
@@ -24,7 +25,7 @@ var SEIDR_HOLD_ACTIVITIES: any[] = [
 		name: "Seidr_Cuddle",
 		slot: "cuddle",
 		prereq: "Seidr_CanCuddle",
-		needsHands: true,
+		needsHands: false,
 		label: "Cuddle",
 		chat: "SourceCharacter cuddles TargetCharacter.",
 	},
@@ -32,7 +33,7 @@ var SEIDR_HOLD_ACTIVITIES: any[] = [
 		name: "Seidr_JoinLeft",
 		joinSlot: "left",
 		prereq: "Seidr_CanJoinLeft",
-		needsHands: true,
+		needsHands: false,
 		label: "Go Left",
 		chat: "SourceCharacter moves to TargetCharacter's left.",
 	},
@@ -40,7 +41,7 @@ var SEIDR_HOLD_ACTIVITIES: any[] = [
 		name: "Seidr_JoinRight",
 		joinSlot: "right",
 		prereq: "Seidr_CanJoinRight",
-		needsHands: true,
+		needsHands: false,
 		label: "Go Right",
 		chat: "SourceCharacter moves to TargetCharacter's right.",
 	},
@@ -48,7 +49,7 @@ var SEIDR_HOLD_ACTIVITIES: any[] = [
 		name: "Seidr_JoinCuddle",
 		joinSlot: "cuddle",
 		prereq: "Seidr_CanJoinCuddle",
-		needsHands: true,
+		needsHands: false,
 		label: "Cuddle Into",
 		chat: "SourceCharacter cuddles into TargetCharacter.",
 	},
@@ -266,6 +267,54 @@ function seidrPeerOk(member) {
 	return Seidr.peerHas && Seidr.peerHas(member);
 }
 
+function seidrMapFormOk(hubChar, satChar, slot) {
+	if (typeof Seidr.mapSeatFormOk !== "function") return true;
+	if (typeof Seidr.mapIsMapRoom === "function" && !Seidr.mapIsMapRoom()) return true;
+	var hubPos = hubChar && hubChar.MapData && hubChar.MapData.Pos
+		? { X: hubChar.MapData.Pos.X, Y: hubChar.MapData.Pos.Y }
+		: null;
+	var satPos = satChar && satChar.MapData && satChar.MapData.Pos
+		? { X: satChar.MapData.Pos.X, Y: satChar.MapData.Pos.Y }
+		: null;
+	return !!Seidr.mapSeatFormOk(hubPos, satPos, slot);
+}
+
+/** Always: hide form/join when tiles wrong. Hybrid/Never: never hide for tiles. */
+function seidrMapFormHidesForPrereq() {
+	return typeof Seidr.mapFormHidesActivity === "function" && !!Seidr.mapFormHidesActivity();
+}
+
+function seidrMapFailMessage(act) {
+	var label = act && act.label ? String(act.label) : "Hold";
+	return label + " not possible — Map conditions not met";
+}
+
+/**
+ * Hybrid/Always click gate: exact seat tile required to form or join.
+ * Returns true when the activity must be blocked (caller skips next + hubs).
+ */
+function seidrMapBlockFormJoin(actor, acted, act) {
+	if (!act || !actor || !acted) return false;
+	if (typeof Seidr.mapIsMapRoom !== "function" || !Seidr.mapIsMapRoom()) return false;
+	var slot = null;
+	var hubChar = null;
+	var satChar = null;
+	if (act.slot) {
+		slot = act.slot;
+		hubChar = actor;
+		satChar = acted;
+	} else if (act.joinSlot) {
+		slot = act.joinSlot;
+		hubChar = acted;
+		satChar = actor;
+	} else {
+		return false;
+	}
+	if (seidrMapFormOk(hubChar, satChar, slot)) return false;
+	seidrCmdWarn(seidrMapFailMessage(act));
+	return true;
+}
+
 function seidrCanPlace(acting, acted, slot) {
 	if (!acting || !acted) return false;
 	if (typeof acting.MemberNumber !== "number" || typeof acted.MemberNumber !== "number") return false;
@@ -273,6 +322,9 @@ function seidrCanPlace(acting, acted, slot) {
 	if (!seidrPeerOk(acted.MemberNumber)) return false;
 	if (!seidrAllowAct(acting, acted)) return false;
 	if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
+	// Always map rooms: hub = actor, satellite = target; exact seat hides the button.
+	// Hybrid shows the button and enforces tiles in ActivityRun instead.
+	if (seidrMapFormHidesForPrereq() && !seidrMapFormOk(acting, acted, slot)) return false;
 	return SeidrState.canPlace(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
 }
 
@@ -283,6 +335,8 @@ function seidrCanJoin(acting, acted, slot) {
 	if (!seidrPeerOk(acted.MemberNumber)) return false;
 	if (!seidrAllowAct(acting, acted)) return false;
 	if (seidrInEcho(acting) || seidrInEcho(acted)) return false;
+	// Always: hub = clicked target, satellite = joiner. Hybrid: show + click-check.
+	if (seidrMapFormHidesForPrereq() && !seidrMapFormOk(acted, acting, slot)) return false;
 	return SeidrState.canJoin(Seidr.getHubs(), acting.MemberNumber, acted.MemberNumber, slot);
 }
 
@@ -589,6 +643,14 @@ function seidrInstallActivityHooks() {
 				console.warn("[Seidr] undress", eStrip);
 			}
 			return undressResult;
+		}
+		try {
+			if (act && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()
+				&& seidrMapBlockFormJoin(actor, acted, act)) {
+				return;
+			}
+		} catch (eBlock) {
+			console.warn("[Seidr] map form block", eBlock);
 		}
 		var result = next(args);
 		try {

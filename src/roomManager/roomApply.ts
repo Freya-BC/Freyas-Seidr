@@ -1,5 +1,37 @@
-/** Read/apply room definition + live Update */
+/** Read/apply room definition + live Update (R134 ChatAdmin via ChatEditorAdminSettingsImport) */
+import { Seidr } from "../seidr";
 import type { RmAccessPreset, RmRoomPreset } from "./model";
+import { rmDefaultDrawingResizeMode, rmNormalizeRoomPreset } from "./model";
+
+declare function ChatEditorGetAdminSettings(): Record<string, unknown> | undefined;
+declare function ChatEditorAdminSettingsImport(settings: Record<string, unknown>): void;
+declare function ElementValue(id: string, value?: string): string;
+declare function CommonConvertArrayToString(arr: number[]): string;
+declare const ChatAdminID: {
+	nameInput: string;
+	descriptionInput: string;
+	sizeInput: string;
+	adminListInput: string;
+	whitelistInput: string;
+	banListInput: string;
+	language: string;
+	game: string;
+	map: string;
+	visibility: string;
+	access: string;
+	customization: string;
+} | undefined;
+
+/** Last room preset applied or selected — used for background Default fillMode. */
+let _lastRoomPreset: RmRoomPreset | null = null;
+
+export function rmSetLastRoomPreset(preset: RmRoomPreset | null) {
+	_lastRoomPreset = preset ? rmNormalizeRoomPreset(preset) : null;
+}
+
+export function rmGetLastRoomPreset(): RmRoomPreset | null {
+	return _lastRoomPreset;
+}
 
 export function rmInLiveRoom(): boolean {
 	try {
@@ -81,17 +113,27 @@ export function rmReadSettings(): Record<string, unknown> | null {
 }
 
 export function rmSliceRoom(settings: Record<string, unknown>): RmRoomPreset {
-	return {
-		Name: settings.Name as string,
-		Language: settings.Language as string,
-		Description: settings.Description as string,
-		Limit: settings.Limit as number,
-		BlockCategory: settings.BlockCategory as string[],
-		Game: settings.Game as string,
-		Visibility: settings.Visibility as string[],
-		Access: settings.Access as string[],
-		MapData: settings.MapData as RmRoomPreset["MapData"],
-	};
+	const custom = settings.Custom && typeof settings.Custom === "object"
+		? settings.Custom as { SizeMode?: number; ImageFilter?: string }
+		: null;
+	return rmNormalizeRoomPreset({
+		Name: settings.Name,
+		Language: settings.Language,
+		Description: settings.Description,
+		Limit: settings.Limit,
+		BlockCategory: settings.BlockCategory,
+		Game: settings.Game,
+		Visibility: settings.Visibility,
+		Access: settings.Access,
+		MapData: settings.MapData,
+		Background: settings.Background,
+		customSizeMode: custom && typeof custom.SizeMode === "number"
+			? custom.SizeMode
+			: rmDefaultDrawingResizeMode(),
+		customImageFilter: custom && typeof custom.ImageFilter === "string"
+			? custom.ImageFilter
+			: "",
+	});
 }
 
 export function rmSliceAccess(settings: Record<string, unknown>): RmAccessPreset {
@@ -102,26 +144,129 @@ export function rmSliceAccess(settings: Record<string, unknown>): RmAccessPreset
 	};
 }
 
-function setVisibilityAccess(preset: RmRoomPreset) {
-	if (typeof ChatAdminData === "undefined" || !ChatAdminData) return;
-	if (Array.isArray(preset.Visibility) && typeof ChatAdminVisibilityModeValues !== "undefined") {
-		let vi = ChatAdminVisibilityModeValues.findIndex(function (elem: string[]) {
-			return elem.length === preset.Visibility!.length
-				&& elem.every(function (role) { return preset.Visibility!.includes(role); });
-		});
-		if (vi < 0) vi = 0;
-		(window as any).ChatAdminVisibilityModeIndex = vi;
-		ChatAdminData.Visibility = ChatAdminVisibilityModeValues[vi];
+function currentAdminBase(): Record<string, unknown> {
+	let base: Record<string, unknown> = {};
+	if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
+		base = snapshotFromRoom(ChatAdminData);
 	}
-	if (Array.isArray(preset.Access) && typeof ChatAdminAccessModeValues !== "undefined") {
-		let ai = ChatAdminAccessModeValues.findIndex(function (elem: string[]) {
-			return elem.length === preset.Access!.length
-				&& elem.every(function (role) { return preset.Access!.includes(role); });
-		});
-		if (ai < 0) ai = 0;
-		(window as any).ChatAdminAccessModeIndex = ai;
-		ChatAdminData.Access = ChatAdminAccessModeValues[ai];
+	if (typeof ChatEditorGetAdminSettings === "function") {
+		try {
+			const full = ChatEditorGetAdminSettings();
+			if (full) base = Object.assign({}, base, full);
+		} catch (e) { /* ignore */ }
 	}
+	return base;
+}
+
+/** Merge partial onto current ChatAdmin settings for a safe ChatEditorAdminSettingsImport payload. */
+export function rmToAdminSettings(partial: Record<string, unknown>): Record<string, unknown> {
+	const base = currentAdminBase();
+	const out: Record<string, unknown> = Object.assign({}, base, partial);
+
+	if (!Array.isArray(out.Admin)) out.Admin = [];
+	if (!Array.isArray(out.Whitelist)) out.Whitelist = [];
+	if (!Array.isArray(out.Ban)) out.Ban = [];
+	if (!Array.isArray(out.BlockCategory)) out.BlockCategory = [];
+
+	if (typeof out.Name !== "string") out.Name = String(base.Name || "");
+	if (typeof out.Description !== "string") out.Description = String(base.Description || "");
+	if (typeof out.Limit !== "number" || !Number.isFinite(out.Limit as number)) {
+		out.Limit = typeof base.Limit === "number" ? base.Limit : 10;
+	}
+
+	const md = out.MapData && typeof out.MapData === "object"
+		? Object.assign({}, out.MapData as object) as { Type?: string }
+		: { Type: "Never" };
+	if (!md.Type) md.Type = "Never";
+	out.MapData = md;
+
+	if (!out.Background) out.Background = base.Background;
+
+	if (partial.Custom !== undefined) {
+		const baseCustom = base.Custom && typeof base.Custom === "object"
+			? Object.assign({}, base.Custom as object)
+			: {};
+		out.Custom = Object.assign(baseCustom, partial.Custom as object);
+	}
+
+	return out;
+}
+
+function importAdminSettings(partial: Record<string, unknown>): boolean {
+	if (typeof ChatEditorAdminSettingsImport !== "function") return false;
+	if (typeof ChatAdminData === "undefined" || !ChatAdminData) return false;
+	try {
+		ChatEditorAdminSettingsImport(rmToAdminSettings(partial));
+		return true;
+	} catch (e) {
+		console.warn("[Seidr RM] ChatEditorAdminSettingsImport failed", e);
+		return false;
+	}
+}
+
+/** Legacy canvas ChatAdmin fallback (pre-R134). */
+function legacyApplyRoom(preset: RmRoomPreset) {
+	const cad: any = ChatAdminData;
+	if (typeof preset.Name === "string") {
+		cad.Name = preset.Name;
+		if (document.getElementById("InputName")) ElementValue("InputName", preset.Name);
+	}
+	if (typeof preset.Description === "string") {
+		cad.Description = preset.Description;
+		if (document.getElementById("InputDescription")) ElementValue("InputDescription", preset.Description);
+	}
+	if (typeof preset.Limit === "number") {
+		cad.Limit = preset.Limit;
+		if (document.getElementById("InputSize")) ElementValue("InputSize", String(preset.Limit));
+	}
+	if (typeof preset.Language === "string") cad.Language = preset.Language;
+	if (Array.isArray(preset.BlockCategory)) cad.BlockCategory = preset.BlockCategory;
+	if (typeof preset.Game === "string") cad.Game = preset.Game;
+	if (preset.MapData && typeof preset.MapData === "object") cad.MapData = preset.MapData;
+	if (typeof preset.Background === "string") cad.Background = preset.Background;
+	if (Array.isArray(preset.Visibility)) cad.Visibility = preset.Visibility;
+	if (Array.isArray(preset.Access)) cad.Access = preset.Access;
+	const custom = cad.Custom && typeof cad.Custom === "object" ? cad.Custom : {};
+	if (typeof preset.customSizeMode === "number") custom.SizeMode = preset.customSizeMode;
+	if (typeof preset.customImageFilter === "string") custom.ImageFilter = preset.customImageFilter;
+	cad.Custom = custom;
+}
+
+function legacyApplyAccess(admin: number[], wl: number[], ban: number[]) {
+	if (document.getElementById("InputAdminList")) {
+		ElementValue("InputAdminList", CommonConvertArrayToString(admin));
+	}
+	if (document.getElementById("InputWhitelist")) {
+		ElementValue("InputWhitelist", CommonConvertArrayToString(wl));
+	}
+	if (document.getElementById("InputBanList")) {
+		ElementValue("InputBanList", CommonConvertArrayToString(ban));
+	}
+	if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
+		ChatAdminData.Admin = admin;
+		ChatAdminData.Whitelist = wl;
+		ChatAdminData.Ban = ban;
+	}
+}
+
+function roomPresetToPartial(preset: RmRoomPreset): Record<string, unknown> {
+	const partial: Record<string, unknown> = {};
+	if (typeof preset.Name === "string") partial.Name = preset.Name;
+	if (typeof preset.Description === "string") partial.Description = preset.Description;
+	if (typeof preset.Limit === "number") partial.Limit = preset.Limit;
+	if (typeof preset.Language === "string") partial.Language = preset.Language;
+	if (Array.isArray(preset.BlockCategory)) partial.BlockCategory = preset.BlockCategory.slice();
+	if (typeof preset.Game === "string") partial.Game = preset.Game;
+	if (Array.isArray(preset.Visibility)) partial.Visibility = preset.Visibility.slice();
+	if (Array.isArray(preset.Access)) partial.Access = preset.Access.slice();
+	if (preset.MapData && typeof preset.MapData === "object") partial.MapData = preset.MapData;
+	if (typeof preset.Background === "string") partial.Background = preset.Background;
+
+	const customPatch: Record<string, unknown> = {};
+	if (typeof preset.customSizeMode === "number") customPatch.SizeMode = preset.customSizeMode;
+	if (typeof preset.customImageFilter === "string") customPatch.ImageFilter = preset.customImageFilter;
+	if (Object.keys(customPatch).length) partial.Custom = customPatch;
+	return partial;
 }
 
 function mergeRoomOnto(target: any, preset: RmRoomPreset) {
@@ -134,33 +279,31 @@ function mergeRoomOnto(target: any, preset: RmRoomPreset) {
 	if (Array.isArray(preset.Visibility)) target.Visibility = preset.Visibility;
 	if (Array.isArray(preset.Access)) target.Access = preset.Access;
 	if (preset.MapData && typeof preset.MapData === "object") target.MapData = preset.MapData;
+	if (typeof preset.Background === "string") target.Background = preset.Background;
+	if (typeof preset.customSizeMode === "number" || typeof preset.customImageFilter === "string") {
+		if (!target.Custom || typeof target.Custom !== "object") target.Custom = {};
+		if (typeof preset.customSizeMode === "number") target.Custom.SizeMode = preset.customSizeMode;
+		if (typeof preset.customImageFilter === "string") target.Custom.ImageFilter = preset.customImageFilter;
+	}
 }
 
 export function rmApplyRoomToEditor(preset: RmRoomPreset) {
 	if (!preset) return;
+	const normalized = rmNormalizeRoomPreset(preset);
+	rmSetLastRoomPreset(normalized);
+
 	if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
-		const cad: any = ChatAdminData;
-		if (typeof preset.Name === "string") {
-			cad.Name = preset.Name;
-			if (document.getElementById("InputName")) ElementValue("InputName", preset.Name);
+		const partial = roomPresetToPartial(normalized);
+		if (!importAdminSettings(partial)) {
+			legacyApplyRoom(normalized);
 		}
-		if (typeof preset.Description === "string") {
-			cad.Description = preset.Description;
-			if (document.getElementById("InputDescription")) ElementValue("InputDescription", preset.Description);
-		}
-		if (typeof preset.Limit === "number") {
-			cad.Limit = preset.Limit;
-			if (document.getElementById("InputSize")) ElementValue("InputSize", String(preset.Limit));
-		}
-		if (typeof preset.Language === "string") cad.Language = preset.Language;
-		if (Array.isArray(preset.BlockCategory)) cad.BlockCategory = preset.BlockCategory;
-		if (typeof preset.Game === "string") cad.Game = preset.Game;
-		if (preset.MapData && typeof preset.MapData === "object") cad.MapData = preset.MapData;
-		setVisibilityAccess(preset);
 		return;
 	}
 	if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
-		mergeRoomOnto(ChatRoomData as any, preset);
+		mergeRoomOnto(ChatRoomData as any, normalized);
+		if (typeof Seidr.checkMapTypeChange === "function") {
+			try { Seidr.checkMapTypeChange(); } catch (e) { /* ignore */ }
+		}
 	}
 }
 
@@ -171,19 +314,8 @@ export function rmApplyAccessToEditor(preset: RmAccessPreset) {
 	const ban = Array.isArray(preset.Ban) ? preset.Ban.slice() : [];
 
 	if (rmOnChatAdmin()) {
-		if (document.getElementById("InputAdminList")) {
-			ElementValue("InputAdminList", CommonConvertArrayToString(admin));
-		}
-		if (document.getElementById("InputWhitelist")) {
-			ElementValue("InputWhitelist", CommonConvertArrayToString(wl));
-		}
-		if (document.getElementById("InputBanList")) {
-			ElementValue("InputBanList", CommonConvertArrayToString(ban));
-		}
-		if (typeof ChatAdminData !== "undefined" && ChatAdminData) {
-			ChatAdminData.Admin = admin;
-			ChatAdminData.Whitelist = wl;
-			ChatAdminData.Ban = ban;
+		if (!importAdminSettings({ Admin: admin, Whitelist: wl, Ban: ban })) {
+			legacyApplyAccess(admin, wl, ban);
 		}
 		return;
 	}
@@ -192,6 +324,39 @@ export function rmApplyAccessToEditor(preset: RmAccessPreset) {
 		ChatRoomData.Whitelist = wl;
 		ChatRoomData.Ban = ban;
 	}
+}
+
+/**
+ * Apply Custom.ImageURL (+ SizeMode / ImageFilter) on ChatAdmin or live room.
+ * On ChatAdmin uses ChatEditorAdminSettingsImport when available.
+ */
+export function rmApplyCustomPatch(patch: {
+	ImageURL?: string;
+	SizeMode?: number;
+	ImageFilter?: string;
+}): { ok: boolean; error?: string } {
+	if (rmOnChatAdmin() && typeof ChatAdminData !== "undefined" && ChatAdminData) {
+		const baseCustom = ChatAdminData.Custom && typeof ChatAdminData.Custom === "object"
+			? Object.assign({}, ChatAdminData.Custom)
+			: {};
+		const custom = Object.assign(baseCustom, patch);
+		if (!importAdminSettings({ Custom: custom })) {
+			ChatAdminData.Custom = custom;
+			try {
+				const btn = typeof ChatAdminID !== "undefined" && ChatAdminID
+					? document.getElementById(ChatAdminID.customization)
+					: document.getElementById("chat-admin-customization");
+				if (btn) btn.classList.toggle("chat-admin-has-custom", true);
+			} catch (e) { /* ignore */ }
+		}
+		return { ok: true };
+	}
+	if (rmInLiveRoom() && typeof ChatRoomData !== "undefined" && ChatRoomData) {
+		if (!ChatRoomData.Custom || typeof ChatRoomData.Custom !== "object") ChatRoomData.Custom = {};
+		Object.assign(ChatRoomData.Custom, patch);
+		return rmUpdateLiveRoom();
+	}
+	return { ok: false, error: "Open ChatAdmin or join a room as admin" };
 }
 
 function buildLiveUpdateRoom(): Record<string, unknown> | null {

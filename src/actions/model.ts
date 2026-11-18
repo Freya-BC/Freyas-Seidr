@@ -29,7 +29,7 @@ export type SeidrCondRule = {
 export type SeidrCondGroup = { rules: SeidrCondRule[] };
 
 export type SeidrActionEffects = {
-	arousal?: { enabled: boolean; activity: string };
+	arousal?: { enabled: boolean; activity: string; reverse?: boolean };
 	sound?: { enabled: boolean; sound: string };
 	pose?: { enabled: boolean; pose: string };
 };
@@ -53,8 +53,15 @@ export type SeidrAction = {
 	chatSelf: string;
 	/** Activity Menu icon (Seidr SVG / Club Activity PNG / custom URL id). */
 	icon: SeidrActionIcon;
-	/** If non-empty, acted must wear one of these restraints for the action to show. */
+	/**
+	 * If non-empty, checked side(s) must wear one of these restraints for the action to show.
+	 * See itemsOnTarget / itemsOnSource.
+	 */
 	items: SeidrActionItemRef[];
+	/** Require a listed restraint on the acted character (default true). */
+	itemsOnTarget: boolean;
+	/** Require a listed restraint on the actor (default false). */
+	itemsOnSource: boolean;
 	conditions: { groups: SeidrCondGroup[] };
 	effects: SeidrActionEffects;
 };
@@ -195,18 +202,20 @@ export function seidrRestraintSlots(): { id: string; label: string }[] {
 	});
 }
 
-/** Shared Club pose ids — Actions, /poses AC, Animations editor. */
+/** Shared Club pose ids — Actions, /poses AC, Animations editor, Dialog picker. */
 export const SEIDR_ACTION_POSES: { id: string; label: string }[] = [
-	{ id: "BaseLower", label: "Standing (legs)" },
-	{ id: "LegsClosed", label: "Legs closed" },
-	{ id: "Kneel", label: "Kneel" },
-	{ id: "KneelingSpread", label: "Kneeling spread" },
-	{ id: "BaseUpper", label: "Hands relaxed" },
-	{ id: "Yoked", label: "Yoked" },
-	{ id: "OverTheHead", label: "Hands up" },
-	{ id: "BackBoxTie", label: "Back box tie" },
-	{ id: "BackElbowTouch", label: "Hands armbinder" },
-	{ id: "AllFours", label: "On all fours" },
+	{ id: "BaseUpper", label: "Arms Relaxed" },
+	{ id: "Yoked", label: "Hands Raised" },
+	{ id: "OverTheHead", label: "Over Head" },
+	{ id: "BackBoxTie", label: "Box Tie" },
+	{ id: "BackElbowTouch", label: "Elbow Touch" },
+	{ id: "BackCuffs", label: "Back Cuffs" },
+	{ id: "BaseLower", label: "Standing" },
+	{ id: "LegsClosed", label: "Legs Closed" },
+	{ id: "Kneel", label: "Kneeling" },
+	{ id: "KneelingSpread", label: "Kneeling Spread" },
+	{ id: "AllFours", label: "All Fours" },
+	{ id: "Hogtied", label: "Belly" },
 ];
 
 declare const PoseCanChangeUnaided: ((C: any, pose: string) => boolean) | undefined;
@@ -578,6 +587,7 @@ function normalizeEffects(raw: unknown): SeidrActionEffects {
 		out.arousal = {
 			enabled: !!e.arousal.enabled,
 			activity: rawAct && SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(rawAct) >= 0 ? rawAct : "Caress",
+			reverse: !!(e.arousal as { reverse?: boolean }).reverse,
 		};
 	}
 	if (e.sound && typeof e.sound === "object") {
@@ -622,6 +632,8 @@ export function seidrNormalizeAction(raw: unknown, fallbackId?: number): SeidrAc
 	const chatSelf = typeof d.chatSelf === "string" && d.chatSelf.trim()
 		? d.chatSelf.trim().slice(0, SEIDR_ACTION_CHAT_MAX)
 		: seidrDefaultChatSelf(name);
+	const itemsOnTarget = d.itemsOnTarget !== false;
+	const itemsOnSource = !!d.itemsOnSource;
 	return {
 		id: id,
 		name: name,
@@ -631,6 +643,8 @@ export function seidrNormalizeAction(raw: unknown, fallbackId?: number): SeidrAc
 		chatSelf: chatSelf,
 		icon: seidrNormalizeActionIcon(d.icon),
 		items: normalizeItems(d.items),
+		itemsOnTarget: itemsOnTarget,
+		itemsOnSource: itemsOnSource,
 		conditions: { groups: normalizeGroups(d.conditions) },
 		effects: normalizeEffects(d.effects),
 	};
@@ -670,9 +684,11 @@ export function seidrDefaultAction(id: number): SeidrAction {
 		chatSelf: seidrDefaultChatSelf(name),
 		icon: seidrDefaultActionIcon(),
 		items: [],
+		itemsOnTarget: true,
+		itemsOnSource: false,
 		conditions: { groups: [] },
 		effects: {
-			arousal: { enabled: false, activity: "Caress" },
+			arousal: { enabled: false, activity: "Caress", reverse: false },
 			sound: { enabled: false, sound: "SpankSkin" },
 			pose: { enabled: false, pose: "Kneel" },
 		},

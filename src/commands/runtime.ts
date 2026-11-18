@@ -1,6 +1,14 @@
 /** Install Seidr chat commands + Tab autocomplete */
 import { Seidr } from "../seidr";
-import { seidrCmdAcClose, seidrCmdAcHandleKeyDown, seidrCmdAcIsOpen } from "./autocomplete";
+import {
+	seidrCmdAcClose,
+	seidrCmdAcHandleKeyDown,
+	seidrCmdAcIsOpen,
+	seidrGetCommandInput,
+	seidrSetCommandInput,
+} from "./autocomplete";
+import { seidrInstallBeepReply } from "./beepReply";
+import { seidrInstallOnlineFriends } from "./onlineFriends";
 import { seidrCmdIsCommandLine } from "./parse";
 import { seidrCmdExecuteLine, seidrCmdIsEnabled } from "./run";
 import { seidrGetCommandsBag } from "./store";
@@ -12,9 +20,13 @@ function clearInput() {
 	try {
 		if (typeof ElementValue === "function") ElementValue("InputChat", "");
 		else {
-			const el = document.getElementById("InputChat") as HTMLTextAreaElement | null;
-			if (el) el.value = "";
+			const club = document.getElementById("InputChat") as HTMLTextAreaElement | null;
+			if (club) club.value = "";
 		}
+	} catch (e) { /* ignore */ }
+	try {
+		const el = seidrGetCommandInput();
+		if (el && el.id !== "InputChat") el.value = "";
 	} catch (e) { /* ignore */ }
 }
 
@@ -24,7 +36,7 @@ function onCommand(fallbackTag: string, _args: string) {
 		clearInput();
 		return;
 	}
-	const el = document.getElementById("InputChat") as HTMLTextAreaElement | null;
+	const el = seidrGetCommandInput();
 	const msg = el ? String(el.value || "").trim() : "";
 	const line = msg || "";
 	const full = seidrCmdIsCommandLine(line)
@@ -147,12 +159,14 @@ function onBlurClose() {
 	}, 50);
 }
 
-function hookInput() {
-	const el = document.getElementById("InputChat");
-	if (!el || (el as any).__seidrCmdHooked) return;
-	(el as any).__seidrCmdHooked = true;
-	el.addEventListener("keydown", onKeyDownCapture, true);
-	el.addEventListener("blur", onBlurClose);
+function hookInput(el?: HTMLElement | null) {
+	const target =
+		el ||
+		(document.getElementById("InputChat") as HTMLElement | null);
+	if (!target || (target as any).__seidrCmdHooked) return;
+	(target as any).__seidrCmdHooked = true;
+	target.addEventListener("keydown", onKeyDownCapture, true);
+	target.addEventListener("blur", onBlurClose);
 }
 
 function installInputWatch() {
@@ -161,18 +175,36 @@ function installInputWatch() {
 		"focusin",
 		function (ev) {
 			const t = ev.target as HTMLElement | null;
-			if (t && t.id === "InputChat") hookInput();
+			if (!t) return;
+			if (t.id === "InputChat") {
+				hookInput(t);
+				return;
+			}
+			const cur = seidrGetCommandInput();
+			if (cur && t === cur) hookInput(t);
 		},
 		true
 	);
+}
+
+function setCommandInput(el: HTMLTextAreaElement | HTMLInputElement | null) {
+	seidrSetCommandInput(el);
+	if (el) hookInput(el);
 }
 
 function hookSendChat() {
 	if (!Seidr.hookFunction) return;
 	Seidr.hookFunction("ChatRoomSendChat", 8, function (args: unknown[], next: (a?: unknown[]) => unknown) {
 		try {
-			const el = document.getElementById("InputChat") as HTMLTextAreaElement | null;
-			const msg = el ? String(el.value || "").trim() : "";
+			/* Club send buffer is #InputChat (FBM copies float text here before Send). */
+			const club = document.getElementById("InputChat") as HTMLTextAreaElement | null;
+			const override = seidrGetCommandInput();
+			const fromClub = club ? String(club.value || "").trim() : "";
+			const fromOverride =
+				override && override.id !== "InputChat"
+					? String(override.value || "").trim()
+					: "";
+			const msg = fromClub || fromOverride;
 			if (seidrCmdIsCommandLine(msg)) {
 				seidrCmdAcClose();
 				seidrCmdExecuteLine(msg);
@@ -195,9 +227,16 @@ export function seidrInstallCommands() {
 	if (!Seidr._hookState) Seidr._hookState = {};
 	Seidr._hookState.commands = true;
 	seidrRegisterCommands();
+	seidrInstallOnlineFriends();
+	seidrInstallBeepReply();
 	installInputWatch();
 	hookSendChat();
 }
 
 Seidr.installCommands = seidrInstallCommands;
 Seidr.registerCommands = seidrRegisterCommands;
+Seidr.setCommandInput = setCommandInput;
+Seidr.getCommandInput = seidrGetCommandInput;
+Seidr.cmdAcIsOpen = seidrCmdAcIsOpen;
+/** Hosts (e.g. FBM float compose) may call this from document-capture Tab. */
+Seidr.cmdAcHandleKeyDown = seidrCmdAcHandleKeyDown;
