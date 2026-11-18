@@ -166,6 +166,14 @@ Example with a custom face applied to action lines, chat, and emotes:
 
 ![Chat font in Club chat](../assets/docs/settings-general-chat-font-result.png)
 
+### Cheats
+
+Collapsible **Cheats** block on General (self only):
+
+| Action | Meaning |
+|--------|---------|
+| **Give all Items** | Confirm, then add all buyable Club assets to your inventory (prefers BCC / Club `AddAllItems` when loaded; otherwise Seidr batches `InventoryAddMany` and syncs once). Already-owned items are skipped by Club. Does not wear anything. |
+
 ### Storage
 
 ![Storage](../assets/docs/settings-general-storage.png)

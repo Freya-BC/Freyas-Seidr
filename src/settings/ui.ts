@@ -40,6 +40,7 @@ import {
 	seidrApplyMapDrawOffsets,
 } from "./drawOffsets";
 import { seidrGetSettings, seidrSaveSettings } from "./storage";
+import { seidrRunGiveAllItems } from "./cheats";
 import { SeidrState } from "../state";
 import { seidrApplyChatFont } from "./chatFont";
 import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
@@ -342,6 +343,14 @@ function seidrBuildGeneralHtml(): string {
 			].join("")
 			: "",
 		'<p class="seidr-settings-hint" id="seidr-set-cmd-en-msg"></p>',
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Cheats</summary>",
+		'<p class="seidr-settings-hint">Self only. Restores missing Club inventory items (confirm first).</p>',
+		'<div class="seidr-settings-row">',
+		'<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-set-cheat-all-items-msg"></p>',
 		"</details>",
 		'<details class="seidr-settings-sec" open>',
 		"<summary>Storage</summary>",
@@ -900,6 +909,21 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			if (openMsg) openMsg.textContent = "";
 			if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
 			else if (openMsg) openMsg.textContent = "Room Manager unavailable.";
+		});
+	}
+
+	const cheatAll = $("seidr-set-cheat-all-items") as HTMLButtonElement | null;
+	const cheatMsg = $("seidr-set-cheat-all-items-msg");
+	if (cheatAll) {
+		cheatAll.addEventListener("click", function () {
+			if (!window.confirm("Add all Club items to your inventory? This can be large.")) return;
+			const r = seidrRunGiveAllItems();
+			if (cheatMsg) {
+				cheatMsg.textContent = r && r.ok
+					? "Added items" + (r.count != null ? " (" + r.count + ")" : "") +
+						(r.via ? " via " + r.via : "") + "."
+					: (r && r.error) || "Failed.";
+			}
 		});
 	}
 

@@ -1,4 +1,4 @@
-/* Seidr v2.0.6 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.9 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.6";
+  Seidr.VERSION = "2.0.9";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -14055,6 +14055,55 @@
     el.textContent = seidrSettingsCss();
   }
 
+  // src/settings/cheats.ts
+  function seidrCheatAddAllItems() {
+    if (typeof Player === "undefined" || !Player) return { ok: false, error: "No player." };
+    if (typeof InventoryAdd !== "function" && typeof InventoryAddMany !== "function") {
+      return { ok: false, error: "Inventory add is not available." };
+    }
+    const bundle = [];
+    const assets = typeof Asset !== "undefined" && Array.isArray(Asset) ? Asset : [];
+    for (let i = 0; i < assets.length; i++) {
+      const A = assets[i];
+      if (!A || !A.Name || !A.Group || !A.Group.Name) continue;
+      if (A.Value === -1) continue;
+      bundle.push({ Name: String(A.Name), Group: String(A.Group.Name) });
+    }
+    let n = 0;
+    if (typeof InventoryAddMany === "function") {
+      InventoryAddMany(Player, bundle, false);
+      n = bundle.length;
+    } else if (typeof InventoryAdd === "function") {
+      for (let j = 0; j < bundle.length; j++) {
+        InventoryAdd(Player, bundle[j].Name, bundle[j].Group, false);
+        n += 1;
+      }
+    }
+    if (typeof ServerPlayerInventorySync === "function") {
+      try {
+        ServerPlayerInventorySync();
+      } catch (_e) {
+      }
+    }
+    return { ok: true, count: n };
+  }
+  function seidrRunGiveAllItems() {
+    try {
+      if (typeof BCC !== "undefined" && BCC && typeof BCC.AddAllItems === "function") {
+        BCC.AddAllItems();
+        return { ok: true, via: "BCC" };
+      }
+      const w = typeof window !== "undefined" ? window : null;
+      if (w && typeof w.AddAllItems === "function") {
+        w.AddAllItems();
+        return { ok: true, via: "AddAllItems" };
+      }
+      return seidrCheatAddAllItems();
+    } catch (e) {
+      return { ok: false, error: String(e && e.message ? e.message : e) };
+    }
+  }
+
   // src/actions/io.ts
   function lz3() {
     try {
@@ -16459,6 +16508,14 @@
       ].join("") : "",
       '<p class="seidr-settings-hint" id="seidr-set-cmd-en-msg"></p>',
       "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Cheats</summary>",
+      '<p class="seidr-settings-hint">Self only. Restores missing Club inventory items (confirm first).</p>',
+      '<div class="seidr-settings-row">',
+      '<button type="button" id="seidr-set-cheat-all-items">Give all Items</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-set-cheat-all-items-msg"></p>',
+      "</details>",
       '<details class="seidr-settings-sec" open>',
       "<summary>Storage</summary>",
       '<p class="seidr-settings-hint" id="seidr-set-storage-total">\u2014</p>',
@@ -16968,6 +17025,17 @@
         if (openMsg) openMsg.textContent = "";
         if (typeof Seidr.rmOpenPanel === "function") Seidr.rmOpenPanel();
         else if (openMsg) openMsg.textContent = "Room Manager unavailable.";
+      });
+    }
+    const cheatAll = $3("seidr-set-cheat-all-items");
+    const cheatMsg = $3("seidr-set-cheat-all-items-msg");
+    if (cheatAll) {
+      cheatAll.addEventListener("click", function() {
+        if (!window.confirm("Add all Club items to your inventory? This can be large.")) return;
+        const r = seidrRunGiveAllItems();
+        if (cheatMsg) {
+          cheatMsg.textContent = r && r.ok ? "Added items" + (r.count != null ? " (" + r.count + ")" : "") + (r.via ? " via " + r.via : "") + "." : r && r.error || "Failed.";
+        }
       });
     }
     function onDrawLive() {
