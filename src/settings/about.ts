@@ -36,7 +36,7 @@ const ABOUT_FEATURES: AboutFeature[] = [
 	{
 		title: "Chat Commands",
 		blurb:
-			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
+			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, /roommanager, and /wardrobe. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
 		docPath: "/docs/view.html#COMMANDS",
 	},
 	{

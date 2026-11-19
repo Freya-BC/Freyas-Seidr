@@ -4,7 +4,8 @@ export type SeidrCmdTag =
 	| "a" | "action" | "strip" | "stripe"
 	| "poses" | "p"
 	| "animation" | "ani"
-	| "seidr" | "roommanager";
+	| "seidr" | "roommanager"
+	| "wardrobe";
 
 export type SeidrCmdFamily =
 	| "action"
@@ -49,7 +50,7 @@ export type SeidrCmdTokenFocus =
 
 /** Longer tags first. */
 const TAG_ALT =
-	"roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p";
+	"roommanager|wardrobe|animation|action|stripe|strip|poses|seidr|ani|a|p";
 const TAG_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s|$)", "i");
 const TAG_LINE_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s+(.*))?$", "i");
 const TAG_TOKEN_RE = new RegExp("^/(" + TAG_ALT + ")(\\s+)?", "i");
@@ -58,7 +59,7 @@ function tagFamily(tag: SeidrCmdTag): SeidrCmdFamily {
 	if (tag === "strip" || tag === "stripe") return "strip";
 	if (tag === "poses" || tag === "p") return "poses";
 	if (tag === "animation" || tag === "ani") return "animation";
-	if (tag === "seidr" || tag === "roommanager") return "meta";
+	if (tag === "seidr" || tag === "roommanager" || tag === "wardrobe") return "meta";
 	return "action";
 }
 
@@ -73,6 +74,7 @@ function normalizeTag(raw: string): SeidrCmdTag {
 	if (t === "ani") return "ani";
 	if (t === "seidr") return "seidr";
 	if (t === "roommanager") return "roommanager";
+	if (t === "wardrobe") return "wardrobe";
 	return "a";
 }
 

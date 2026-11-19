@@ -137,6 +137,14 @@ export function seidrRegisterCommands(): void {
 			Action: function () { onMetaCommand("roommanager"); },
 		});
 	}
+	if (en.wardrobe !== false) {
+		defs.push({
+			Tag: "wardrobe",
+			Description: "Seidr: open wardrobe (always, even when clothes are locked)",
+			Clear: false,
+			Action: function () { onMetaCommand("wardrobe"); },
+		});
+	}
 	if (!defs.length) return;
 	try {
 		CommandCombine(defs);

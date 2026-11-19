@@ -18,10 +18,11 @@ export type SeidrCmdEnableKey =
 	| "animation"
 	| "ani"
 	| "seidr"
-	| "roommanager";
+	| "roommanager"
+	| "wardrobe";
 
 export const SEIDR_CMD_ENABLE_KEYS: SeidrCmdEnableKey[] = [
-	"a", "action", "strip", "stripe", "poses", "p", "animation", "ani", "seidr", "roommanager",
+	"a", "action", "strip", "stripe", "poses", "p", "animation", "ani", "seidr", "roommanager", "wardrobe",
 ];
 
 export const SEIDR_CMD_ENABLE_LABELS: { key: SeidrCmdEnableKey; label: string }[] = [
@@ -35,6 +36,7 @@ export const SEIDR_CMD_ENABLE_LABELS: { key: SeidrCmdEnableKey; label: string }[
 	{ key: "ani", label: "/ani" },
 	{ key: "seidr", label: "/seidr" },
 	{ key: "roommanager", label: "/roommanager" },
+	{ key: "wardrobe", label: "/wardrobe" },
 ];
 
 export type SeidrCmdEnabledMap = Record<SeidrCmdEnableKey, boolean>;
@@ -164,6 +166,7 @@ export function seidrCmdEnableKeyForTag(tag: string): SeidrCmdEnableKey | null {
 	if (t === "ani") return "ani";
 	if (t === "seidr") return "seidr";
 	if (t === "roommanager") return "roommanager";
+	if (t === "wardrobe") return "wardrobe";
 	return null;
 }
 

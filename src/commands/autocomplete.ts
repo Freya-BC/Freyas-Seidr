@@ -482,12 +482,12 @@ export function seidrCmdAcOnTab(): boolean {
 	// Bare tag — insert trailing space so next token is real
 	if (focus.kind === "tag") {
 		const bare = value.match(
-			/^\s*\/(roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
+			/^\s*\/(roommanager|wardrobe|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
 		);
 		if (!bare) return false;
 		const tag = bare[1].toLowerCase();
 		if (!seidrCmdIsEnabled(tag)) return false;
-		if (tag === "seidr" || tag === "roommanager") return false;
+		if (tag === "seidr" || tag === "roommanager" || tag === "wardrobe") return false;
 		const spaced = "/" + tag + " ";
 		input.value = spaced;
 		try {

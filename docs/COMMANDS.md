@@ -15,6 +15,7 @@ Run Seidr helpers from the Club chat box with short slash commands. Each command
 | **`/animation`** / **`/ani`** | Play one of **your** Animations (local Player only) |
 | **`/seidr`** | Open Seidr Settings |
 | **`/roommanager`** | Open Room Manager (when activated) |
+| **`/wardrobe`** | Open your wardrobe (always — even when clothes are locked) |
 | **`/beep`** / **`/whisper`** | Club commands — Seidr only adds Tab autocomplete (and beep **Reply**) |
 
 **Important:** **Commands → Actions** (this page) are chat shortcuts for `/a`. **Settings → Actions** is a different feature — custom entries in the Club Activity Menu. See [ACTIONS.md](ACTIONS.md).
@@ -124,9 +125,12 @@ Plays a clip from **Settings → Animations** on **you** only. See [ANIMATIONS.m
 ```
 /seidr
 /roommanager
+/wardrobe
 ```
 
 `/roommanager` requires **Activate Room Manager** in Settings → General.
+
+`/wardrobe` opens your clothing screen even when Club would normally block it (restraints, rules, etc.).
 
 ---
 
@@ -177,6 +181,7 @@ Plays a clip from **Settings → Animations** on **you** only. See [ANIMATIONS.m
 - **`/strip` / `/stripe`**: runs the matching Seidr **Undress** / **Undress all** activity on that person.
 - **`/poses` / `/p`**: applies a Club pose when allowed, then posts a public Action line describing the pose.
 - **`/animation` / `/ani`**: plays your saved animation on the local Player.
+- **`/wardrobe`**: opens your Appearance/wardrobe via `ChatRoomAppearanceLoadCharacter` (skips Club’s “can change clothes” gate).
 
 You still need Club permission to act on others. If the activity / pose is not available right now, the command is refused.
 

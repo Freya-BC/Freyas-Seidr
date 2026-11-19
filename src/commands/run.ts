@@ -20,6 +20,7 @@ declare const Player: any;
 declare const AssetGroupGet: any;
 declare const ActivityRun: any;
 declare const ServerChatRoomGetAllowItem: any;
+declare const ChatRoomAppearanceLoadCharacter: ((C: unknown) => void) | undefined;
 
 export function seidrCmdIsEnabled(tag: string): boolean {
 	const key = seidrCmdEnableKeyForTag(tag);
@@ -155,7 +156,23 @@ function executeAnimationCommand(nameRaw: string): boolean {
 	return true;
 }
 
-function executeMetaCommand(tag: "seidr" | "roommanager"): boolean {
+function executeWardrobeCommand(): boolean {
+	try {
+		/* Bypass ChatRoomOpenWardrobeScreen / CanChangeOwnClothes — always open. */
+		if (typeof ChatRoomAppearanceLoadCharacter === "function" && Player) {
+			ChatRoomAppearanceLoadCharacter(Player);
+		} else {
+			seidrCmdWarn("Wardrobe unavailable");
+		}
+	} catch (e) {
+		console.warn("[Seidr Cmd] wardrobe open failed", e);
+		seidrCmdWarn("Wardrobe unavailable");
+	}
+	return true;
+}
+
+function executeMetaCommand(tag: "seidr" | "roommanager" | "wardrobe"): boolean {
+	if (tag === "wardrobe") return executeWardrobeCommand();
 	if (tag === "seidr") {
 		if (typeof Seidr.openSettings === "function") Seidr.openSettings();
 		else seidrCmdWarn("Settings unavailable");
@@ -190,7 +207,11 @@ export function seidrCmdExecuteLine(msg: string): boolean {
 	}
 
 	if (parsed.family === "meta") {
-		return executeMetaCommand(parsed.tag === "roommanager" ? "roommanager" : "seidr");
+		const metaTag =
+			parsed.tag === "roommanager" ? "roommanager"
+				: parsed.tag === "wardrobe" ? "wardrobe"
+					: "seidr";
+		return executeMetaCommand(metaTag);
 	}
 	if (parsed.family === "animation") {
 		return executeAnimationCommand(parsed.secondRaw);

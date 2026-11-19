@@ -118,7 +118,7 @@ Seat tiles, walk-back grace, and form/join rules: [HOLDS.md](HOLDS.md#map-rooms)
 
 Collapsible **Commands** block on General:
 
-1. **Enable toggles** — turn each slash tag on or off (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`). Off = not registered / ignored. Keep `/seidr` on so you can always reopen Settings.
+1. **Enable toggles** — turn each slash tag on or off (`/a`, `/action`, `/strip`, `/stripe`, `/poses`, `/p`, `/animation`, `/ani`, `/seidr`, `/roommanager`, `/wardrobe`). Off = not registered / ignored. Keep `/seidr` on so you can always reopen Settings.
 2. **Fast Select** (when shown) — type a letter then **Tab** to jump into a command (`a` → `/action `, `s` → `/strip `, …). Empty Tab is configurable. Per-letter checkboxes gate individual shortcuts.
 3. **Last target** — after a successful `/a` / `/strip` / `/poses`, member autocomplete prefers that person next time (while they are still in the room).
 4. **Club chat assist** (default on):

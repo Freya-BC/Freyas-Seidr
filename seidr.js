@@ -1,4 +1,4 @@
-/* Seidr v2.0.17 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.24 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.17";
+  Seidr.VERSION = "2.0.24";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1092,7 +1092,8 @@
     "animation",
     "ani",
     "seidr",
-    "roommanager"
+    "roommanager",
+    "wardrobe"
   ];
   var SEIDR_CMD_ENABLE_LABELS = [
     { key: "a", label: "/a" },
@@ -1104,7 +1105,8 @@
     { key: "animation", label: "/animation" },
     { key: "ani", label: "/ani" },
     { key: "seidr", label: "/seidr" },
-    { key: "roommanager", label: "/roommanager" }
+    { key: "roommanager", label: "/roommanager" },
+    { key: "wardrobe", label: "/wardrobe" }
   ];
   var SEIDR_FAST_SELECT_EMPTY_OPTS = [
     { id: "disabled", label: "Disabled (normal Tab)" },
@@ -1174,6 +1176,7 @@
     if (t === "ani") return "ani";
     if (t === "seidr") return "seidr";
     if (t === "roommanager") return "roommanager";
+    if (t === "wardrobe") return "wardrobe";
     return null;
   }
   function seidrDefaultCommandsBag() {
@@ -6523,7 +6526,7 @@
   }
 
   // src/commands/parse.ts
-  var TAG_ALT = "roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p";
+  var TAG_ALT = "roommanager|wardrobe|animation|action|stripe|strip|poses|seidr|ani|a|p";
   var TAG_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s|$)", "i");
   var TAG_LINE_RE = new RegExp("^/(" + TAG_ALT + ")(?:\\s+(.*))?$", "i");
   var TAG_TOKEN_RE = new RegExp("^/(" + TAG_ALT + ")(\\s+)?", "i");
@@ -6531,7 +6534,7 @@
     if (tag === "strip" || tag === "stripe") return "strip";
     if (tag === "poses" || tag === "p") return "poses";
     if (tag === "animation" || tag === "ani") return "animation";
-    if (tag === "seidr" || tag === "roommanager") return "meta";
+    if (tag === "seidr" || tag === "roommanager" || tag === "wardrobe") return "meta";
     return "action";
   }
   function normalizeTag(raw) {
@@ -6545,6 +6548,7 @@
     if (t === "ani") return "ani";
     if (t === "seidr") return "seidr";
     if (t === "roommanager") return "roommanager";
+    if (t === "wardrobe") return "wardrobe";
     return "a";
   }
   function secondKindForFamily(family) {
@@ -7596,7 +7600,21 @@
     });
     return true;
   }
+  function executeWardrobeCommand() {
+    try {
+      if (typeof ChatRoomAppearanceLoadCharacter === "function" && Player) {
+        ChatRoomAppearanceLoadCharacter(Player);
+      } else {
+        seidrCmdWarn("Wardrobe unavailable");
+      }
+    } catch (e) {
+      console.warn("[Seidr Cmd] wardrobe open failed", e);
+      seidrCmdWarn("Wardrobe unavailable");
+    }
+    return true;
+  }
   function executeMetaCommand(tag) {
+    if (tag === "wardrobe") return executeWardrobeCommand();
     if (tag === "seidr") {
       if (typeof Seidr.openSettings === "function") Seidr.openSettings();
       else seidrCmdWarn("Settings unavailable");
@@ -7627,7 +7645,8 @@
       return true;
     }
     if (parsed.family === "meta") {
-      return executeMetaCommand(parsed.tag === "roommanager" ? "roommanager" : "seidr");
+      const metaTag = parsed.tag === "roommanager" ? "roommanager" : parsed.tag === "wardrobe" ? "wardrobe" : "seidr";
+      return executeMetaCommand(metaTag);
     }
     if (parsed.family === "animation") {
       return executeAnimationCommand(parsed.secondRaw);
@@ -7792,11 +7811,11 @@
       const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml2(it.hint) + "</span>" : "";
       return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml2(it.label) + "</span>" + hint + "</button>";
     }).join("");
-    root3.querySelectorAll("[data-i]").forEach(function(btn3) {
-      btn3.addEventListener("mousedown", function(ev) {
+    root3.querySelectorAll("[data-i]").forEach(function(btn2) {
+      btn2.addEventListener("mousedown", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const i = parseInt(btn3.getAttribute("data-i") || "0", 10);
+        const i = parseInt(btn2.getAttribute("data-i") || "0", 10);
         state.index = i;
         seidrCmdAcAccept();
       });
@@ -8055,12 +8074,12 @@
     let focus = seidrCmdTokenAtCaret(value, caret);
     if (focus.kind === "tag") {
       const bare = value.match(
-        /^\s*\/(roommanager|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
+        /^\s*\/(roommanager|wardrobe|animation|action|stripe|strip|poses|seidr|ani|a|p)\s*$/i
       );
       if (!bare) return false;
       const tag = bare[1].toLowerCase();
       if (!seidrCmdIsEnabled(tag)) return false;
-      if (tag === "seidr" || tag === "roommanager") return false;
+      if (tag === "seidr" || tag === "roommanager" || tag === "wardrobe") return false;
       const spaced = "/" + tag + " ";
       input.value = spaced;
       try {
@@ -8369,17 +8388,17 @@
     } catch (e) {
       console.warn("[Seidr] beep hover Reply menu failed", e);
     }
-    const btn3 = document.createElement("button");
-    btn3.type = "button";
-    btn3.className = "seidr-beep-reply-btn ReplyButton";
-    btn3.title = "Reply";
-    btn3.textContent = "Reply";
-    btn3.addEventListener("click", function(ev) {
+    const btn2 = document.createElement("button");
+    btn2.type = "button";
+    btn2.className = "seidr-beep-reply-btn ReplyButton";
+    btn2.title = "Reply";
+    btn2.textContent = "Reply";
+    btn2.addEventListener("click", function(ev) {
       ev.preventDefault();
       ev.stopPropagation();
       onReply();
     });
-    div.appendChild(btn3);
+    div.appendChild(btn2);
   }
   function onComposeKeyDown(ev) {
     if (!activeBeepReply) return;
@@ -8600,6 +8619,16 @@
         Clear: false,
         Action: function() {
           onMetaCommand("roommanager");
+        }
+      });
+    }
+    if (en.wardrobe !== false) {
+      defs.push({
+        Tag: "wardrobe",
+        Description: "Seidr: open wardrobe (always, even when clothes are locked)",
+        Clear: false,
+        Action: function() {
+          onMetaCommand("wardrobe");
         }
       });
     }
@@ -9075,25 +9104,6 @@
   // src/poses/styles.ts
   function seidrPoseCss() {
     return [
-      "#seidr-pose-btn {",
-      "  position: fixed; z-index: 118; box-sizing: border-box;",
-      "  display: none; place-items: center; padding: 0; margin: 0;",
-      "  border: 1px solid #000;",
-      "  border-radius: 0;",
-      "  background: #fff;",
-      "  color: #000;",
-      "  box-shadow: none;",
-      "  cursor: pointer;",
-      "}",
-      "#seidr-pose-btn.seidr-pose-btn-visible { display: grid; }",
-      /* Club DrawButton hover uses Cyan over White. */
-      "#seidr-pose-btn:hover { background: Cyan; }",
-      "#seidr-pose-btn .seidr-pose-btn-icon {",
-      "  width: 78%; height: 78%; pointer-events: none; display: block;",
-      "}",
-      "#seidr-pose-btn .seidr-pose-btn-icon svg {",
-      "  width: 100%; height: 100%; display: block;",
-      "}",
       "#seidr-pose-panel {",
       "  position: fixed; z-index: 130; display: none; flex-direction: column;",
       "  width: min(92vw, 420px); max-height: min(80vh, 520px);",
@@ -9163,6 +9173,7 @@
 
   // src/poses/ui.ts
   var BTN_ID = "seidr-pose-btn";
+  var DIALOG_MENUBAR_ID = "dialog-dialog-menubar";
   var PANEL_ID = "seidr-pose-panel";
   var GRID_ID = "seidr-pose-grid";
   var CLUB_POSE_ICON = {
@@ -9179,11 +9190,23 @@
     AllFours: "Icons/Poses/AllFours.png"
   };
   var BELLY_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 1024" aria-hidden="true"><path fill="#f0e6d4" d="M1260.5 265.1c-6.6 1.5-21.5 9.5-30.5 16.3-4.7 3.5-14.3 11.4-21.4 17.6-7.1 6.1-21.8 18.3-32.7 27.1-10.8 8.7-20.9 17.3-22.4 19-7.8 9.3-9.9 20.3-5.7 29 1.2 2.4 5.4 8.4 9.3 13.3 18.6 23.5 20 33.4 17.9 125.8-1.4 64.2-.8 90.5 2.9 112.9l1.7 10.7 7.6 8.3c4.2 4.6 7.5 8.5 7.4 8.6-.2.2-5.1-2-11-4.8-26.8-12.6-70.8-28.4-100.1-35.9-8.8-2.3-17.7-4.6-19.8-5.1-3.3-.9-4.1-1.8-7.2-8-11.2-22.1-26.3-40.6-44.5-54.2-43.5-32.7-105.4-37.7-157.5-12.8-18.5 8.9-31.2 17.6-64 43.7-38.3 30.5-54.8 40.8-73 45.4-12.8 3.3-30.4 4.5-44.2 3.1-32.9-3.3-61.3-13.5-113.4-40.7-51.5-26.8-71.9-36.2-97.4-44.8-32.9-11.1-63.3-15.5-79.5-11.6-15.6 3.7-26.8 14.2-31.9 30-1.1 3.6-4.3 17.5-7.1 31-4.9 24-10.8 48.2-20.6 84.6l-4.8 18.1-38.6.6c-57.5.9-99.6 5-125 12.3-23.9 6.9-36.3 24.6-28.6 40.9 2.9 6.1 6.5 9.7 13.1 12.7l5 2.3h221l4.1-2.2c7.1-3.8 11.5-10 18.9-26.5 11.3-25.4 30.8-70.6 35.9-83.1 2.7-6.4 5.2-11.7 5.6-11.7 1.7 0 5 5.3 5 7.9 0 5-15.3 46.5-30.1 81.8-3.5 8.4-4 10.4-3 11.7 1.9 2.3 18.8 10.3 25.6 12.2 3.9 1.1 11.6 1.8 22 2.1 19.6.6 28.2-.9 49-8.7 23.6-8.8 15.1-8.2 129-8.4 106.5-.2 105.6-.2 164.6-5.6 58.4-5.4 69.9-4.5 152.9 11.9 53.2 10.5 69.8 13.2 105 17.5 84.3 10.3 193.9 7.7 235-5.6 27.4-8.8 41.1-27.5 38-52.1-2.3-18.8-6.3-31.7-25.7-83.7-22.8-61-24.7-66.2-33.8-92.6-28-81.3-35.9-120.1-29.6-146.4 5.4-22.8 19.5-48.6 40.5-74.5 11.6-14.2 13.6-17.8 13.6-24.3 0-12.2-11.9-18.7-27.5-15.1"/><path fill="#f0e6d4" d="M288 289.7c-13.3 1.4-33.7 8-49 15.9-42.7 22.2-72.4 61.2-77 101.2-1.8 16.3 1.7 37.8 8.9 53.6 2.7 5.9 3.1 6.3 6.9 6.9 2.2.4 5 1.5 6.3 2.6 2.3 1.8 2.4 2.5 2.3 13.3 0 13.1-1.5 19.2-9.9 41.9-7.1 19.1-7.8 22.4-7.3 31.9.7 12 5.1 20.2 17.3 32.2 10.6 10.3 12.5 13.5 12.5 20.2 0 6.9-2.4 11.4-9.2 17.9-5.6 5.2-6 5.9-4.6 7.3.8.8 4.6 2 8.4 2.6 13.5 2.1 29.7-3.3 43.8-14.7 3.8-3 7.2-5.5 7.6-5.5 2 0 8.8 7.4 9.9 10.8 2.7 8.1-.2 19.6-6.6 26.4-1.6 1.7-2.3 3.3-1.9 4.4.5 1.4 1.9 1.6 10.4 1.2 17.6-.8 35.7-9.3 52.1-24.4l7.7-7.2 3.2-14.8c1.7-8.2 4.6-22.6 6.3-31.9 6.2-34.2 9.8-43.6 21-54.8 11.8-11.8 26.2-17.1 46.4-17 23.5.1 49.1 6.6 89.9 22.8l11.9 4.7 6.5-3.4c8.4-4.2 17.4-12.9 20.7-19.9 4.4-9.6 3.5-10.8-6.5-8.3-10.3 2.5-20.8 1.6-29.3-2.4-3.7-1.7-6.7-3.5-6.7-3.9s3.1-2.1 6.8-3.8c8.9-4 20.1-14.9 22.5-22 2.2-6.4 2.1-10.7-.3-13.8-1.9-2.4-2.5-2.5-14.2-2.9-10.4-.3-13.3-.8-18.6-3-23.8-9.9-37.1-26.4-57.2-71.3-14.9-33.2-22.9-47.3-34.2-59.9-15.2-17.1-36.9-28.5-60.8-32.1-8.6-1.4-27-1.7-36-.8m1092.5 10.7c-13.6 3.1-23.3 8.3-46.3 24.4-16.4 11.5-25.9 17.4-40.7 25.2-34.1 18-40.9 29.5-31.3 52.4 6.2 14.7 7.8 21.1 7.8 31 0 10.4-2.6 26.7-7 43.2l-3 11.2 6.4 17.8c12.6 35 35.6 94.7 36.3 94 .6-.6 4.6-27.3 8.8-58.1 5.6-41.1 11.4-78.8 14.4-94 7.2-35.5 20.6-57.3 58.1-94.6 20.8-20.7 26-26.9 27.4-33.2.8-3.5-.8-9.7-3.4-13-4.7-5.9-16.8-8.7-27.5-6.3"/></svg>';
-  var btn = null;
+  var POSE_BTN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 102"><path fill="black" d="M23 13Q18 17 16 25L13 55Q11 66 17 70Q20 73 25 71L26 74Q25 81 21 89L69 89Q65 81 63 74L64 71Q70 73 74 68Q79 63 77 55L74 25Q71 15 64 12Q57 8 51 9L50 6L38 6L37 9Q29 9 23 13Z"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var POSE_BTN_ICON_URL = "data:image/svg+xml," + encodeURIComponent(POSE_BTN_SVG);
   var panel = null;
   var escBound = false;
-  var lastPlace = null;
+  var poseBtnImg = null;
+  var lastBtnRect = null;
   var lastTargetMember = null;
+  function ensurePoseBtnImg() {
+    if (!poseBtnImg) {
+      poseBtnImg = new Image();
+      poseBtnImg.src = POSE_BTN_ICON_URL;
+    }
+    return poseBtnImg;
+  }
+  function isDialogIntroMode() {
+    return (typeof DialogMenuMode !== "undefined" ? DialogMenuMode : "") === "dialog";
+  }
   function isOtherDialogTarget(C) {
     if (!C || typeof Player === "undefined" || !Player) return false;
     try {
@@ -9208,6 +9231,29 @@
     if (!C.FocusGroup) return false;
     return true;
   }
+  function poseButtonRect() {
+    if (!dialogPoseContextOk()) return null;
+    const len = Array.isArray(DialogMenuButton) ? DialogMenuButton.length : 1;
+    return { x: 1885 - len * 110, y: 15, w: 90, h: 90 };
+  }
+  function clubRectToClient(r) {
+    try {
+      const canvas = MainCanvas && MainCanvas.canvas;
+      if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return null;
+      const sx = canvas.clientWidth / 2e3;
+      const sy = canvas.clientHeight / 1e3;
+      const left = canvas.offsetLeft + r.x * sx;
+      const top = canvas.offsetTop + r.y * sy;
+      return {
+        left,
+        top,
+        right: left + r.w * sx,
+        bottom: top + r.h * sy
+      };
+    } catch (e) {
+      return null;
+    }
+  }
   function poseIconHtml(poseId) {
     const src = CLUB_POSE_ICON[poseId];
     if (src) return '<img src="' + src + '" alt="" />';
@@ -9215,26 +9261,6 @@
   }
   function ensureDom() {
     seidrInjectPoseStyles();
-    if (!btn || !document.body.contains(btn)) {
-      btn = document.createElement("button");
-      btn.id = BTN_ID;
-      btn.type = "button";
-      btn.title = "Pose";
-      btn.setAttribute("aria-label", "Pose");
-      btn.innerHTML = '<span class="seidr-pose-btn-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 102" focusable="false"><path fill="black" d="M23 13Q18 17 16 25L13 55Q11 66 17 70Q20 73 25 71L26 74Q25 81 21 89L69 89Q65 81 63 74L64 71Q70 73 74 68Q79 63 77 55L74 25Q71 15 64 12Q57 8 51 9L50 6L38 6L37 9Q29 9 23 13Z"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-      btn.addEventListener("click", function(ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        togglePanel();
-      });
-      ["pointerdown", "mousedown", "mouseup", "touchstart"].forEach(function(type) {
-        btn.addEventListener(type, function(ev) {
-          ev.stopPropagation();
-        });
-      });
-      document.body.appendChild(btn);
-      lastPlace = null;
-    }
     if (!panel || !document.body.contains(panel)) {
       panel = document.createElement("div");
       panel.id = PANEL_ID;
@@ -9315,9 +9341,21 @@
     }
     grid.innerHTML = parts.length ? parts.join("") : '<div class="seidr-pose-empty">No poses available</div>';
   }
+  function buttonClientRect() {
+    const htmlBtn = document.getElementById(BTN_ID);
+    if (htmlBtn) {
+      const b = htmlBtn.getBoundingClientRect();
+      if (b.width > 0 && b.height > 0) {
+        return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+      }
+    }
+    if (lastBtnRect) return clubRectToClient(lastBtnRect);
+    return null;
+  }
   function placePanelNearButton() {
-    if (!panel || !btn) return;
-    const r = btn.getBoundingClientRect();
+    if (!panel) return;
+    const r = buttonClientRect();
+    if (!r) return;
     const pad = 8;
     const pw = Math.min(window.innerWidth - pad * 2, 420);
     const ph = Math.min(
@@ -9339,6 +9377,39 @@
     panel.style.top = top + "px";
     panel.style.right = "auto";
     panel.style.transform = "none";
+  }
+  function removeHtmlMenubarBtn() {
+    const el = document.getElementById(BTN_ID);
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+  function ensureHtmlMenubarBtn() {
+    if (!dialogPoseContextOk() || !isDialogIntroMode()) {
+      removeHtmlMenubarBtn();
+      return;
+    }
+    const menubar = document.getElementById(DIALOG_MENUBAR_ID);
+    if (!menubar) return;
+    if (document.getElementById(BTN_ID)) return;
+    if (typeof ElementButton === "undefined" || !ElementButton || typeof ElementButton.Create !== "function") {
+      return;
+    }
+    ensurePoseBtnImg();
+    try {
+      const button = ElementButton.Create(
+        BTN_ID,
+        function() {
+          togglePanel();
+        },
+        {
+          image: POSE_BTN_ICON_URL,
+          tooltip: "Positions",
+          tooltipPosition: "left"
+        },
+        { button: { classList: ["dialog-menubar-button"] } }
+      );
+      menubar.appendChild(button);
+    } catch (e) {
+    }
   }
   function isPanelOpen() {
     return !!(panel && panel.classList.contains("seidr-pose-open"));
@@ -9363,67 +9434,87 @@
     if (isPanelOpen()) closePanel();
     else openPanel();
   }
-  function hideButton() {
-    if (btn) {
-      btn.classList.remove("seidr-pose-btn-visible");
-      btn.style.removeProperty("display");
-    }
-    lastPlace = null;
+  function hidePanel() {
+    lastBtnRect = null;
+    removeHtmlMenubarBtn();
     closePanel();
   }
-  function placeButton(x, y, w, h) {
-    if (!btn) return;
-    if (lastPlace && lastPlace.x === x && lastPlace.y === y && lastPlace.w === w && lastPlace.h === h) {
-      return;
-    }
-    lastPlace = { x, y, w, h };
+  function drawPoseIconIntoButton(r) {
+    if (!MainCanvas) return;
+    const img = ensurePoseBtnImg();
+    if (!img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+    const pad = 2;
+    const bw = r.w - 2 * pad;
+    const bh = r.h - 2 * pad;
+    const scale = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    const dx = r.x + pad + (bw - dw) / 2;
+    const dy = r.y + pad + (bh - dh) / 2;
+    MainCanvas.drawImage(img, dx, dy, dw, dh);
+  }
+  function seidrPoseDrawButton() {
     try {
-      if (typeof ElementPositionFixed === "function") {
-        ElementPositionFixed(btn, x, y, w, h);
-      } else {
-        btn.style.right = "16px";
-        btn.style.top = "16px";
-        btn.style.width = w + "px";
-        btn.style.height = h + "px";
+      if (isDialogIntroMode()) {
+        lastBtnRect = null;
+        return;
       }
+      const r = poseButtonRect();
+      if (!r || typeof DrawButton !== "function") {
+        lastBtnRect = null;
+        return;
+      }
+      lastBtnRect = r;
+      DrawButton(r.x, r.y, r.w, r.h, "", "White", null, "Positions");
+      drawPoseIconIntoButton(r);
     } catch (e) {
+      lastBtnRect = null;
     }
   }
-  function showAndPlaceButton() {
-    ensureDom();
-    if (!btn) return;
-    const len = Array.isArray(DialogMenuButton) ? DialogMenuButton.length : 1;
-    const x = 1885 - len * 110;
-    const y = 15;
-    btn.classList.add("seidr-pose-btn-visible");
-    placeButton(x, y, 90, 90);
+  function seidrPoseTryClick() {
+    try {
+      if (isDialogIntroMode()) return false;
+      const r = poseButtonRect();
+      if (!r || typeof MouseIn !== "function" || !MouseIn(r.x, r.y, r.w, r.h)) return false;
+      lastBtnRect = r;
+      togglePanel();
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
   function seidrPoseDialogTick() {
     try {
       if (!dialogPoseContextOk()) {
-        hideButton();
+        hidePanel();
         return;
       }
-      showAndPlaceButton();
+      ensureHtmlMenubarBtn();
       if (isPanelOpen()) {
         const C = CurrentCharacter;
         const mem = C && typeof C.MemberNumber === "number" ? C.MemberNumber : null;
         if (mem !== lastTargetMember) rebuildGrid();
       }
     } catch (e) {
-      hideButton();
+      hidePanel();
+    }
+  }
+  function seidrPoseAfterDialogMenubar() {
+    try {
+      removeHtmlMenubarBtn();
+      ensureHtmlMenubarBtn();
+    } catch (e) {
     }
   }
   function seidrPoseDialogLeave() {
-    hideButton();
+    hidePanel();
   }
   function seidrPoseDestroyUi() {
     closePanel();
-    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+    removeHtmlMenubarBtn();
     if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
-    btn = null;
     panel = null;
-    lastPlace = null;
+    lastBtnRect = null;
     lastTargetMember = null;
     const style = document.getElementById("seidr-pose-styles");
     if (style && style.parentNode) style.parentNode.removeChild(style);
@@ -9431,6 +9522,18 @@
 
   // src/poses/index.ts
   var installed2 = false;
+  function drawAfter(args, next) {
+    const ret = next(args);
+    try {
+      seidrPoseDrawButton();
+    } catch (e) {
+    }
+    try {
+      seidrPoseDialogTick();
+    } catch (e2) {
+    }
+    return ret;
+  }
   function tickAfter(args, next) {
     const ret = next(args);
     try {
@@ -9442,10 +9545,30 @@
   function seidrInstallPoses() {
     if (installed2) return;
     installed2 = true;
-    Seidr.tryHook("DialogDraw", "DialogDraw", 5, tickAfter);
+    Seidr.tryHook("DialogDraw", "DialogDraw", 5, drawAfter);
     Seidr.tryHook("seidrPoseCharacterSetCurrent", "CharacterSetCurrent", 5, tickAfter);
     Seidr.tryHook("seidrPoseDialogChangeMode", "DialogChangeMode", 5, tickAfter);
     Seidr.tryHook("seidrPoseDialogChangeFocus", "DialogChangeFocusToGroup", 5, tickAfter);
+    Seidr.tryHook("seidrPoseDialogMenuClick", "DialogMenuButtonClick", 5, function(args, next) {
+      try {
+        if (seidrPoseTryClick()) return true;
+      } catch (e) {
+      }
+      return next(args);
+    });
+    Seidr.tryHook(
+      "seidrPoseDialogMenubar",
+      "DialogMenuMapping.dialog._ReloadMenubar",
+      5,
+      function(args, next) {
+        const ret = next(args);
+        try {
+          seidrPoseAfterDialogMenubar();
+        } catch (e) {
+        }
+        return ret;
+      }
+    );
     Seidr.tryHook("seidrPoseDialogLeave", "DialogLeave", 0, function(args, next) {
       const ret = next(args);
       try {
@@ -10684,8 +10807,8 @@
       if (!importAdminSettings({ Custom: custom })) {
         ChatAdminData.Custom = custom;
         try {
-          const btn3 = typeof ChatAdminID !== "undefined" && ChatAdminID ? document.getElementById(ChatAdminID.customization) : document.getElementById("chat-admin-customization");
-          if (btn3) btn3.classList.toggle("chat-admin-has-custom", true);
+          const btn2 = typeof ChatAdminID !== "undefined" && ChatAdminID ? document.getElementById(ChatAdminID.customization) : document.getElementById("chat-admin-customization");
+          if (btn2) btn2.classList.toggle("chat-admin-has-custom", true);
         } catch (e) {
         }
       }
@@ -12598,7 +12721,7 @@
 
   // src/roomManager/shell.ts
   var root = null;
-  var btn2 = null;
+  var btn = null;
   var panel2 = null;
   var sessionBtnPos = null;
   var dragMoved = false;
@@ -12621,10 +12744,10 @@
     return Math.max(28, Math.round(BTN_BASE * clubScale()));
   }
   function applyBtnSize() {
-    if (!btn2) return;
+    if (!btn) return;
     const s = btnSize();
-    btn2.style.width = s + "px";
-    btn2.style.height = s + "px";
+    btn.style.width = s + "px";
+    btn.style.height = s + "px";
   }
   function chatLogEl() {
     return document.getElementById("TextAreaChatLog");
@@ -12744,13 +12867,13 @@
     el.addEventListener("pointercancel", up);
   }
   function setBtnXY(x, y) {
-    if (!btn2) return;
+    if (!btn) return;
     const size = btnSize();
     const maxX = Math.max(8, window.innerWidth - size - 8);
     const maxY = Math.max(8, window.innerHeight - size - 8);
-    btn2.style.left = Math.min(Math.max(8, x), maxX) + "px";
-    btn2.style.top = Math.min(Math.max(8, y), maxY) + "px";
-    btn2.style.right = "auto";
+    btn.style.left = Math.min(Math.max(8, x), maxX) + "px";
+    btn.style.top = Math.min(Math.max(8, y), maxY) + "px";
+    btn.style.right = "auto";
   }
   function storeSessionBtnPosFromPx(x, y) {
     const vw = Math.max(1, window.innerWidth);
@@ -12761,13 +12884,13 @@
     };
   }
   function placeSessionBtn() {
-    if (!btn2 || !sessionBtnPos) return;
+    if (!btn || !sessionBtnPos) return;
     const x = sessionBtnPos.fx * window.innerWidth;
     const y = sessionBtnPos.fy * window.innerHeight;
     setBtnXY(x, y);
   }
   function applyLauncherPosition(pos) {
-    if (!btn2) return;
+    if (!btn) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const size = btnSize();
@@ -12815,7 +12938,7 @@
     }
   }
   function placeBtnDefault() {
-    if (!btn2) return;
+    if (!btn) return;
     applyBtnSize();
     if (sessionBtnPos) {
       placeSessionBtn();
@@ -12825,8 +12948,8 @@
     applyLauncherPosition(settings.launcherPosition || "chatTop");
   }
   function rmRelayoutLauncher() {
-    if (!btn2) return;
-    if (!btn2.classList.contains("seidr-rm-visible")) {
+    if (!btn) return;
+    if (!btn.classList.contains("seidr-rm-visible")) {
       applyBtnSize();
       return;
     }
@@ -12872,7 +12995,7 @@
   }
   function syncChatLogObserver() {
     disconnectChatLogObserver();
-    if (!btn2 || !btn2.classList.contains("seidr-rm-visible")) return;
+    if (!btn || !btn.classList.contains("seidr-rm-visible")) return;
     if (sessionBtnPos) return;
     const pos = seidrGetSettings().launcherPosition || "chatTop";
     if (!isChatAnchorPos(pos)) return;
@@ -12916,16 +13039,16 @@
     if (root && document.body.contains(root)) return;
     root = document.createElement("div");
     root.id = "seidr-rm-root";
-    btn2 = document.createElement("button");
-    btn2.type = "button";
-    btn2.id = "seidr-rm-btn";
-    btn2.title = "Room Manager";
-    btn2.setAttribute("aria-label", "Room Manager");
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "seidr-rm-btn";
+    btn.title = "Room Manager";
+    btn.setAttribute("aria-label", "Room Manager");
     const logo = document.createElement("img");
     logo.src = Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
     logo.alt = "";
     logo.draggable = false;
-    btn2.appendChild(logo);
+    btn.appendChild(logo);
     applyBtnSize();
     panel2 = document.createElement("div");
     panel2.id = "seidr-rm-panel";
@@ -12945,7 +13068,7 @@
       '  <span class="seidr-rm-footer-usage" id="seidr-rm-footer-usage">Storage: \u2014</span>',
       "</div>"
     ].join("");
-    root.appendChild(btn2);
+    root.appendChild(btn);
     root.appendChild(panel2);
     document.body.appendChild(root);
     ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
@@ -12953,10 +13076,10 @@
         ev.stopPropagation();
       });
     });
-    makeDraggable(btn2, function() {
-      if (!btn2) return;
-      const x = parseFloat(btn2.style.left) || btn2.offsetLeft;
-      const y = parseFloat(btn2.style.top) || btn2.offsetTop;
+    makeDraggable(btn, function() {
+      if (!btn) return;
+      const x = parseFloat(btn.style.left) || btn.offsetLeft;
+      const y = parseFloat(btn.style.top) || btn.offsetTop;
       storeSessionBtnPosFromPx(x, y);
       disconnectChatLogObserver();
     });
@@ -12985,7 +13108,7 @@
         persistPanelGeometry(true);
       });
     })();
-    btn2.addEventListener("pointerup", function() {
+    btn.addEventListener("pointerup", function() {
       if (dragMoved) return;
       rmTogglePanel();
     });
@@ -13022,14 +13145,14 @@
     const enabled = s.roomManagerEnabled !== false;
     const quickmenu = s.showQuickmenuButton !== false;
     if (!Seidr.SHOW_ROOM_MANAGER || !enabled || !quickmenu) {
-      if (btn2) btn2.classList.remove("seidr-rm-visible");
+      if (btn) btn.classList.remove("seidr-rm-visible");
       disconnectChatLogObserver();
       return;
     }
     rmEnsureShell();
     const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog() && !fbmFloatChatActive();
-    if (btn2) {
-      btn2.classList.toggle("seidr-rm-visible", show);
+    if (btn) {
+      btn.classList.toggle("seidr-rm-visible", show);
       if (show) rmRelayoutLauncher();
       else disconnectChatLogObserver();
     }
@@ -13072,7 +13195,7 @@
     }
     rmClosePanel();
     if (root && root.parentNode) root.parentNode.removeChild(root);
-    root = btn2 = panel2 = null;
+    root = btn = panel2 = null;
     const st = document.getElementById("seidr-rm-styles");
     if (st && st.parentNode) st.parentNode.removeChild(st);
   }
@@ -14599,8 +14722,8 @@
     };
     const slotBtns = root3.querySelectorAll(".seidr-act-slot-on");
     const slots = [];
-    slotBtns.forEach(function(btn3) {
-      const s = btn3.getAttribute("data-slot");
+    slotBtns.forEach(function(btn2) {
+      const s = btn2.getAttribute("data-slot");
       if (s && slots.indexOf(s) < 0) slots.push(s);
     });
     if (slots.length) next.slots = slots;
@@ -14712,9 +14835,9 @@
     }
     if (results) {
       results.addEventListener("click", function(ev) {
-        const btn3 = ev.target.closest("[data-arousal-id]");
-        if (!btn3 || !hidden) return;
-        const id = btn3.getAttribute("data-arousal-id");
+        const btn2 = ev.target.closest("[data-arousal-id]");
+        if (!btn2 || !hidden) return;
+        const id = btn2.getAttribute("data-arousal-id");
         if (!id || SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(id) < 0) return;
         hidden.value = id;
         if (labelEl) labelEl.textContent = seidrArousalActivityLabel(id);
@@ -14773,9 +14896,9 @@
     function refreshResults() {
       if (!results || !draft) return;
       results.innerHTML = itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, draft.items || []);
-      results.querySelectorAll("[data-item-add-name]").forEach(function(btn3) {
-        btn3.addEventListener("click", function() {
-          const el = btn3;
+      results.querySelectorAll("[data-item-add-name]").forEach(function(btn2) {
+        btn2.addEventListener("click", function() {
+          const el = btn2;
           addItemRef(
             root3,
             el.getAttribute("data-item-add-slot") || "",
@@ -14806,11 +14929,11 @@
       refreshResults();
     });
     if (itemsPickerOpen) refreshResults();
-    root3.querySelectorAll("[data-item-del]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-item-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const idx = parseInt(btn3.getAttribute("data-item-del") || "", 10);
+        const idx = parseInt(btn2.getAttribute("data-item-del") || "", 10);
         if (!Number.isFinite(idx) || !draft.items) return;
         draft.items.splice(idx, 1);
         renderEditor(root3);
@@ -14836,17 +14959,17 @@
     if (!grid) return;
     seidrListActions().forEach(function(action) {
       const name = seidrActionActivityName(action.id);
-      const btn3 = grid.querySelector('button[name="' + name + '"]');
-      if (!btn3) return;
+      const btn2 = grid.querySelector('button[name="' + name + '"]');
+      if (!btn2) return;
       const url = seidrResolveActionIconUrl(action);
       try {
         if (typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.SetImage === "function") {
-          ElementButton.SetImage(btn3, url);
+          ElementButton.SetImage(btn2, url);
           return;
         }
       } catch (e) {
       }
-      const img = btn3.querySelector(".button-image");
+      const img = btn2.querySelector(".button-image");
       if (img && img instanceof HTMLImageElement) img.src = url;
       else if (img) {
         const css = url.indexOf("data:image") === 0 || url.indexOf("http") === 0 ? 'url("' + url + '")' : 'url("./' + url + '")';
@@ -14920,9 +15043,9 @@
       }).join("");
       pushSection("Club Activity", actCells);
       grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
-      grid.querySelectorAll("[data-icon-id]").forEach(function(btn3) {
-        btn3.addEventListener("click", function() {
-          const el = btn3;
+      grid.querySelectorAll("[data-icon-id]").forEach(function(btn2) {
+        btn2.addEventListener("click", function() {
+          const el = btn2;
           const source = el.getAttribute("data-icon-source");
           const id = el.getAttribute("data-icon-id") || "";
           if (!source || !id) return;
@@ -14955,9 +15078,9 @@
       });
     });
     root3.querySelector("#seidr-act-ph")?.addEventListener("click", function(ev) {
-      const btn3 = ev.target.closest("[data-chat-token]");
-      if (!btn3) return;
-      const token = btn3.getAttribute("data-chat-token");
+      const btn2 = ev.target.closest("[data-chat-token]");
+      if (!btn2) return;
+      const token = btn2.getAttribute("data-chat-token");
       if (!token) return;
       const other = root3.querySelector("#seidr-act-chat-other");
       const self = root3.querySelector("#seidr-act-chat-self");
@@ -14970,9 +15093,9 @@
       }
     });
     root3.querySelector("#seidr-act-slots")?.addEventListener("click", function(ev) {
-      const btn3 = ev.target.closest("[data-slot]");
-      if (!btn3 || !draft) return;
-      const slot = btn3.getAttribute("data-slot");
+      const btn2 = ev.target.closest("[data-slot]");
+      if (!btn2 || !draft) return;
+      const slot = btn2.getAttribute("data-slot");
       if (!slot) return;
       const i = draft.slots.indexOf(slot);
       if (i >= 0) {
@@ -14992,22 +15115,22 @@
       renderEditor(root3);
       bindEditor(root3);
     });
-    root3.querySelectorAll("[data-group-del]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-group-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const gi = parseInt(btn3.getAttribute("data-group-del") || "", 10);
+        const gi = parseInt(btn2.getAttribute("data-group-del") || "", 10);
         if (!Number.isFinite(gi)) return;
         draft.conditions.groups.splice(gi, 1);
         renderEditor(root3);
         bindEditor(root3);
       });
     });
-    root3.querySelectorAll("[data-rule-add]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-rule-add]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const gi = parseInt(btn3.getAttribute("data-rule-add") || "", 10);
+        const gi = parseInt(btn2.getAttribute("data-rule-add") || "", 10);
         const g = draft.conditions.groups[gi];
         if (!g) return;
         g.rules.push({ who: "target", type: "isGagged", not: false });
@@ -15015,11 +15138,11 @@
         bindEditor(root3);
       });
     });
-    root3.querySelectorAll("[data-rule-del]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-rule-del]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         if (!draft) return;
         readDraftFromDom(root3);
-        const key = parseInt(btn3.getAttribute("data-rule-del") || "", 10);
+        const key = parseInt(btn2.getAttribute("data-rule-del") || "", 10);
         const gi = Math.floor(key / 100);
         const ri = key % 100;
         const g = draft.conditions.groups[gi];
@@ -15551,11 +15674,11 @@
       draft2 = cur;
       renderEditor2(root3);
     });
-    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         const cur = readDraftFromDom2(root3) || draft2;
         if (!cur) return;
-        const idx = parseInt(btn3.getAttribute("data-anim-del-step") || "-1", 10);
+        const idx = parseInt(btn2.getAttribute("data-anim-del-step") || "-1", 10);
         if (idx < 0) return;
         cur.steps.splice(idx, 1);
         draft2 = cur;
@@ -15572,14 +15695,14 @@
     root3.querySelectorAll("[data-anim-feature], [data-anim-pose], [data-anim-expr]").forEach(function(sel) {
       sel.addEventListener("change", refreshFromDom);
     });
-    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn3) {
-      btn3.addEventListener("click", function(ev) {
+    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn2) {
+      btn2.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap2 = btn3.closest(".seidr-num-wrap");
+        const wrap2 = btn2.closest(".seidr-num-wrap");
         const input = wrap2 ? wrap2.querySelector("[data-anim-wait]") : null;
         if (!input) return;
-        const dir = parseInt(btn3.getAttribute("data-anim-wait-dir") || "0", 10);
+        const dir = parseInt(btn2.getAttribute("data-anim-wait-dir") || "0", 10);
         if (!dir) return;
         let n = parseFloat(input.value);
         if (!Number.isFinite(n)) n = 0.5;
@@ -15594,9 +15717,9 @@
       syncAnimChatCount(root3);
     });
     root3.querySelector("#seidr-anim-ph")?.addEventListener("click", function(ev) {
-      const btn3 = ev.target.closest("[data-anim-chat-token]");
-      if (!btn3) return;
-      const token = btn3.getAttribute("data-anim-chat-token");
+      const btn2 = ev.target.closest("[data-anim-chat-token]");
+      if (!btn2) return;
+      const token = btn2.getAttribute("data-anim-chat-token");
       if (!token) return;
       const ta = root3.querySelector("#seidr-anim-chat");
       if (!ta) return;
@@ -15936,10 +16059,10 @@
       refreshAll(root3);
       setMsg5(root3, "Saved names");
     });
-    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
+    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
         if (!editMapId) return;
-        const loc = btn3.getAttribute("data-seidr-map-loc");
+        const loc = btn2.getAttribute("data-seidr-map-loc");
         if (loc !== "local" && loc !== "remote") return;
         const r = rmSetMapLocation(editMapId, loc);
         if (!r.ok) {
@@ -16234,7 +16357,7 @@
     },
     {
       title: "Chat Commands",
-      blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, and /roommanager. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
+      blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, /roommanager, and /wardrobe. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
       docPath: "/docs/view.html#COMMANDS"
     },
     {
@@ -16681,9 +16804,9 @@
     const aboutPane = $3("seidr-settings-pane-about");
     if (aboutPane) seidrBuildAboutTab(aboutPane);
     const tabRoot = tabs || body;
-    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
-        const tab = btn3.getAttribute("data-seidr-tab");
+    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const tab = btn2.getAttribute("data-seidr-tab");
         if (tab) seidrSelectSettingsTab(tab);
       });
     });
@@ -16749,11 +16872,11 @@
     }
   }
   function updateDrawSyncButton() {
-    const btn3 = $3("seidr-set-draw-sync");
-    if (!btn3) return;
+    const btn2 = $3("seidr-set-draw-sync");
+    if (!btn2) return;
     const allow = !!drawAllowSyncDraft;
     const isHub = localPlayerIsHub();
-    btn3.disabled = !allow || !isHub;
+    btn2.disabled = !allow || !isHub;
     if (!allow) setDrawSyncHint("Turn on Allow Sync to receive hub layouts or broadcast as hub.");
     else if (!isHub) setDrawSyncHint("Sync is available when you are the hub of an active cuddle/pull.");
     else setDrawSyncHint("Press Sync to send your current Drawing layout to this cuddle.");
@@ -17005,12 +17128,12 @@
       cfs.addEventListener("change", persist);
       cfs.addEventListener("blur", persist);
     }
-    document.querySelectorAll("[data-seidr-chat-font-size][data-seidr-num-dir]").forEach(function(btn3) {
-      btn3.addEventListener("click", function(ev) {
+    document.querySelectorAll("[data-seidr-chat-font-size][data-seidr-num-dir]").forEach(function(btn2) {
+      btn2.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
         if (!cfs) return;
-        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
+        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
         if (!dir) return;
         let n = parseFloat(cfs.value);
         if (!Number.isFinite(n) || n <= 0) n = 36;
@@ -17167,14 +17290,14 @@
         y.addEventListener("change", onAdvDrawCommit);
       }
     });
-    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn3) {
-      btn3.addEventListener("click", function(ev) {
+    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn2) {
+      btn2.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap2 = btn3.closest(".seidr-num-wrap");
+        const wrap2 = btn2.closest(".seidr-num-wrap");
         const input = wrap2 ? wrap2.querySelector('input[type="number"]') : null;
         if (!input || input.disabled) return;
-        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
+        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
         if (!dir) return;
         const step = parseFloat(input.step) || 1;
         const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
@@ -17189,9 +17312,9 @@
         input.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
-    document.querySelectorAll("[data-draw-reset]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
-        const pose = btn3.getAttribute("data-draw-reset");
+    document.querySelectorAll("[data-draw-reset]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const pose = btn2.getAttribute("data-draw-reset");
         if (!pose || !drawDraft) return;
         const def = seidrDefaultDrawOffsets();
         drawDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -17201,9 +17324,9 @@
         setDrawMsg("Reset to default \u2014 Save Drawing to keep");
       });
     });
-    document.querySelectorAll("[data-draw-adv-reset]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
-        const pose = btn3.getAttribute("data-draw-adv-reset");
+    document.querySelectorAll("[data-draw-adv-reset]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const pose = btn2.getAttribute("data-draw-adv-reset");
         if (!pose || !drawAdvDraft) return;
         const def = seidrDefaultDrawAdvancedOffsets();
         drawAdvDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -17311,9 +17434,9 @@
         y.addEventListener("change", onMapDrawCommit);
       }
     });
-    document.querySelectorAll("[data-map-draw-reset]").forEach(function(btn3) {
-      btn3.addEventListener("click", function() {
-        const pose = btn3.getAttribute("data-map-draw-reset");
+    document.querySelectorAll("[data-map-draw-reset]").forEach(function(btn2) {
+      btn2.addEventListener("click", function() {
+        const pose = btn2.getAttribute("data-map-draw-reset");
         if (!pose || !mapDrawDraft) return;
         const def = seidrDefaultMapDrawOffsets();
         mapDrawDraft[pose] = { x: def[pose].x, y: def[pose].y };

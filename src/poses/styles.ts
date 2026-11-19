@@ -1,26 +1,7 @@
-/** Dialog pose picker CSS — Club-like launcher + Seidr panel chrome */
+/** Dialog pose picker CSS — Seidr panel chrome (launcher is Club canvas DrawButton). */
 
 export function seidrPoseCss(): string {
 	return [
-		"#seidr-pose-btn {",
-		"  position: fixed; z-index: 118; box-sizing: border-box;",
-		"  display: none; place-items: center; padding: 0; margin: 0;",
-		"  border: 1px solid #000;",
-		"  border-radius: 0;",
-		"  background: #fff;",
-		"  color: #000;",
-		"  box-shadow: none;",
-		"  cursor: pointer;",
-		"}",
-		"#seidr-pose-btn.seidr-pose-btn-visible { display: grid; }",
-		/* Club DrawButton hover uses Cyan over White. */
-		"#seidr-pose-btn:hover { background: Cyan; }",
-		"#seidr-pose-btn .seidr-pose-btn-icon {",
-		"  width: 78%; height: 78%; pointer-events: none; display: block;",
-		"}",
-		"#seidr-pose-btn .seidr-pose-btn-icon svg {",
-		"  width: 100%; height: 100%; display: block;",
-		"}",
 		"#seidr-pose-panel {",
 		"  position: fixed; z-index: 130; display: none; flex-direction: column;",
 		"  width: min(92vw, 420px); max-height: min(80vh, 520px);",

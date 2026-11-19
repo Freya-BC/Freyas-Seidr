@@ -8,16 +8,30 @@ declare const Player: any;
 declare const CurrentCharacter: any;
 declare const DialogMenuMode: string | undefined;
 declare const DialogMenuButton: string[] | undefined;
-declare const ElementPositionFixed: ((
-	el: HTMLElement | string,
-	x: number,
-	y: number,
-	w: number,
-	h: number,
-	anchor?: string
+declare const DrawButton: ((
+	Left: number,
+	Top: number,
+	Width: number,
+	Height: number,
+	Label: string,
+	Color: string,
+	Image?: string | null,
+	HoveringText?: string | null,
+	Disabled?: boolean,
 ) => void) | undefined;
+declare const MouseIn: ((Left: number, Top: number, Width: number, Height: number) => boolean) | undefined;
+declare const MainCanvas: CanvasRenderingContext2D & { canvas?: HTMLCanvasElement } | undefined;
+declare const ElementButton: {
+	Create: (
+		id: string | null,
+		onClick: () => void,
+		options?: Record<string, unknown>,
+		htmlOptions?: Record<string, unknown>,
+	) => HTMLButtonElement;
+} | undefined;
 
 const BTN_ID = "seidr-pose-btn";
+const DIALOG_MENUBAR_ID = "dialog-dialog-menubar";
 const PANEL_ID = "seidr-pose-panel";
 const GRID_ID = "seidr-pose-grid";
 
@@ -43,12 +57,37 @@ const BELLY_SVG =
 	'<path fill="#f0e6d4" d="M288 289.7c-13.3 1.4-33.7 8-49 15.9-42.7 22.2-72.4 61.2-77 101.2-1.8 16.3 1.7 37.8 8.9 53.6 2.7 5.9 3.1 6.3 6.9 6.9 2.2.4 5 1.5 6.3 2.6 2.3 1.8 2.4 2.5 2.3 13.3 0 13.1-1.5 19.2-9.9 41.9-7.1 19.1-7.8 22.4-7.3 31.9.7 12 5.1 20.2 17.3 32.2 10.6 10.3 12.5 13.5 12.5 20.2 0 6.9-2.4 11.4-9.2 17.9-5.6 5.2-6 5.9-4.6 7.3.8.8 4.6 2 8.4 2.6 13.5 2.1 29.7-3.3 43.8-14.7 3.8-3 7.2-5.5 7.6-5.5 2 0 8.8 7.4 9.9 10.8 2.7 8.1-.2 19.6-6.6 26.4-1.6 1.7-2.3 3.3-1.9 4.4.5 1.4 1.9 1.6 10.4 1.2 17.6-.8 35.7-9.3 52.1-24.4l7.7-7.2 3.2-14.8c1.7-8.2 4.6-22.6 6.3-31.9 6.2-34.2 9.8-43.6 21-54.8 11.8-11.8 26.2-17.1 46.4-17 23.5.1 49.1 6.6 89.9 22.8l11.9 4.7 6.5-3.4c8.4-4.2 17.4-12.9 20.7-19.9 4.4-9.6 3.5-10.8-6.5-8.3-10.3 2.5-20.8 1.6-29.3-2.4-3.7-1.7-6.7-3.5-6.7-3.9s3.1-2.1 6.8-3.8c8.9-4 20.1-14.9 22.5-22 2.2-6.4 2.1-10.7-.3-13.8-1.9-2.4-2.5-2.5-14.2-2.9-10.4-.3-13.3-.8-18.6-3-23.8-9.9-37.1-26.4-57.2-71.3-14.9-33.2-22.9-47.3-34.2-59.9-15.2-17.1-36.9-28.5-60.8-32.1-8.6-1.4-27-1.7-36-.8m1092.5 10.7c-13.6 3.1-23.3 8.3-46.3 24.4-16.4 11.5-25.9 17.4-40.7 25.2-34.1 18-40.9 29.5-31.3 52.4 6.2 14.7 7.8 21.1 7.8 31 0 10.4-2.6 26.7-7 43.2l-3 11.2 6.4 17.8c12.6 35 35.6 94.7 36.3 94 .6-.6 4.6-27.3 8.8-58.1 5.6-41.1 11.4-78.8 14.4-94 7.2-35.5 20.6-57.3 58.1-94.6 20.8-20.7 26-26.9 27.4-33.2.8-3.5-.8-9.7-3.4-13-4.7-5.9-16.8-8.7-27.5-6.3"/>' +
 	"</svg>";
 
-let btn: HTMLButtonElement | null = null;
+/** Silhouette used by the canvas Positions DrawButton. */
+const POSE_BTN_SVG =
+	'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 102">' +
+	'<path fill="black" d="M23 13Q18 17 16 25L13 55Q11 66 17 70Q20 73 25 71L26 74Q25 81 21 89L69 89Q65 81 63 74L64 71Q70 73 74 68Q79 63 77 55L74 25Q71 15 64 12Q57 8 51 9L50 6L38 6L37 9Q29 9 23 13Z"/>' +
+	'<path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+	'<path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+	'<path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+	'<path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+	"</svg>";
+
+const POSE_BTN_ICON_URL = "data:image/svg+xml," + encodeURIComponent(POSE_BTN_SVG);
+
 let panel: HTMLElement | null = null;
 let escBound = false;
-/** Last Club-space placement — skip ElementPositionFixed when unchanged. */
-let lastPlace: { x: number; y: number; w: number; h: number } | null = null;
+/** Preloaded silhouette — Club ImageCache mishandles data: URLs in DrawButton. */
+let poseBtnImg: HTMLImageElement | null = null;
+/** Last Club-space button rect — used to anchor the HTML panel from canvas mode. */
+let lastBtnRect: { x: number; y: number; w: number; h: number } | null = null;
 let lastTargetMember: number | null = null;
+
+function ensurePoseBtnImg(): HTMLImageElement {
+	if (!poseBtnImg) {
+		poseBtnImg = new Image();
+		poseBtnImg.src = POSE_BTN_ICON_URL;
+	}
+	return poseBtnImg;
+}
+
+function isDialogIntroMode(): boolean {
+	return (typeof DialogMenuMode !== "undefined" ? DialogMenuMode : "") === "dialog";
+}
 
 /** Other online players only — hide for self and Club NPCs (IsNpc). */
 function isOtherDialogTarget(C: any): boolean {
@@ -82,6 +121,37 @@ function dialogPoseContextOk(): boolean {
 	return true;
 }
 
+function poseButtonRect(): { x: number; y: number; w: number; h: number } | null {
+	if (!dialogPoseContextOk()) return null;
+	const len = Array.isArray(DialogMenuButton) ? DialogMenuButton.length : 1;
+	return { x: 1885 - len * 110, y: 15, w: 90, h: 90 };
+}
+
+/** Club 2000×1000 space → viewport pixels for panel anchoring. */
+function clubRectToClient(r: { x: number; y: number; w: number; h: number }): {
+	left: number;
+	top: number;
+	right: number;
+	bottom: number;
+} | null {
+	try {
+		const canvas = MainCanvas && MainCanvas.canvas;
+		if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return null;
+		const sx = canvas.clientWidth / 2000;
+		const sy = canvas.clientHeight / 1000;
+		const left = canvas.offsetLeft + r.x * sx;
+		const top = canvas.offsetTop + r.y * sy;
+		return {
+			left,
+			top,
+			right: left + r.w * sx,
+			bottom: top + r.h * sy,
+		};
+	} catch (e) {
+		return null;
+	}
+}
+
 function poseIconHtml(poseId: string): string {
 	const src = CLUB_POSE_ICON[poseId];
 	if (src) return '<img src="' + src + '" alt="" />';
@@ -90,34 +160,6 @@ function poseIconHtml(poseId: string): string {
 
 function ensureDom(): void {
 	seidrInjectPoseStyles();
-	if (!btn || !document.body.contains(btn)) {
-		btn = document.createElement("button");
-		btn.id = BTN_ID;
-		btn.type = "button";
-		btn.title = "Pose";
-		btn.setAttribute("aria-label", "Pose");
-		btn.innerHTML =
-			'<span class="seidr-pose-btn-icon" aria-hidden="true">' +
-			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 89 102" focusable="false">' +
-			'<path fill="black" d="M23 13Q18 17 16 25L13 55Q11 66 17 70Q20 73 25 71L26 74Q25 81 21 89L69 89Q65 81 63 74L64 71Q70 73 74 68Q79 63 77 55L74 25Q71 15 64 12Q57 8 51 9L50 6L38 6L37 9Q29 9 23 13Z"/>' +
-			'<path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-			'<path d="M25.7 25.6C21 32 18.4 39 18.4 43C18.4 49 22 53 26.2 55C32 59 38.6 59 43.4 54.7Q45.3 52.5 45.9 50.2" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-			'<path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-			'<path d="M25.4 57.5C25.9 63.4 27.1 67.3 26.9 70.5C26.6 76.4 22.6 83.8 19.4 89.6" transform="translate(89 0) scale(-1 1)" fill="none" stroke="white" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-			"</svg></span>";
-		btn.addEventListener("click", function (ev) {
-			ev.preventDefault();
-			ev.stopPropagation();
-			togglePanel();
-		});
-		["pointerdown", "mousedown", "mouseup", "touchstart"].forEach(function (type) {
-			btn!.addEventListener(type, function (ev) {
-				ev.stopPropagation();
-			});
-		});
-		document.body.appendChild(btn);
-		lastPlace = null;
-	}
 	if (!panel || !document.body.contains(panel)) {
 		panel = document.createElement("div");
 		panel.id = PANEL_ID;
@@ -205,9 +247,22 @@ function rebuildGrid(): void {
 		: '<div class="seidr-pose-empty">No poses available</div>';
 }
 
+function buttonClientRect(): { left: number; top: number; right: number; bottom: number } | null {
+	const htmlBtn = document.getElementById(BTN_ID);
+	if (htmlBtn) {
+		const b = htmlBtn.getBoundingClientRect();
+		if (b.width > 0 && b.height > 0) {
+			return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+		}
+	}
+	if (lastBtnRect) return clubRectToClient(lastBtnRect);
+	return null;
+}
+
 function placePanelNearButton(): void {
-	if (!panel || !btn) return;
-	const r = btn.getBoundingClientRect();
+	if (!panel) return;
+	const r = buttonClientRect();
+	if (!r) return;
 	const pad = 8;
 	const pw = Math.min(window.innerWidth - pad * 2, 420);
 	// Measure after layout; fall back to a typical open height.
@@ -231,6 +286,46 @@ function placePanelNearButton(): void {
 	panel.style.top = top + "px";
 	panel.style.right = "auto";
 	panel.style.transform = "none";
+}
+
+function removeHtmlMenubarBtn(): void {
+	const el = document.getElementById(BTN_ID);
+	if (el && el.parentNode) el.parentNode.removeChild(el);
+}
+
+/**
+ * First dialog screen uses an HTML menubar (`#dialog-dialog-menubar`) that
+ * covers the canvas — canvas DrawButton is not clickable there. Mount a Club
+ * ElementButton with the same Positions tooltip instead.
+ */
+function ensureHtmlMenubarBtn(): void {
+	if (!dialogPoseContextOk() || !isDialogIntroMode()) {
+		removeHtmlMenubarBtn();
+		return;
+	}
+	const menubar = document.getElementById(DIALOG_MENUBAR_ID);
+	if (!menubar) return;
+	if (document.getElementById(BTN_ID)) return;
+	if (typeof ElementButton === "undefined" || !ElementButton || typeof ElementButton.Create !== "function") {
+		return;
+	}
+	ensurePoseBtnImg();
+	try {
+		const button = ElementButton.Create(
+			BTN_ID,
+			function () {
+				togglePanel();
+			},
+			{
+				image: POSE_BTN_ICON_URL,
+				tooltip: "Positions",
+				tooltipPosition: "left",
+			},
+			{ button: { classList: ["dialog-menubar-button"] } },
+		);
+		// RTL menubar → append places visually left of Exit.
+		menubar.appendChild(button);
+	} catch (e) { /* ignore */ }
 }
 
 function isPanelOpen(): boolean {
@@ -261,57 +356,73 @@ function togglePanel(): void {
 	else openPanel();
 }
 
-function hideButton(): void {
-	if (btn) {
-		btn.classList.remove("seidr-pose-btn-visible");
-		btn.style.removeProperty("display");
-	}
-	lastPlace = null;
+function hidePanel(): void {
+	lastBtnRect = null;
+	removeHtmlMenubarBtn();
 	closePanel();
 }
 
-function placeButton(x: number, y: number, w: number, h: number): void {
-	if (!btn) return;
-	if (
-		lastPlace
-		&& lastPlace.x === x
-		&& lastPlace.y === y
-		&& lastPlace.w === w
-		&& lastPlace.h === h
-	) {
-		return;
-	}
-	lastPlace = { x, y, w, h };
+function drawPoseIconIntoButton(r: { x: number; y: number; w: number; h: number }): void {
+	if (!MainCanvas) return;
+	const img = ensurePoseBtnImg();
+	if (!img.complete || img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+	const pad = 2;
+	const bw = r.w - 2 * pad;
+	const bh = r.h - 2 * pad;
+	const scale = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+	const dw = img.naturalWidth * scale;
+	const dh = img.naturalHeight * scale;
+	const dx = r.x + pad + (bw - dw) / 2;
+	const dy = r.y + pad + (bh - dh) / 2;
+	MainCanvas.drawImage(img, dx, dy, dw, dh);
+}
+
+/**
+ * Items/activities: Club canvas menubar — DrawButton so yellow tooltips sit above us.
+ * Dialog intro: HTML menubar covers this area; skip canvas draw (see ensureHtmlMenubarBtn).
+ */
+export function seidrPoseDrawButton(): void {
 	try {
-		if (typeof ElementPositionFixed === "function") {
-			ElementPositionFixed(btn, x, y, w, h);
-		} else {
-			btn.style.right = "16px";
-			btn.style.top = "16px";
-			btn.style.width = w + "px";
-			btn.style.height = h + "px";
+		if (isDialogIntroMode()) {
+			lastBtnRect = null;
+			return;
 		}
-	} catch (e) { /* ignore */ }
+		const r = poseButtonRect();
+		if (!r || typeof DrawButton !== "function") {
+			lastBtnRect = null;
+			return;
+		}
+		lastBtnRect = r;
+		// No image URL — Club ImageCache breaks on data: SVG; paint silhouette ourselves.
+		DrawButton(r.x, r.y, r.w, r.h, "", "White", null, "Positions");
+		drawPoseIconIntoButton(r);
+	} catch (e) {
+		lastBtnRect = null;
+	}
 }
 
-function showAndPlaceButton(): void {
-	ensureDom();
-	if (!btn) return;
-	const len = Array.isArray(DialogMenuButton) ? DialogMenuButton.length : 1;
-	const x = 1885 - len * 110;
-	const y = 15;
-	btn.classList.add("seidr-pose-btn-visible");
-	placeButton(x, y, 90, 90);
+/** Consume canvas menubar click when the Positions slot is hit (items/activities). */
+export function seidrPoseTryClick(): boolean {
+	try {
+		if (isDialogIntroMode()) return false;
+		const r = poseButtonRect();
+		if (!r || typeof MouseIn !== "function" || !MouseIn(r.x, r.y, r.w, r.h)) return false;
+		lastBtnRect = r;
+		togglePanel();
+		return true;
+	} catch (e) {
+		return false;
+	}
 }
 
-/** Called from DialogDraw / focus hooks — keep button stable; do not rebuild panel DOM. */
+/** Called from DialogDraw / focus hooks — panel + dialog-mode HTML launcher. */
 export function seidrPoseDialogTick(): void {
 	try {
 		if (!dialogPoseContextOk()) {
-			hideButton();
+			hidePanel();
 			return;
 		}
-		showAndPlaceButton();
+		ensureHtmlMenubarBtn();
 		// If panel is open on a different target, refresh once.
 		if (isPanelOpen()) {
 			const C = CurrentCharacter;
@@ -319,21 +430,28 @@ export function seidrPoseDialogTick(): void {
 			if (mem !== lastTargetMember) rebuildGrid();
 		}
 	} catch (e) {
-		hideButton();
+		hidePanel();
 	}
 }
 
+/** After Club rebuilds the dialog intro menubar (replaceChildren). */
+export function seidrPoseAfterDialogMenubar(): void {
+	try {
+		removeHtmlMenubarBtn();
+		ensureHtmlMenubarBtn();
+	} catch (e) { /* ignore */ }
+}
+
 export function seidrPoseDialogLeave(): void {
-	hideButton();
+	hidePanel();
 }
 
 export function seidrPoseDestroyUi(): void {
 	closePanel();
-	if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+	removeHtmlMenubarBtn();
 	if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
-	btn = null;
 	panel = null;
-	lastPlace = null;
+	lastBtnRect = null;
 	lastTargetMember = null;
 	const style = document.getElementById("seidr-pose-styles");
 	if (style && style.parentNode) style.parentNode.removeChild(style);
