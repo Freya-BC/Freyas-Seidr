@@ -5,6 +5,7 @@ import "./defaults";
 import "./state";
 import "./room";
 import "./undress";
+import "./intimateActivities";
 import "./core/sdk";
 import "./activities";
 import "./draw";

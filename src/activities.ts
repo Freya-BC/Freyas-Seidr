@@ -112,6 +112,19 @@ function seidrMergeUndressActivities() {
 	});
 }
 
+function seidrMergeIntimateActivities() {
+	if (typeof Seidr.intimateActivities !== "function") return;
+	var seen: Record<string, boolean> = {};
+	SEIDR_ACTIVITIES.forEach(function (act) {
+		if (act && act.name) seen[act.name] = true;
+	});
+	Seidr.intimateActivities().forEach(function (act: any) {
+		if (!act || !act.name || seen[act.name]) return;
+		seen[act.name] = true;
+		SEIDR_ACTIVITIES.push(act);
+	});
+}
+
 function seidrSvg(body) {
 	var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' + body + "</svg>";
 	return "data:image/svg+xml," + encodeURIComponent(svg);
@@ -154,6 +167,10 @@ function seidrButtonImage(name) {
 			'<path d="M14 14 L50 50" stroke="#e07a7a" stroke-width="4" stroke-linecap="round"/>'
 		);
 	}
+	if (typeof Seidr.intimateButtonImage === "function") {
+		var intimateImg = Seidr.intimateButtonImage(name);
+		if (intimateImg) return intimateImg;
+	}
 	return seidrSvg(bg + '<path d="M20 20 L44 44 M44 20 L20 44" fill="none" stroke="#e07a7a" stroke-width="5" stroke-linecap="round"/>');
 }
 
@@ -191,6 +208,7 @@ function seidrWriteLabels(cache) {
 	if (!cache || !cache.cache) return;
 	SEIDR_ACTIVITIES.forEach(function (act) {
 		if (act.undress) return;
+		if (act.intimate) return;
 		cache.cache["Activity" + act.name] = act.label;
 		seidrActZones(act).forEach(function (group) {
 			cache.cache["Label-ChatOther-" + group + "-" + act.name] = act.label;
@@ -203,15 +221,28 @@ function seidrWriteLabels(cache) {
 		var focused = typeof CharacterGetCurrent === "function" ? CharacterGetCurrent() : null;
 		Seidr.undressWriteLabels(cache, focused || (typeof Player !== "undefined" ? Player : null));
 	}
+	if (typeof Seidr.intimateWriteLabels === "function") {
+		Seidr.intimateWriteLabels(cache);
+	}
 }
 
 function seidrBindActivity(act: any): any {
-	var prereq = act.needsHands ? ["UseHands", act.prereq] : [act.prereq];
+	var prereq: string[];
+	if (Array.isArray(act.prerequisites) && act.prerequisites.length) {
+		prereq = act.prerequisites.slice();
+	} else {
+		prereq = act.needsHands ? ["UseHands", act.prereq] : [act.prereq];
+		if (Array.isArray(act.extraPrereqs)) {
+			prereq = prereq.concat(act.extraPrereqs);
+		}
+	}
 	var zones = seidrActZones(act);
+	var max = typeof act.maxProgress === "number" ? act.maxProgress : 0;
+	var maxSelf = typeof act.maxProgressSelf === "number" ? act.maxProgressSelf : 0;
 	return {
 		Name: act.name,
-		MaxProgress: 0,
-		MaxProgressSelf: 0,
+		MaxProgress: max,
+		MaxProgressSelf: maxSelf,
 		Prerequisite: prereq,
 		Target: zones.slice(),
 		TargetSelf: act.self ? zones.slice() : undefined,
@@ -234,6 +265,7 @@ function seidrRegisterActivities() {
 	if (seidrActivitiesRegistered) return;
 	if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return;
 	seidrMergeUndressActivities();
+	seidrMergeIntimateActivities();
 	SEIDR_ACTIVITIES.forEach(function (act) {
 		var existing = null;
 		for (var i = 0; i < ActivityFemale3DCG.length; i++) {
@@ -362,7 +394,7 @@ function seidrCanRemoveSlot(acting, acted, slot) {
 function seidrApplyNamed(hubs, source, target, name) {
 	var act = seidrActivityByName(name);
 	if (!act || typeof source !== "number" || typeof target !== "number") return hubs;
-	if (act.undress) return hubs;
+	if (act.undress || act.intimate) return hubs;
 	if (act.joinSlot) return SeidrState.applySlot(hubs, target, act.joinSlot, source);
 	if (act.slot) return SeidrState.applySlot(hubs, source, act.slot, target);
 	if (act.removeSlot) return SeidrState.clearSlot(hubs, source, act.removeSlot);
@@ -413,6 +445,13 @@ function seidrDialogForContent(content) {
 	if (act.undress && typeof Seidr.undressConsumePending === "function") {
 		var pending = Seidr.undressConsumePending(act.name);
 		if (pending) return pending;
+	}
+	if (act.intimate && typeof Seidr.intimateConsumePending === "function") {
+		var intimatePending = Seidr.intimateConsumePending(act.name);
+		if (intimatePending) return intimatePending;
+	}
+	if (act.intimate && typeof Seidr.intimateDefaultChat === "function") {
+		return Seidr.intimateDefaultChat(act);
 	}
 	if (match[1] === "ChatSelf") return act.chatSelf || act.chat;
 	return act.chat;
@@ -471,7 +510,7 @@ function seidrBadgeActivityButtons() {
 		button.classList.remove("seidr-slot-active");
 		button.removeAttribute("data-seidr-state");
 		var act = seidrActivityByName(name);
-		if (!act || act.undress) continue;
+		if (!act || act.undress || act.intimate) continue;
 		var letter = "";
 		var tip = "";
 		var active = false;
@@ -537,6 +576,15 @@ function seidrBadgeActivityButtons() {
 	}
 }
 
+function seidrAssetPreviewUrl(asset) {
+	if (!asset || typeof AssetGetPreviewPath !== "function" || !asset.Name) return "";
+	try {
+		return "./" + AssetGetPreviewPath(asset) + "/" + asset.Name + ".png";
+	} catch (e) {
+		return "";
+	}
+}
+
 function seidrInstallLateActivityUiHooks() {
 	Seidr.tryHook("ElementButton.CreateForActivity", "ElementButton.CreateForActivity", 5, function (args, next) {
 		var activity = args[1];
@@ -547,7 +595,23 @@ function seidrInstallLateActivityUiHooks() {
 			actName.indexOf(Seidr.PREFIX) === 0 &&
 			actName.indexOf("Seidr_Act_") !== 0
 		) {
-			args[4] = Object.assign({}, args[4] || {}, { image: seidrButtonImage(actName) });
+			var image = "";
+			// Item-backed (TargetNeeds-PenetrateItem): show the shaft item (Penis, DildoGag, StrapOn, …).
+			if (activity.Item && activity.Item.Asset) {
+				image = seidrAssetPreviewUrl(activity.Item.Asset);
+			}
+			// Strap-on Panties oral has no ItemActivity.Item — use the panties asset preview.
+			if (!image && typeof Seidr.intimateByName === "function") {
+				var idef = Seidr.intimateByName(actName);
+				if (idef && idef.kind === "oral" && typeof AssetGet === "function") {
+					try {
+						var panties = AssetGet("Female3DCG", "ItemPelvis", "StraponPanties");
+						image = seidrAssetPreviewUrl(panties);
+					} catch (eP) { /* ignore */ }
+				}
+			}
+			if (!image) image = seidrButtonImage(actName);
+			args[4] = Object.assign({}, args[4] || {}, { image: image });
 		}
 		return next(args);
 	});
@@ -620,6 +684,15 @@ function seidrInstallActivityHooks() {
 		var itemActivity = args[3];
 		var actName = itemActivity && itemActivity.Activity && itemActivity.Activity.Name;
 		var act = seidrActivityByName(actName);
+		if (act && act.intimate && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()) {
+			try {
+				if (typeof Seidr.intimatePrepareChat === "function") {
+					Seidr.intimatePrepareChat(act);
+				}
+			} catch (eIntPrep) {
+				console.warn("[Seidr] intimate prep", eIntPrep);
+			}
+		}
 		if (act && act.undress && actor && typeof actor.IsPlayer === "function" && actor.IsPlayer()) {
 			try {
 				if (typeof Seidr.undressPrepareChat === "function") {
@@ -676,9 +749,15 @@ function seidrInstallActivityHooks() {
 
 Seidr.installActivities = function () {
 	seidrMergeUndressActivities();
+	seidrMergeIntimateActivities();
 	seidrRegisterActivities();
 	seidrEnsureLabels();
 	seidrInstallActivityHooks();
+	if (typeof Seidr.installIntimateActivities === "function") {
+		try { Seidr.installIntimateActivities(); } catch (eInt) {
+			console.warn("[Seidr] Intimate activities", eInt);
+		}
+	}
 	Seidr.applyNamed = seidrApplyNamed;
 	Seidr.activityNameFromMessage = seidrActivityNameFromMessage;
 	Seidr.dictValue = seidrDictValue;
