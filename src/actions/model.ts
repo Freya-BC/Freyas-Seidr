@@ -172,6 +172,7 @@ export const SEIDR_ACTION_SLOTS: { id: string; label: string }[] = [
 	{ id: "ItemMouth3", label: "Mouth 3" },
 	{ id: "ItemHead", label: "Head" },
 	{ id: "ItemHood", label: "Hood" },
+	{ id: "ItemNose", label: "Nose" },
 	{ id: "ItemEars", label: "Ears" },
 	{ id: "ItemNeck", label: "Neck" },
 	{ id: "ItemNeckAccessories", label: "Neck Acc." },

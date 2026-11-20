@@ -1,4 +1,4 @@
-/* Seidr v2.0.56 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.61 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.56";
+  Seidr.VERSION = "2.0.61";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1037,6 +1037,7 @@
     { id: "ItemMouth3", label: "Mouth 3" },
     { id: "ItemHead", label: "Head" },
     { id: "ItemHood", label: "Hood" },
+    { id: "ItemNose", label: "Nose" },
     { id: "ItemEars", label: "Ears" },
     { id: "ItemNeck", label: "Neck" },
     { id: "ItemNeckAccessories", label: "Neck Acc." },
@@ -2401,7 +2402,7 @@
       roomManagerEnabled: true,
       showQuickmenuButton: true,
       launcherPosition: "chatTop",
-      showFastWiggleButton: false,
+      showFastWiggleButton: true,
       fastWigglePosition: "chatBottom",
       drawOffsets: seidrDefaultDrawOffsets(),
       drawAdvancedMode: false,
@@ -12109,6 +12110,11 @@
   // src/reactions/ui.ts
   var editId = null;
   var draft = null;
+  var trigFilters = [];
+  function syncTrigFiltersLen(n) {
+    while (trigFilters.length < n) trigFilters.push("");
+    if (trigFilters.length > n) trigFilters.length = n;
+  }
   function escapeHtml4(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
@@ -12141,15 +12147,16 @@
       "</div>"
     ].join("");
   }
-  function activityOptionsHtml(selected) {
-    const list = seidrCmdListAllActivities();
+  function activityOptionsHtml(selected, filterSlot) {
+    const list = filterSlot ? seidrCmdListActivitiesForSlot(filterSlot) : seidrCmdListAllActivities();
     const extra = selected && !list.some(function(o) {
       return o.id === selected;
-    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (custom)</option>" : "";
+    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (saved)</option>" : "";
+    const empty = !selected ? '<option value="" selected>\u2014 Activity \u2014</option>' : '<option value="">\u2014 Activity \u2014</option>';
     const opts4 = list.map(function(o) {
       return '<option value="' + escapeHtml4(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml4(o.label) + "</option>";
     }).join("");
-    return '<option value="">\u2014 Activity \u2014</option>' + extra + opts4;
+    return empty + extra + opts4;
   }
   function animationOptionsHtml(selectedId) {
     const list = seidrListAnimations();
@@ -12173,28 +12180,35 @@
       return '<option value="' + escapeHtml4(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + escapeHtml4(a.name) + " (" + escapeHtml4(a.activity) + ")</option>";
     }).join("");
   }
-  function slotOptionsHtml(selected) {
+  function slotOptionsHtml(selected, emptyLabel) {
     const sel = String(selected || "");
-    const known = SEIDR_ACTION_SLOTS.some(function(s) {
+    const slots = seidrCmdListSlots();
+    const known = slots.some(function(s) {
       return s.id === sel;
     });
-    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '" selected>' + escapeHtml4(sel) + " (custom)</option>" : "";
-    return '<option value="">Any slot</option>' + extra + SEIDR_ACTION_SLOTS.map(function(s) {
+    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '" selected>' + escapeHtml4(sel) + " (saved)</option>" : "";
+    return '<option value="">' + escapeHtml4(emptyLabel) + "</option>" + extra + slots.map(function(s) {
       return '<option value="' + escapeHtml4(s.id) + '"' + (s.id === sel ? " selected" : "") + ">" + escapeHtml4(s.label) + " (" + escapeHtml4(s.id) + ")</option>";
     }).join("");
   }
   function triggerRowHtml(t, index) {
+    const filterSlot = trigFilters[index] || "";
+    const matchSlot = t.slot || "";
     return [
       '<div class="seidr-settings-sec" data-rxn-trig="' + index + '" style="margin-top:8px;padding:8px;">',
       '<div class="seidr-settings-field-row">',
-      '<span class="seidr-settings-field-label">Activity</span>',
-      "<select data-rxn-trig-act>" + activityOptionsHtml(t.activity) + "</select>",
+      '<span class="seidr-settings-field-label">Filter by Slot</span>',
+      "<select data-rxn-trig-filter>" + slotOptionsHtml(filterSlot, "All activities") + "</select>",
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:6px;">',
-      '<span class="seidr-settings-field-label">Slot</span>',
-      "<select data-rxn-trig-slot>" + slotOptionsHtml(t.slot || "") + "</select>",
+      '<span class="seidr-settings-field-label">Activity</span>',
+      "<select data-rxn-trig-act>" + activityOptionsHtml(t.activity, filterSlot) + "</select>",
       "</div>",
-      '<p class="seidr-settings-hint">Optional zone filter (e.g. Ears for ear pets). Any slot = activity name only.</p>',
+      '<div class="seidr-settings-field-row" style="margin-top:6px;">',
+      '<span class="seidr-settings-field-label">On slot</span>',
+      "<select data-rxn-trig-slot>" + slotOptionsHtml(matchSlot, "Any slot") + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Filter by Slot narrows the Activity list (Caress lives on many zones). On slot is the match filter when the activity fires (Any = activity name only).</p>',
       '<div class="seidr-settings-row" style="margin-top:6px;gap:12px;display:flex;flex-wrap:wrap;align-items:center;">',
       '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-perf' + (t.whenIPerform ? " checked" : "") + " /> I perform</label>",
       '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-onme' + (t.whenOnMe ? " checked" : "") + " /> On me</label>",
@@ -12296,11 +12310,14 @@
     const phrase = (phraseEl && phraseEl.value || "").trim().slice(0, SEIDR_REACTION_PHRASE_MAX);
     const onClimax = !!(climaxEl && climaxEl.checked);
     const activities = [];
+    const nextFilters = [];
     root4.querySelectorAll("[data-rxn-trig]").forEach(function(row) {
       const act2 = row.querySelector("[data-rxn-trig-act]")?.value || "";
+      const filter = row.querySelector("[data-rxn-trig-filter]")?.value || "";
       const slot = row.querySelector("[data-rxn-trig-slot]")?.value || "";
       const whenIPerform = !!row.querySelector("[data-rxn-trig-perf]")?.checked;
       const whenOnMe = !!row.querySelector("[data-rxn-trig-onme]")?.checked;
+      nextFilters.push(String(filter).trim());
       activities.push({
         activity: String(act2).trim(),
         whenIPerform,
@@ -12308,6 +12325,7 @@
         slot: String(slot).trim()
       });
     });
+    trigFilters = nextFilters;
     const steps = [];
     root4.querySelectorAll("[data-rxn-step]").forEach(function(card) {
       const kind = card.querySelector("[data-rxn-step-kind]")?.value || "say";
@@ -12356,6 +12374,7 @@
       host.innerHTML = "";
       return;
     }
+    syncTrigFiltersLen(draft.activities.length);
     const firstAnim = seidrListAnimations()[0];
     const triggersHtml = draft.activities.length ? draft.activities.map(triggerRowHtml).join("") : '<p class="seidr-settings-hint">No activity triggers. Add one, a Phrase, or On climax.</p>';
     const stepsHtml = draft.steps.map(stepCardHtml).join("");
@@ -12391,7 +12410,7 @@
       '<button type="button" class="seidr-act-btn" id="seidr-rxn-save">Save</button>',
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-rxn-del">Delete</button>',
       "</div>",
-      '<p class="seidr-settings-hint" id="seidr-rxn-msg"></p>',
+      '<p class="seidr-cmd-msg" id="seidr-rxn-msg"></p>',
       firstAnim ? "" : '<p class="seidr-settings-hint">Tip: define Animations first if you want Animation steps.</p>'
     ].join("");
     wireEditor(root4);
@@ -12429,6 +12448,15 @@
         const next = readDraftFromDom(root4);
         if (!next || idx < 0) return;
         next.activities.splice(idx, 1);
+        trigFilters.splice(idx, 1);
+        draft = next;
+        renderEditor(root4);
+      });
+    });
+    root4.querySelectorAll("[data-rxn-trig-filter]").forEach(function(sel) {
+      sel.addEventListener("change", function() {
+        const next = readDraftFromDom(root4);
+        if (!next) return;
         draft = next;
         renderEditor(root4);
       });
@@ -12486,10 +12514,10 @@
       }
       draft = saved.reaction || next;
       editId = draft.id;
-      setMsg2(root4, "Saved");
       renderList(root4);
       wireList(root4);
       renderEditor(root4);
+      setMsg2(root4, "Saved");
     });
     root4.querySelector("#seidr-rxn-del")?.addEventListener("click", function() {
       if (!draft) return;
@@ -12518,6 +12546,9 @@
     if (!r) return;
     editId = id;
     draft = JSON.parse(JSON.stringify(r));
+    trigFilters = draft.activities.map(function() {
+      return "";
+    });
     renderList(root4);
     wireList(root4);
     renderEditor(root4);
@@ -17359,6 +17390,9 @@
       "}",
       ".seidr-settings-hint {",
       "  margin: 6px 0 0; font-size: 11px; color: #a898b0;",
+      "}",
+      ".seidr-cmd-msg {",
+      "  margin: 6px 0 0; font-size: 11px; color: #d4a017; min-height: 1em;",
       "}",
       ".seidr-about-header {",
       "  display: flex; gap: 12px; align-items: flex-start;",

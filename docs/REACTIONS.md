@@ -22,7 +22,7 @@ Author under **`/seidr` → Reaction**.
 
 Each reaction can combine:
 
-1. **Activities** — pick a Club activity name; enable **I perform** and/or **On me** (one or both). Optionally set **Slot** (e.g. Ears / `ItemEars`) so only that zone counts — useful for ear pets vs a body caress.  
+1. **Activities** — **Filter by Slot** narrows the Activity list (same Club zones as Commands; All = every Club/Seidr/mod activity). Then pick **Activity**, and optionally **On slot** so only that zone counts when it fires (e.g. Caress on Ears vs Arms). Enable **I perform** and/or **On me**.  
 2. **Phrase** — exact line **you** say in room chat (case-insensitive). Other people’s chat, whispers, and emotes do not count.  
 3. **On climax** — when **you** orgasm, ruin, or successfully resist in the room. Other people’s climaxes do not count.
 

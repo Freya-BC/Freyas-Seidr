@@ -341,7 +341,7 @@ export function seidrDefaultSettings(): SeidrSettings {
 		roomManagerEnabled: true,
 		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
-		showFastWiggleButton: false,
+		showFastWiggleButton: true,
 		fastWigglePosition: "chatBottom",
 		drawOffsets: seidrDefaultDrawOffsets(),
 		drawAdvancedMode: false,
