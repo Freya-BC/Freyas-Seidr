@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "2.0.68";
+Seidr.VERSION = "2.0.70";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";

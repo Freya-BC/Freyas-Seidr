@@ -119,6 +119,25 @@ function wornPropertyFingerprint(group: string): string {
 	return JSON.stringify(null);
 }
 
+function wornColorFingerprint(group: string): string {
+	try {
+		const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+		if (item && (typeof item.Color === "string" || Array.isArray(item.Color))) {
+			return JSON.stringify(item.Color);
+		}
+	} catch (e) { /* ignore */ }
+	return "";
+}
+
+function frameColorFingerprint(color: SeidrWiggleFrame["color"]): string {
+	if (color === undefined) return "";
+	try {
+		return JSON.stringify(color);
+	} catch (e) {
+		return "";
+	}
+}
+
 function applyFrame(group: string, frame: SeidrWiggleFrame, syncWire: boolean): void {
 	if (!frame || !frame.assetName || typeof InventoryWear !== "function") return;
 	const wearName = seidrWiggleRealAssetName(frame.assetName);
@@ -133,8 +152,15 @@ function applyFrame(group: string, frame: SeidrWiggleFrame, syncWire: boolean): 
 			propDiffers = true;
 		}
 	}
-	// Same asset + typed still needs a re-wear when Property (modular rotation) differs
-	if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped && !propDiffers) {
+	const colorDiffers = frame.color !== undefined &&
+		frameColorFingerprint(frame.color) !== wornColorFingerprint(group);
+	// Same asset + typed still needs a re-wear when Property or color differs
+	if (
+		seidrWiggleNameEquals(wornName, frame.assetName) &&
+		wornTyped === nextTyped &&
+		!propDiffers &&
+		!colorDiffers
+	) {
 		return;
 	}
 	const color = frame.color !== undefined ? frame.color : undefined;

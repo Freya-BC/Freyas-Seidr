@@ -1,4 +1,4 @@
-/* Seidr v2.0.68 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.70 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.68";
+  Seidr.VERSION = "2.0.70";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1741,6 +1741,18 @@
     }
     return frame;
   }
+  function colorFingerprint(c) {
+    if (c === void 0) return "";
+    try {
+      return JSON.stringify(c);
+    } catch (e) {
+      return "";
+    }
+  }
+  function seidrWiggleColorsDiffer(a, b) {
+    if (!a || !b) return false;
+    return colorFingerprint(a.color) !== colorFingerprint(b.color);
+  }
   function seidrWiggleFramesDiffer(a, b) {
     if (!a || !b || !a.assetName || !b.assetName) return false;
     if (a.assetName !== b.assetName) return true;
@@ -1753,6 +1765,7 @@
       if (pa !== pb) return true;
     } catch (e) {
     }
+    if (seidrWiggleColorsDiffer(a, b)) return true;
     return false;
   }
   function seidrClampWiggleCount(raw, fallback) {
@@ -6866,6 +6879,14 @@
       return "";
     }
   }
+  function colorFingerprint2(c) {
+    if (c === void 0) return "";
+    try {
+      return JSON.stringify(c);
+    } catch (e) {
+      return "";
+    }
+  }
   function seidrWiggleCounterpartReady(anim, playGroup) {
     if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.secondary) return false;
     const group = playGroup || anim.group || (anim.slot ? seidrWiggleBaseGroup(anim.slot) : "");
@@ -6878,7 +6899,10 @@
       const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
       const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
       if (sTyped !== "" && sTyped !== pTyped) return true;
-      return propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property);
+      if (propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property)) {
+        return true;
+      }
+      return colorFingerprint2(anim.primary.color) !== colorFingerprint2(anim.secondary.color);
     }
     return seidrWiggleAssetLoadable(group, secondaryName);
   }
@@ -7360,6 +7384,24 @@
     }
     return JSON.stringify(null);
   }
+  function wornColorFingerprint(group) {
+    try {
+      const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+      if (item && (typeof item.Color === "string" || Array.isArray(item.Color))) {
+        return JSON.stringify(item.Color);
+      }
+    } catch (e) {
+    }
+    return "";
+  }
+  function frameColorFingerprint(color) {
+    if (color === void 0) return "";
+    try {
+      return JSON.stringify(color);
+    } catch (e) {
+      return "";
+    }
+  }
   function applyFrame(group, frame, syncWire) {
     if (!frame || !frame.assetName || typeof InventoryWear !== "function") return;
     const wearName = seidrWiggleRealAssetName(frame.assetName);
@@ -7374,7 +7416,8 @@
         propDiffers = true;
       }
     }
-    if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped && !propDiffers) {
+    const colorDiffers = frame.color !== void 0 && frameColorFingerprint(frame.color) !== wornColorFingerprint(group);
+    if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped && !propDiffers && !colorDiffers) {
       return;
     }
     const color = frame.color !== void 0 ? frame.color : void 0;
@@ -19821,10 +19864,16 @@
     if (!sec || !group) return "";
     if (seidrWiggleNameEquals(sec, d.primary.assetName)) {
       if (seidrWiggleFramesDiffer(d.primary, d.secondary)) return "";
-      return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left \u2194 Top Right) or a different Property (rotation).</p>';
+      return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left \u2194 Top Right), Property (rotation), or a different saved color.</p>';
     }
     if (seidrWiggleAssetLoadable(group, sec)) return "";
     return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' + escapeHtml7(seidrWiggleAssetLabel(sec)) + "</b> not loaded \u2014 install Echo (or the mod that adds it), then re-open.</p>";
+  }
+  function colorModeWarningHtml(d) {
+    if (!d.primary || !d.secondary) return "";
+    if ((d.colorMode || "snapshot") !== "autoupdate") return "";
+    if (!seidrWiggleColorsDiffer(d.primary, d.secondary)) return "";
+    return '<p class="seidr-settings-hint" style="color:#c45;margin-top:6px;">First and second have different saved colors. Switch Colors to <b>Snapshot (saved colors)</b> or Autoupdate will dye both frames the same from whatever you wear.</p>';
   }
   function renderWiggleEditor(root4) {
     const wrap2 = root4.querySelector("#seidr-wiggle-editor");
@@ -19855,7 +19904,7 @@
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-capture-second">Capture second</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch</button>',
       "</div>",
-      '<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (same item with another size/rotation/typed option is fine; or a different asset). Automatch: typed Top Left\u2194Top Right when available, else Echo mirror. <b>' + escapeHtml7(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Colors Autoupdate keeps pose Property and only refreshes dye.</p>",
+      '<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (pose and dye). Same item with another size/rotation/typed option, a different asset, or a different color is fine. Automatch: typed Top Left\u2194Top Right when available, else Echo mirror. <b>' + escapeHtml7(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Different colors per frame need <b>Snapshot</b>; Autoupdate dyes both from the worn item.</p>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Colors</span>',
       '<select id="seidr-wiggle-colors">',
@@ -19863,6 +19912,7 @@
       '<option value="autoupdate"' + (colorMode === "autoupdate" ? " selected" : "") + ">Autoupdate (current worn)</option>",
       "</select>",
       "</div>",
+      colorModeWarningHtml(d),
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Amount</span>',
       '<input type="number" class="seidr-settings-num" id="seidr-wiggle-count" min="1" max="' + SEIDR_WIGGLE_COUNT_MAX + '" step="1" value="' + (d.count || defs.count) + '" />',
@@ -19988,6 +20038,12 @@
     return onSlot[0];
   }
   function wireWiggleEditor(root4) {
+    root4.querySelector("#seidr-wiggle-colors")?.addEventListener("change", function() {
+      const cur = readWiggleDraftFromDom(root4);
+      if (!cur) return;
+      wiggleDraft = cur;
+      renderWiggleEditor(root4);
+    });
     function onPreviewToggle(which) {
       const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
       if (!cur) return;
@@ -20016,9 +20072,6 @@
       }
       cur.primary = seidrWornToFrame(worn);
       cur.group = worn.group;
-      if (cur.secondary && cur.colorMode !== "autoupdate") {
-        cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
-      }
       wiggleDraft = cur;
       renderWiggleEditor(root4);
       const hint = framePoseHint(cur.primary);
@@ -20034,10 +20087,10 @@
       }
       const frame = seidrWornToFrame(worn);
       if (!seidrWiggleFramesDiffer(cur.primary, frame)) {
-        setWiggleMsg(root4, "Second must differ from first (typed, size/rotation Property, or other asset)");
+        setWiggleMsg(root4, "Second must differ from first (typed, Property, color, or other asset)");
         return;
       }
-      cur.secondary = cur.colorMode === "autoupdate" ? frame : applyPrimaryColorsToSecondary(cur.primary, frame);
+      cur.secondary = frame;
       wiggleDraft = cur;
       renderWiggleEditor(root4);
       const hint = framePoseHint(cur.secondary);
@@ -20053,7 +20106,7 @@
         cur.primary.typedState
       );
       if (!match) {
-        setWiggleMsg(root4, "No typed/mirror pair \u2014 Capture second after changing typed/size/rotation");
+        setWiggleMsg(root4, "No typed/mirror pair \u2014 Capture second after changing typed/size/rotation/color");
         return;
       }
       const secFrame = { assetName: match.assetName };
@@ -20070,11 +20123,8 @@
         return;
       }
       if (!seidrWiggleFramesDiffer(cur.primary, cur.secondary)) {
-        setWiggleMsg(root4, "Second must differ (other asset, typed option, or Property)");
+        setWiggleMsg(root4, "Second must differ (other asset, typed, Property, or color)");
         return;
-      }
-      if (cur.colorMode !== "autoupdate" && cur.primary) {
-        cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
       }
       const r = seidrUpsertAnimation(cur);
       if (!r.ok) {

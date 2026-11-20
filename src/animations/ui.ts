@@ -26,6 +26,7 @@ import {
 	seidrDefaultAnimWiggleStep,
 	seidrDefaultWiggleAnimation,
 	seidrNormalizeWiggleSlots,
+	seidrWiggleColorsDiffer,
 	seidrWiggleFramesDiffer,
 	seidrWiggleSlotsLabel,
 	type SeidrAnimFaceFeature,
@@ -587,12 +588,20 @@ function counterpartHintHtml(d: SeidrAnimation): string {
 	if (!sec || !group) return "";
 	if (seidrWiggleNameEquals(sec, d.primary.assetName)) {
 		if (seidrWiggleFramesDiffer(d.primary, d.secondary)) return "";
-		return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left ↔ Top Right) or a different Property (rotation).</p>';
+		return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left ↔ Top Right), Property (rotation), or a different saved color.</p>';
 	}
 	if (seidrWiggleAssetLoadable(group, sec)) return "";
 	return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' +
 		escapeHtml(seidrWiggleAssetLabel(sec)) +
 		"</b> not loaded — install Echo (or the mod that adds it), then re-open.</p>";
+}
+
+/** Warn when frames have different dyes but Autoupdate would overwrite both. */
+function colorModeWarningHtml(d: SeidrAnimation): string {
+	if (!d.primary || !d.secondary) return "";
+	if ((d.colorMode || "snapshot") !== "autoupdate") return "";
+	if (!seidrWiggleColorsDiffer(d.primary, d.secondary)) return "";
+	return '<p class="seidr-settings-hint" style="color:#c45;margin-top:6px;">First and second have different saved colors. Switch Colors to <b>Snapshot (saved colors)</b> or Autoupdate will dye both frames the same from whatever you wear.</p>';
 }
 
 function renderWiggleEditor(root: HTMLElement) {
@@ -631,8 +640,8 @@ function renderWiggleEditor(root: HTMLElement) {
 		'<button type="button" class="seidr-act-btn" id="seidr-wiggle-capture-second">Capture second</button>',
 		'<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch</button>',
 		"</div>",
-		'<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (same item with another size/rotation/typed option is fine; or a different asset). Automatch: typed Top Left↔Top Right when available, else Echo mirror. <b>' +
-		escapeHtml(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Colors Autoupdate keeps pose Property and only refreshes dye.</p>",
+		'<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (pose and dye). Same item with another size/rotation/typed option, a different asset, or a different color is fine. Automatch: typed Top Left↔Top Right when available, else Echo mirror. <b>' +
+		escapeHtml(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Different colors per frame need <b>Snapshot</b>; Autoupdate dyes both from the worn item.</p>",
 		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
 		'<span class="seidr-settings-field-label">Colors</span>',
 		'<select id="seidr-wiggle-colors">',
@@ -640,6 +649,7 @@ function renderWiggleEditor(root: HTMLElement) {
 		'<option value="autoupdate"' + (colorMode === "autoupdate" ? " selected" : "") + ">Autoupdate (current worn)</option>",
 		"</select>",
 		"</div>",
+		colorModeWarningHtml(d),
 		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
 		'<span class="seidr-settings-field-label">Amount</span>',
 		'<input type="number" class="seidr-settings-num" id="seidr-wiggle-count" min="1" max="' +
@@ -778,6 +788,12 @@ function wornOnWiggleSlot(cur: SeidrAnimation): SeidrWornWiggleItem | null {
 }
 
 function wireWiggleEditor(root: HTMLElement) {
+	root.querySelector("#seidr-wiggle-colors")?.addEventListener("change", function () {
+		const cur = readWiggleDraftFromDom(root);
+		if (!cur) return;
+		wiggleDraft = cur;
+		renderWiggleEditor(root);
+	});
 	function onPreviewToggle(which: "primary" | "secondary") {
 		const cur = readWiggleDraftFromDom(root) || wiggleDraft;
 		if (!cur) return;
@@ -808,9 +824,6 @@ function wireWiggleEditor(root: HTMLElement) {
 		}
 		cur.primary = seidrWornToFrame(worn);
 		cur.group = worn.group;
-		if (cur.secondary && cur.colorMode !== "autoupdate") {
-			cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
-		}
 		wiggleDraft = cur;
 		renderWiggleEditor(root);
 		const hint = framePoseHint(cur.primary);
@@ -826,12 +839,10 @@ function wireWiggleEditor(root: HTMLElement) {
 		}
 		const frame = seidrWornToFrame(worn);
 		if (!seidrWiggleFramesDiffer(cur.primary, frame)) {
-			setWiggleMsg(root, "Second must differ from first (typed, size/rotation Property, or other asset)");
+			setWiggleMsg(root, "Second must differ from first (typed, Property, color, or other asset)");
 			return;
 		}
-		cur.secondary = cur.colorMode === "autoupdate"
-			? frame
-			: applyPrimaryColorsToSecondary(cur.primary, frame);
+		cur.secondary = frame;
 		wiggleDraft = cur;
 		renderWiggleEditor(root);
 		const hint = framePoseHint(cur.secondary);
@@ -847,11 +858,12 @@ function wireWiggleEditor(root: HTMLElement) {
 			cur.primary.typedState
 		);
 		if (!match) {
-			setWiggleMsg(root, "No typed/mirror pair — Capture second after changing typed/size/rotation");
+			setWiggleMsg(root, "No typed/mirror pair — Capture second after changing typed/size/rotation/color");
 			return;
 		}
 		const secFrame: SeidrWiggleFrame = { assetName: match.assetName };
 		if (match.typedState != null) secFrame.typedState = match.typedState;
+		// Seed dye from first; Capture second to keep a different color
 		cur.secondary = applyPrimaryColorsToSecondary(cur.primary, secFrame);
 		wiggleDraft = cur;
 		renderWiggleEditor(root);
@@ -866,11 +878,8 @@ function wireWiggleEditor(root: HTMLElement) {
 			return;
 		}
 		if (!seidrWiggleFramesDiffer(cur.primary, cur.secondary)) {
-			setWiggleMsg(root, "Second must differ (other asset, typed option, or Property)");
+			setWiggleMsg(root, "Second must differ (other asset, typed, Property, or color)");
 			return;
-		}
-		if (cur.colorMode !== "autoupdate" && cur.primary) {
-			cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
 		}
 		const r = seidrUpsertAnimation(cur);
 		if (!r.ok) {

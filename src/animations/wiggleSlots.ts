@@ -551,9 +551,18 @@ function propertyFingerprint(p: unknown): string {
 	}
 }
 
+function colorFingerprint(c: unknown): string {
+	if (c === undefined) return "";
+	try {
+		return JSON.stringify(c);
+	} catch (e) {
+		return "";
+	}
+}
+
 /**
  * Secondary frame is usable: different asset that loads, or same asset with a
- * different typed state and/or Property (modular rotation, etc.).
+ * different typed state, Property (modular rotation), and/or saved color.
  */
 export function seidrWiggleCounterpartReady(anim: SeidrAnimation, playGroup?: string | null): boolean {
 	if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.secondary) return false;
@@ -567,7 +576,10 @@ export function seidrWiggleCounterpartReady(anim: SeidrAnimation, playGroup?: st
 		const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
 		const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
 		if (sTyped !== "" && sTyped !== pTyped) return true;
-		return propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property);
+		if (propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property)) {
+			return true;
+		}
+		return colorFingerprint(anim.primary.color) !== colorFingerprint(anim.secondary.color);
 	}
 	return seidrWiggleAssetLoadable(group, secondaryName);
 }

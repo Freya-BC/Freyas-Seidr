@@ -85,7 +85,7 @@ Under **Animations → Wiggle**, add a set while wearing the **primary** item (E
    - **Tail 1 / Tail 2** (next to Save) — equip that saved frame for 30s; press again to restore.  
    - **Capture first / Capture second** — store what you are wearing (same tail with another size/rotation/typed option is fine; or a different asset).  
    - **Automatch** — typed Top Left ↔ Top Right when available; otherwise Echo mirror.  
-3. Colors: **Autoupdate** (default — dye from whatever you wear now; pose Property stays per frame) or **Snapshot**.  
+3. Colors: **Autoupdate** (default — both frames share the dye you wear now; pose Property stays per frame) or **Snapshot** (each frame keeps its own saved dye — needed for color wiggles). The editor warns if the two frames have different saved colors while Autoupdate is on.  
 4. Set **Amount** and **Delay**, then **Save**. **Test** from the editor — if the primary is not worn, Seidr equips it for the test and restores whatever was on that slot afterward.
 
 Rules of thumb:

@@ -297,7 +297,22 @@ export function seidrNormalizeWiggleFrame(raw: unknown): SeidrWiggleFrame | null
 	return frame;
 }
 
-/** True when two wiggle frames would look different (asset, typed, and/or Property). */
+function colorFingerprint(c: unknown): string {
+	if (c === undefined) return "";
+	try {
+		return JSON.stringify(c);
+	} catch (e) {
+		return "";
+	}
+}
+
+/** True when saved dyes differ (Snapshot color-wiggle). */
+export function seidrWiggleColorsDiffer(a: SeidrWiggleFrame | null | undefined, b: SeidrWiggleFrame | null | undefined): boolean {
+	if (!a || !b) return false;
+	return colorFingerprint(a.color) !== colorFingerprint(b.color);
+}
+
+/** True when two wiggle frames would look different (asset, typed, Property, and/or color). */
 export function seidrWiggleFramesDiffer(a: SeidrWiggleFrame | null | undefined, b: SeidrWiggleFrame | null | undefined): boolean {
 	if (!a || !b || !a.assetName || !b.assetName) return false;
 	if (a.assetName !== b.assetName) return true;
@@ -309,6 +324,7 @@ export function seidrWiggleFramesDiffer(a: SeidrWiggleFrame | null | undefined, 
 		const pb = JSON.stringify(b.property == null ? null : b.property);
 		if (pa !== pb) return true;
 	} catch (e) { /* ignore */ }
+	if (seidrWiggleColorsDiffer(a, b)) return true;
 	return false;
 }
 
