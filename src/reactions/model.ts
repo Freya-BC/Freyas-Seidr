@@ -20,6 +20,11 @@ export type SeidrReactionActivityTrigger = {
 	 * Empty = any slot. Matched from ChatOther/Self-Group-Activity Content.
 	 */
 	slot?: string;
+	/**
+	 * Persisted Activity-list filter zone (Settings UI "Filter by Slot").
+	 * Empty = show all activities. Independent of match `slot`.
+	 */
+	filterSlot?: string;
 };
 
 export type SeidrReactionSayStep = {
@@ -67,7 +72,7 @@ export type SeidrReactionsBag = {
 };
 
 export function seidrDefaultReactionActivityTrigger(): SeidrReactionActivityTrigger {
-	return { activity: "", whenIPerform: false, whenOnMe: true, slot: "" };
+	return { activity: "", whenIPerform: false, whenOnMe: true, slot: "", filterSlot: "" };
 }
 
 export function seidrDefaultReactionSayStep(): SeidrReactionSayStep {
@@ -108,11 +113,15 @@ function sanitizeActivityTrigger(raw: unknown): SeidrReactionActivityTrigger | n
 	const d = raw as Partial<SeidrReactionActivityTrigger>;
 	const activity = String(d.activity || "").trim().slice(0, 64);
 	const slot = typeof d.slot === "string" ? d.slot.trim().slice(0, 48) : "";
+	let filterSlot = typeof d.filterSlot === "string" ? d.filterSlot.trim().slice(0, 48) : "";
+	// Migrate older saves: restore list filter from match slot so Activity reappears on swap.
+	if (!filterSlot && slot) filterSlot = slot;
 	return {
 		activity: activity,
 		whenIPerform: d.whenIPerform === true,
 		whenOnMe: d.whenOnMe === true,
 		slot: slot,
+		filterSlot: filterSlot,
 	};
 }
 

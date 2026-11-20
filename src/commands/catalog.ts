@@ -7,8 +7,43 @@ declare const AssetGroup: any;
 declare const ActivityFemale3DCG: any;
 declare const ActivityAllowedForGroup: any;
 declare const ActivityDictionaryLoad: any;
+declare const ScreenFileGetPath: any;
+declare const CommonCSVCache: Record<string, string[][]> | undefined;
 declare const ChatRoomCharacter: any;
 declare const Player: any;
+
+/** EN ActivityDictionary.csv rows (Club keeps these in CommonCSVCache before CN/TW overlay). */
+let enActivityDict: Record<string, string> | null = null;
+
+function activityDictPath(): string {
+	try {
+		if (typeof ScreenFileGetPath === "function") {
+			return String(ScreenFileGetPath("ActivityDictionary.csv", "Character", "Preference") || "");
+		}
+	} catch (e) { /* ignore */ }
+	return "Screens/Character/Preference/ActivityDictionary.csv";
+}
+
+function ensureEnActivityDict(): Record<string, string> {
+	if (enActivityDict && Object.keys(enActivityDict).length > 0) return enActivityDict;
+	const next: Record<string, string> = {};
+	try {
+		// Ensure Club has fetched the CSV (even if TextCache is localized).
+		if (typeof ActivityDictionaryLoad === "function") ActivityDictionaryLoad();
+		const path = activityDictPath();
+		const lines = typeof CommonCSVCache !== "undefined" && path ? CommonCSVCache[path] : null;
+		if (Array.isArray(lines)) {
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (!line || !line[0] || line[1] == null) continue;
+				next[String(line[0])] = String(line[1]);
+			}
+		}
+	} catch (e) { /* ignore */ }
+	// Only pin the cache once rows exist (CSV may still be loading on first open).
+	if (Object.keys(next).length > 0) enActivityDict = next;
+	return next;
+}
 
 /**
  * Resolve a display label without ActivityDictionaryText / TextCache.get.
@@ -32,20 +67,99 @@ function activityDictLookup(key: string): string | null {
 	}
 }
 
+/** Prefer English dictionary text so Seidr UI stays EN even when Club language is CN/TW. */
+function activityLookupPreferEn(key: string): string | null {
+	const en = ensureEnActivityDict()[key];
+	if (typeof en === "string" && en && en.indexOf("MISSING") < 0) return en;
+	return activityDictLookup(key);
+}
+
+function findActivityDef(name: string): any | null {
+	try {
+		if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return null;
+		for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+			const a = ActivityFemale3DCG[i] as any;
+			if (a && a.Name === name) return a;
+		}
+	} catch (e) { /* ignore */ }
+	return null;
+}
+
+/**
+ * Display label for an activity. Prefer EN ActivityDictionary, then zone Labels
+ * (so BrushItem → "Brush Hair" not generic "Brush"), then localized fallback, then Name.
+ * Echo/mod activities whose Name is already Chinese keep that Name (no EN entry).
+ */
 function activityLabel(name: string, group?: string): string {
 	if (group) {
 		const keys = [
-			"Label-ChatSelf-" + group + "-" + name,
 			"Label-ChatOther-" + group + "-" + name,
+			"Label-ChatSelf-" + group + "-" + name,
 		];
 		for (let i = 0; i < keys.length; i++) {
-			const t = activityDictLookup(keys[i]);
+			const t = activityLookupPreferEn(keys[i]);
 			if (t) return t;
 		}
 	}
-	const generic = activityDictLookup("Activity" + name);
+	const def = findActivityDef(name);
+	const zones: string[] = [];
+	if (def) {
+		if (Array.isArray(def.Target)) {
+			for (let i = 0; i < def.Target.length; i++) zones.push(String(def.Target[i]));
+		}
+		if (Array.isArray(def.TargetSelf)) {
+			for (let i = 0; i < def.TargetSelf.length; i++) {
+				const z = String(def.TargetSelf[i]);
+				if (zones.indexOf(z) < 0) zones.push(z);
+			}
+		}
+	}
+	for (let i = 0; i < zones.length; i++) {
+		const z = zones[i];
+		const t =
+			activityLookupPreferEn("Label-ChatOther-" + z + "-" + name) ||
+			activityLookupPreferEn("Label-ChatSelf-" + z + "-" + name);
+		if (t) return t;
+	}
+	const generic = activityLookupPreferEn("Activity" + name);
 	if (generic) return generic;
 	return name;
+}
+
+/** Club/mod activities that need a held / worn tool (Needs-* / TargetNeeds-*). */
+function activityNeedsItem(def: any): boolean {
+	const prereq = def && Array.isArray(def.Prerequisite) ? def.Prerequisite : [];
+	for (let i = 0; i < prereq.length; i++) {
+		const p = String(prereq[i] || "");
+		if (p.indexOf("Needs-") === 0 || p.indexOf("TargetNeeds-") === 0) return true;
+	}
+	return false;
+}
+
+function activityOpt(name: string, group?: string): SeidrCmdActivityOpt {
+	let label = activityLabel(name, group);
+	const def = findActivityDef(name);
+	if (def && activityNeedsItem(def)) label += " (item)";
+	return { id: name, label: label };
+}
+
+/** Whether `slot` is a Target / TargetSelf zone for this activity def. */
+function activityTargetsSlot(a: any, slot: string): boolean {
+	if (!a || !slot) return false;
+	if (Array.isArray(a.Target) && a.Target.indexOf(slot) >= 0) return true;
+	if (Array.isArray(a.TargetSelf) && a.TargetSelf.indexOf(slot) >= 0) return true;
+	// Club uses TargetSelf: true to mean "same zones as Target, on self".
+	if (a.TargetSelf === true && Array.isArray(a.Target) && a.Target.indexOf(slot) >= 0) return true;
+	return false;
+}
+
+/** First Target / TargetSelf zone for an activity (for Reaction Filter-by-Slot defaults). */
+export function seidrCmdActivityPrimarySlot(activityName: string): string {
+	const def = findActivityDef(String(activityName || ""));
+	if (!def) return "";
+	if (Array.isArray(def.Target) && def.Target[0]) return String(def.Target[0]);
+	if (Array.isArray(def.TargetSelf) && def.TargetSelf[0]) return String(def.TargetSelf[0]);
+	return "";
 }
 
 /** Item* (+ cloth) groups suitable for activity targets. */
@@ -93,7 +207,7 @@ export function seidrCmdListAllActivities(): SeidrCmdActivityOpt[] {
 			const a = ActivityFemale3DCG[i] as any;
 			if (!a || !a.Name || seen[a.Name]) continue;
 			seen[a.Name] = true;
-			out.push({ id: a.Name, label: activityLabel(a.Name) });
+			out.push(activityOpt(a.Name));
 		}
 	} catch (e) { /* ignore */ }
 	out.sort(function (a, b) { return a.label.localeCompare(b.label); });
@@ -110,12 +224,10 @@ export function seidrCmdListActivitiesForSlot(slot: string): SeidrCmdActivityOpt
 		for (let i = 0; i < ActivityFemale3DCG.length; i++) {
 			const a = ActivityFemale3DCG[i] as any;
 			if (!a || !a.Name) continue;
-			const t = Array.isArray(a.Target) && a.Target.indexOf(s) >= 0;
-			const ts = Array.isArray(a.TargetSelf) && a.TargetSelf.indexOf(s) >= 0;
-			if (!t && !ts) continue;
+			if (!activityTargetsSlot(a, s)) continue;
 			if (seen[a.Name]) continue;
 			seen[a.Name] = true;
-			out.push({ id: a.Name, label: activityLabel(a.Name, s) });
+			out.push(activityOpt(a.Name, s));
 		}
 	} catch (e) { /* ignore */ }
 	out.sort(function (a, b) { return a.label.localeCompare(b.label); });

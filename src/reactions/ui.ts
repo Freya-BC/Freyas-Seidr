@@ -7,6 +7,7 @@ import {
 } from "../animations/model";
 import { seidrListAnimations } from "../animations/store";
 import {
+	seidrCmdActivityPrimarySlot,
 	seidrCmdListAllActivities,
 	seidrCmdListActivitiesForSlot,
 	seidrCmdListSlots,
@@ -36,13 +37,6 @@ import {
 
 let editId: number | null = null;
 let draft: SeidrReaction | null = null;
-/** UI-only: activity-list filter slot per trigger index (not persisted). */
-let trigFilters: string[] = [];
-
-function syncTrigFiltersLen(n: number) {
-	while (trigFilters.length < n) trigFilters.push("");
-	if (trigFilters.length > n) trigFilters.length = n;
-}
 
 function escapeHtml(s: string): string {
 	return String(s)
@@ -86,24 +80,21 @@ function renderList(root: HTMLElement) {
 }
 
 /**
- * Activity dropdown — filtered by UI "Filter by Slot" (not the match On-slot).
+ * Activity dropdown — filtered by persisted "Filter by Slot" (not the match On-slot).
  * Empty filter → full Club/Seidr/mod list (same as Commands catalog).
+ * Selection is applied via .value after render (swap-safe).
  */
 function activityOptionsHtml(selected: string, filterSlot: string): string {
 	const list = filterSlot
 		? seidrCmdListActivitiesForSlot(filterSlot)
 		: seidrCmdListAllActivities();
 	const extra = selected && !list.some(function (o) { return o.id === selected; })
-		? '<option value="' + escapeHtml(selected) + '" selected>' + escapeHtml(selected) + " (saved)</option>"
+		? '<option value="' + escapeHtml(selected) + '">' + escapeHtml(selected) + " (saved)</option>"
 		: "";
-	const empty = !selected
-		? '<option value="" selected>— Activity —</option>'
-		: '<option value="">— Activity —</option>';
 	const opts = list.map(function (o) {
-		return '<option value="' + escapeHtml(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" +
-			escapeHtml(o.label) + "</option>";
+		return '<option value="' + escapeHtml(o.id) + '">' + escapeHtml(o.label) + "</option>";
 	}).join("");
-	return empty + extra + opts;
+	return '<option value="">— Activity —</option>' + extra + opts;
 }
 
 function animationOptionsHtml(selectedId: number): string {
@@ -132,22 +123,32 @@ function cmdActionOptionsHtml(selected: string): string {
 	}).join("");
 }
 
-/** Club AssetGroup Item* list (same as Commands), plus empty = Any. */
+/** Club AssetGroup Item* list (same as Commands). Selection set via .value after render. */
 function slotOptionsHtml(selected: string, emptyLabel: string): string {
 	const sel = String(selected || "");
 	const slots = seidrCmdListSlots();
 	const known = slots.some(function (s) { return s.id === sel; });
 	const extra = sel && !known
-		? '<option value="' + escapeHtml(sel) + '" selected>' + escapeHtml(sel) + " (saved)</option>"
+		? '<option value="' + escapeHtml(sel) + '">' + escapeHtml(sel) + " (saved)</option>"
 		: "";
 	return '<option value="">' + escapeHtml(emptyLabel) + "</option>" + extra + slots.map(function (s) {
-		return '<option value="' + escapeHtml(s.id) + '"' + (s.id === sel ? " selected" : "") + ">" +
+		return '<option value="' + escapeHtml(s.id) + '">' +
 			escapeHtml(s.label) + " (" + escapeHtml(s.id) + ")</option>";
 	}).join("");
 }
 
+/** Prefer saved filterSlot; else match slot; else activity's primary Target zone. */
+function resolveFilterSlot(t: SeidrReactionActivityTrigger): string {
+	const saved = String(t.filterSlot || "").trim();
+	if (saved) return saved;
+	const match = String(t.slot || "").trim();
+	if (match) return match;
+	if (t.activity) return seidrCmdActivityPrimarySlot(t.activity);
+	return "";
+}
+
 function triggerRowHtml(t: SeidrReactionActivityTrigger, index: number): string {
-	const filterSlot = trigFilters[index] || "";
+	const filterSlot = resolveFilterSlot(t);
 	const matchSlot = t.slot || "";
 	return [
 		'<div class="seidr-settings-sec" data-rxn-trig="' + index + '" style="margin-top:8px;padding:8px;">',
@@ -163,7 +164,7 @@ function triggerRowHtml(t: SeidrReactionActivityTrigger, index: number): string 
 		'<span class="seidr-settings-field-label">On slot</span>',
 		'<select data-rxn-trig-slot>' + slotOptionsHtml(matchSlot, "Any slot") + "</select>",
 		"</div>",
-		'<p class="seidr-settings-hint">Filter by Slot narrows the Activity list (Caress lives on many zones). On slot is the match filter when the activity fires (Any = activity name only).</p>',
+		'<p class="seidr-settings-hint">Filter by Slot narrows the Activity list and is saved with the reaction. On slot is the match filter when it fires (Any = activity name only).</p>',
 		'<div class="seidr-settings-row" style="margin-top:6px;gap:12px;display:flex;flex-wrap:wrap;align-items:center;">',
 		'<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-perf' +
 		(t.whenIPerform ? " checked" : "") + " /> I perform</label>",
@@ -174,6 +175,23 @@ function triggerRowHtml(t: SeidrReactionActivityTrigger, index: number): string 
 		"</div>",
 		"</div>",
 	].join("");
+}
+
+/** Force Filter / Activity / On-slot values after innerHTML (swap-safe). */
+function applyTriggerSelectValues(root: HTMLElement, activities: SeidrReactionActivityTrigger[]) {
+	const rows = root.querySelectorAll("[data-rxn-trig]");
+	for (let i = 0; i < rows.length; i++) {
+		const t = activities[i];
+		if (!t) continue;
+		const row = rows[i] as HTMLElement;
+		const filterEl = row.querySelector("[data-rxn-trig-filter]") as HTMLSelectElement | null;
+		const actEl = row.querySelector("[data-rxn-trig-act]") as HTMLSelectElement | null;
+		const slotEl = row.querySelector("[data-rxn-trig-slot]") as HTMLSelectElement | null;
+		const filterSlot = resolveFilterSlot(t);
+		if (filterEl) filterEl.value = filterSlot;
+		if (actEl) actEl.value = t.activity || "";
+		if (slotEl) slotEl.value = t.slot || "";
+	}
 }
 
 function stepSummary(step: SeidrReactionStep): string {
@@ -280,22 +298,33 @@ function readDraftFromDom(root: HTMLElement): SeidrReaction | null {
 	const onClimax = !!(climaxEl && climaxEl.checked);
 
 	const activities: SeidrReactionActivityTrigger[] = [];
-	const nextFilters: string[] = [];
 	root.querySelectorAll("[data-rxn-trig]").forEach(function (row) {
 		const act = (row.querySelector("[data-rxn-trig-act]") as HTMLSelectElement | null)?.value || "";
 		const filter = (row.querySelector("[data-rxn-trig-filter]") as HTMLSelectElement | null)?.value || "";
 		const slot = (row.querySelector("[data-rxn-trig-slot]") as HTMLSelectElement | null)?.value || "";
 		const whenIPerform = !!(row.querySelector("[data-rxn-trig-perf]") as HTMLInputElement | null)?.checked;
 		const whenOnMe = !!(row.querySelector("[data-rxn-trig-onme]") as HTMLInputElement | null)?.checked;
-		nextFilters.push(String(filter).trim());
+		const activity = String(act).trim();
+		let filterSlot = String(filter).trim();
+		const matchSlot = String(slot).trim();
+		// Keep a usable list filter so swap/restore shows the Activity option.
+		if (!filterSlot && activity) {
+			if (matchSlot && seidrCmdListActivitiesForSlot(matchSlot).some(function (o) {
+				return o.id === activity;
+			})) {
+				filterSlot = matchSlot;
+			} else {
+				filterSlot = seidrCmdActivityPrimarySlot(activity);
+			}
+		}
 		activities.push({
-			activity: String(act).trim(),
+			activity: activity,
 			whenIPerform: whenIPerform,
 			whenOnMe: whenOnMe,
-			slot: String(slot).trim(),
+			slot: matchSlot,
+			filterSlot: filterSlot,
 		});
 	});
-	trigFilters = nextFilters;
 
 	const steps: SeidrReactionStep[] = [];
 	root.querySelectorAll("[data-rxn-step]").forEach(function (card) {
@@ -347,7 +376,6 @@ function renderEditor(root: HTMLElement) {
 		host.innerHTML = "";
 		return;
 	}
-	syncTrigFiltersLen(draft.activities.length);
 	const firstAnim = seidrListAnimations()[0];
 	const triggersHtml = draft.activities.length
 		? draft.activities.map(triggerRowHtml).join("")
@@ -395,6 +423,7 @@ function renderEditor(root: HTMLElement) {
 		'<p class="seidr-cmd-msg" id="seidr-rxn-msg"></p>',
 		firstAnim ? "" : '<p class="seidr-settings-hint">Tip: define Animations first if you want Animation steps.</p>',
 	].join("");
+	applyTriggerSelectValues(host, draft.activities);
 	wireEditor(root);
 }
 
@@ -434,7 +463,6 @@ function wireEditor(root: HTMLElement) {
 			const next = readDraftFromDom(root);
 			if (!next || idx < 0) return;
 			next.activities.splice(idx, 1);
-			trigFilters.splice(idx, 1);
 			draft = next;
 			renderEditor(root);
 		});
@@ -444,6 +472,31 @@ function wireEditor(root: HTMLElement) {
 		sel.addEventListener("change", function () {
 			const next = readDraftFromDom(root);
 			if (!next) return;
+			draft = next;
+			renderEditor(root);
+		});
+	});
+
+	root.querySelectorAll("[data-rxn-trig-act]").forEach(function (sel) {
+		sel.addEventListener("change", function () {
+			const next = readDraftFromDom(root);
+			if (!next) return;
+			for (let i = 0; i < next.activities.length; i++) {
+				const t = next.activities[i];
+				if (!t.activity) continue;
+				const cur = String(t.filterSlot || "");
+				const stillOk = !cur || seidrCmdListActivitiesForSlot(cur).some(function (o) {
+					return o.id === t.activity;
+				});
+				if (stillOk && cur) continue;
+				if (t.slot && seidrCmdListActivitiesForSlot(t.slot).some(function (o) {
+					return o.id === t.activity;
+				})) {
+					t.filterSlot = t.slot;
+				} else {
+					t.filterSlot = seidrCmdActivityPrimarySlot(t.activity);
+				}
+			}
 			draft = next;
 			renderEditor(root);
 		});
@@ -538,7 +591,6 @@ function openReaction(root: HTMLElement, id: number) {
 	if (!r) return;
 	editId = id;
 	draft = JSON.parse(JSON.stringify(r)) as SeidrReaction;
-	trigFilters = draft.activities.map(function () { return ""; });
 	renderList(root);
 	wireList(root);
 	renderEditor(root);

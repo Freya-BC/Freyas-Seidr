@@ -153,30 +153,42 @@ function renderActionEditor(root: HTMLElement) {
 	const host = root.querySelector("#seidr-cmd-action-editor") as HTMLElement | null;
 	if (!host) return;
 	const list = seidrListCmdActions();
-	let a = draftAction;
-	if (!a && editActionId != null) {
+	// Always prefer the saved row for the selected id (avoids stale draft after swapping).
+	let a: SeidrCmdAction | null = null;
+	if (editActionId != null) {
 		for (let i = 0; i < list.length; i++) {
 			if (list[i].id === editActionId) {
 				a = Object.assign({}, list[i]);
-				draftAction = a;
 				break;
 			}
 		}
 	}
+	if (draftAction && a && draftAction.id === a.id) {
+		// Keep in-progress edits for the same action only.
+		a = Object.assign({}, a, {
+			name: draftAction.name,
+			slot: draftAction.slot,
+			activity: draftAction.activity,
+		});
+	} else if (draftAction && !a && draftAction.id === editActionId) {
+		a = Object.assign({}, draftAction);
+	}
+	draftAction = a;
 	if (!a) {
 		host.innerHTML = '<p class="seidr-settings-hint">Add an action or pick one from the list.</p>';
 		return;
 	}
 	const slots = seidrCmdListSlots();
 	const slot = a.slot || (slots[0] ? slots[0].id : "ItemTorso");
-	const acts = seidrCmdListActivitiesForSlot(slot);
-	const hasAct = acts.some(function (x) { return x.id === a!.activity; });
-	const extra = !hasAct && a.activity
-		? '<option value="' + escapeHtml(a.activity) + '" selected>' + escapeHtml(a.activity) + " (saved)</option>"
+	const slotKnown = slots.some(function (s) { return s.id === slot; });
+	const slotExtra = !slotKnown && slot
+		? '<option value="' + escapeHtml(slot) + '">' + escapeHtml(slot) + " (saved)</option>"
 		: "";
-	const emptyOpt = !a.activity
-		? '<option value="" selected>— pick activity —</option>'
-		: '<option value="">— pick activity —</option>';
+	const acts = seidrCmdListActivitiesForSlot(slot);
+	const hasAct = !!(a.activity && acts.some(function (x) { return x.id === a!.activity; }));
+	const actExtra = a.activity && !hasAct
+		? '<option value="' + escapeHtml(a.activity) + '">' + escapeHtml(a.activity) + " (saved)</option>"
+		: "";
 	host.innerHTML = [
 		'<div class="seidr-settings-field-row">',
 		'<span class="seidr-settings-field-label">Call name</span>',
@@ -185,18 +197,24 @@ function renderActionEditor(root: HTMLElement) {
 		"</div>",
 		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
 		'<span class="seidr-settings-field-label">Slot</span>',
-		'<select id="seidr-cmd-action-slot">' + opts(slots, slot) + "</select>",
+		'<select id="seidr-cmd-action-slot">' + slotExtra + opts(slots, "") + "</select>",
 		"</div>",
 		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
 		'<span class="seidr-settings-field-label">Activity</span>',
-		'<select id="seidr-cmd-action-activity">' + emptyOpt + extra + opts(acts, a.activity || "") + "</select>",
+		'<select id="seidr-cmd-action-activity">' +
+		'<option value="">— pick activity —</option>' + actExtra + opts(acts, "") + "</select>",
 		"</div>",
-		'<p class="seidr-settings-hint">Slot first, then activities available for that zone (Club / Seidr / mods).</p>',
+		'<p class="seidr-settings-hint">Slot first, then activities for that zone (Club / Seidr / mods). Item-tool activities are marked (item).</p>',
 		'<div class="seidr-settings-row seidr-cmd-editor-actions">',
 		'<button type="button" class="seidr-act-btn" id="seidr-cmd-action-save">Save action</button>',
 		'<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-cmd-action-del">Delete</button>',
 		"</div>",
 	].join("");
+	// Force values after build — HTML "selected" alone is flaky when swapping actions.
+	const slotEl = host.querySelector("#seidr-cmd-action-slot") as HTMLSelectElement | null;
+	const actEl = host.querySelector("#seidr-cmd-action-activity") as HTMLSelectElement | null;
+	if (slotEl) slotEl.value = slot;
+	if (actEl) actEl.value = a.activity || "";
 }
 
 function readPersonDraft(root: HTMLElement): SeidrCmdPerson | null {
@@ -306,6 +324,7 @@ function bindActionsPicker(root: HTMLElement) {
 	pick.addEventListener("change", function () {
 		const id = parseInt(pick.value || "0", 10);
 		if (!id) return;
+		// Drop unsaved edits from the previous action; load the saved row.
 		editActionId = id;
 		draftAction = null;
 		const list = seidrListCmdActions();

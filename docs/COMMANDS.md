@@ -50,6 +50,8 @@ These bindings power `/a <person> <action-name>`.
 4. Pick **Slot** first (body/clothing zone), then **Activity** for that slot (list refreshes after Slot).
 5. Click **Save action**.
 
+Activity names in Seidr lists prefer **English** Club dictionary labels (e.g. **Brush Hair** on Head), even if your Club language is Chinese. Mod activities whose internal name is already Chinese stay as-is.
+
 You can bind a call name to a stock Club activity, a Seidr hold/undress, a custom Activity Menu action, or another mod’s activity — as long as it appears for that slot. Max **50**.
 
 `/strip`, `/poses`, `/animation`, and `/seidr` do **not** need rows here.

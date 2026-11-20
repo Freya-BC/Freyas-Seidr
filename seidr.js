@@ -1,4 +1,4 @@
-/* Seidr v2.0.61 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.65 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.61";
+  Seidr.VERSION = "2.0.65";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2080,7 +2080,7 @@
   var SEIDR_REACTION_PHRASE_MAX = 80;
   var SEIDR_REACTION_ACTIVITIES_MAX = 12;
   function seidrDefaultReactionActivityTrigger() {
-    return { activity: "", whenIPerform: false, whenOnMe: true, slot: "" };
+    return { activity: "", whenIPerform: false, whenOnMe: true, slot: "", filterSlot: "" };
   }
   function seidrDefaultReactionSayStep() {
     return { kind: "say", text: "" };
@@ -2114,11 +2114,14 @@
     const d = raw;
     const activity = String(d.activity || "").trim().slice(0, 64);
     const slot = typeof d.slot === "string" ? d.slot.trim().slice(0, 48) : "";
+    let filterSlot = typeof d.filterSlot === "string" ? d.filterSlot.trim().slice(0, 48) : "";
+    if (!filterSlot && slot) filterSlot = slot;
     return {
       activity,
       whenIPerform: d.whenIPerform === true,
       whenOnMe: d.whenOnMe === true,
-      slot
+      slot,
+      filterSlot
     };
   }
   function seidrNormalizeReactionStep(raw) {
@@ -8332,6 +8335,35 @@
   Seidr.syncUserActions = seidrSyncUserActions;
 
   // src/commands/catalog.ts
+  var enActivityDict = null;
+  function activityDictPath() {
+    try {
+      if (typeof ScreenFileGetPath === "function") {
+        return String(ScreenFileGetPath("ActivityDictionary.csv", "Character", "Preference") || "");
+      }
+    } catch (e) {
+    }
+    return "Screens/Character/Preference/ActivityDictionary.csv";
+  }
+  function ensureEnActivityDict() {
+    if (enActivityDict && Object.keys(enActivityDict).length > 0) return enActivityDict;
+    const next = {};
+    try {
+      if (typeof ActivityDictionaryLoad === "function") ActivityDictionaryLoad();
+      const path = activityDictPath();
+      const lines = typeof CommonCSVCache !== "undefined" && path ? CommonCSVCache[path] : null;
+      if (Array.isArray(lines)) {
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          if (!line || !line[0] || line[1] == null) continue;
+          next[String(line[0])] = String(line[1]);
+        }
+      }
+    } catch (e) {
+    }
+    if (Object.keys(next).length > 0) enActivityDict = next;
+    return next;
+  }
   function activityDictLookup(key) {
     try {
       if (typeof ActivityDictionaryLoad !== "function") return null;
@@ -8347,20 +8379,82 @@
       return null;
     }
   }
+  function activityLookupPreferEn(key) {
+    const en = ensureEnActivityDict()[key];
+    if (typeof en === "string" && en && en.indexOf("MISSING") < 0) return en;
+    return activityDictLookup(key);
+  }
+  function findActivityDef(name) {
+    try {
+      if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return null;
+      for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+        const a = ActivityFemale3DCG[i];
+        if (a && a.Name === name) return a;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
   function activityLabel(name, group) {
     if (group) {
       const keys = [
-        "Label-ChatSelf-" + group + "-" + name,
-        "Label-ChatOther-" + group + "-" + name
+        "Label-ChatOther-" + group + "-" + name,
+        "Label-ChatSelf-" + group + "-" + name
       ];
       for (let i = 0; i < keys.length; i++) {
-        const t = activityDictLookup(keys[i]);
+        const t = activityLookupPreferEn(keys[i]);
         if (t) return t;
       }
     }
-    const generic = activityDictLookup("Activity" + name);
+    const def = findActivityDef(name);
+    const zones = [];
+    if (def) {
+      if (Array.isArray(def.Target)) {
+        for (let i = 0; i < def.Target.length; i++) zones.push(String(def.Target[i]));
+      }
+      if (Array.isArray(def.TargetSelf)) {
+        for (let i = 0; i < def.TargetSelf.length; i++) {
+          const z = String(def.TargetSelf[i]);
+          if (zones.indexOf(z) < 0) zones.push(z);
+        }
+      }
+    }
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      const t = activityLookupPreferEn("Label-ChatOther-" + z + "-" + name) || activityLookupPreferEn("Label-ChatSelf-" + z + "-" + name);
+      if (t) return t;
+    }
+    const generic = activityLookupPreferEn("Activity" + name);
     if (generic) return generic;
     return name;
+  }
+  function activityNeedsItem(def) {
+    const prereq = def && Array.isArray(def.Prerequisite) ? def.Prerequisite : [];
+    for (let i = 0; i < prereq.length; i++) {
+      const p = String(prereq[i] || "");
+      if (p.indexOf("Needs-") === 0 || p.indexOf("TargetNeeds-") === 0) return true;
+    }
+    return false;
+  }
+  function activityOpt(name, group) {
+    let label = activityLabel(name, group);
+    const def = findActivityDef(name);
+    if (def && activityNeedsItem(def)) label += " (item)";
+    return { id: name, label };
+  }
+  function activityTargetsSlot(a, slot) {
+    if (!a || !slot) return false;
+    if (Array.isArray(a.Target) && a.Target.indexOf(slot) >= 0) return true;
+    if (Array.isArray(a.TargetSelf) && a.TargetSelf.indexOf(slot) >= 0) return true;
+    if (a.TargetSelf === true && Array.isArray(a.Target) && a.Target.indexOf(slot) >= 0) return true;
+    return false;
+  }
+  function seidrCmdActivityPrimarySlot(activityName) {
+    const def = findActivityDef(String(activityName || ""));
+    if (!def) return "";
+    if (Array.isArray(def.Target) && def.Target[0]) return String(def.Target[0]);
+    if (Array.isArray(def.TargetSelf) && def.TargetSelf[0]) return String(def.TargetSelf[0]);
+    return "";
   }
   function seidrCmdListSlots() {
     const out = [];
@@ -8407,7 +8501,7 @@
         const a = ActivityFemale3DCG[i];
         if (!a || !a.Name || seen[a.Name]) continue;
         seen[a.Name] = true;
-        out.push({ id: a.Name, label: activityLabel(a.Name) });
+        out.push(activityOpt(a.Name));
       }
     } catch (e) {
     }
@@ -8425,12 +8519,10 @@
       for (let i = 0; i < ActivityFemale3DCG.length; i++) {
         const a = ActivityFemale3DCG[i];
         if (!a || !a.Name) continue;
-        const t = Array.isArray(a.Target) && a.Target.indexOf(s) >= 0;
-        const ts = Array.isArray(a.TargetSelf) && a.TargetSelf.indexOf(s) >= 0;
-        if (!t && !ts) continue;
+        if (!activityTargetsSlot(a, s)) continue;
         if (seen[a.Name]) continue;
         seen[a.Name] = true;
-        out.push({ id: a.Name, label: activityLabel(a.Name, s) });
+        out.push(activityOpt(a.Name, s));
       }
     } catch (e) {
     }
@@ -10846,28 +10938,40 @@
     const host = root4.querySelector("#seidr-cmd-action-editor");
     if (!host) return;
     const list = seidrListCmdActions();
-    let a = draftAction;
-    if (!a && editActionId != null) {
+    let a = null;
+    if (editActionId != null) {
       for (let i = 0; i < list.length; i++) {
         if (list[i].id === editActionId) {
           a = Object.assign({}, list[i]);
-          draftAction = a;
           break;
         }
       }
     }
+    if (draftAction && a && draftAction.id === a.id) {
+      a = Object.assign({}, a, {
+        name: draftAction.name,
+        slot: draftAction.slot,
+        activity: draftAction.activity
+      });
+    } else if (draftAction && !a && draftAction.id === editActionId) {
+      a = Object.assign({}, draftAction);
+    }
+    draftAction = a;
     if (!a) {
       host.innerHTML = '<p class="seidr-settings-hint">Add an action or pick one from the list.</p>';
       return;
     }
     const slots = seidrCmdListSlots();
     const slot = a.slot || (slots[0] ? slots[0].id : "ItemTorso");
-    const acts = seidrCmdListActivitiesForSlot(slot);
-    const hasAct = acts.some(function(x) {
-      return x.id === a.activity;
+    const slotKnown = slots.some(function(s) {
+      return s.id === slot;
     });
-    const extra = !hasAct && a.activity ? '<option value="' + escapeHtml3(a.activity) + '" selected>' + escapeHtml3(a.activity) + " (saved)</option>" : "";
-    const emptyOpt = !a.activity ? '<option value="" selected>\u2014 pick activity \u2014</option>' : '<option value="">\u2014 pick activity \u2014</option>';
+    const slotExtra = !slotKnown && slot ? '<option value="' + escapeHtml3(slot) + '">' + escapeHtml3(slot) + " (saved)</option>" : "";
+    const acts = seidrCmdListActivitiesForSlot(slot);
+    const hasAct = !!(a.activity && acts.some(function(x) {
+      return x.id === a.activity;
+    }));
+    const actExtra = a.activity && !hasAct ? '<option value="' + escapeHtml3(a.activity) + '">' + escapeHtml3(a.activity) + " (saved)</option>" : "";
     host.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Call name</span>',
@@ -10875,18 +10979,22 @@
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Slot</span>',
-      '<select id="seidr-cmd-action-slot">' + opts(slots, slot) + "</select>",
+      '<select id="seidr-cmd-action-slot">' + slotExtra + opts(slots, "") + "</select>",
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Activity</span>',
-      '<select id="seidr-cmd-action-activity">' + emptyOpt + extra + opts(acts, a.activity || "") + "</select>",
+      '<select id="seidr-cmd-action-activity"><option value="">\u2014 pick activity \u2014</option>' + actExtra + opts(acts, "") + "</select>",
       "</div>",
-      '<p class="seidr-settings-hint">Slot first, then activities available for that zone (Club / Seidr / mods).</p>',
+      '<p class="seidr-settings-hint">Slot first, then activities for that zone (Club / Seidr / mods). Item-tool activities are marked (item).</p>',
       '<div class="seidr-settings-row seidr-cmd-editor-actions">',
       '<button type="button" class="seidr-act-btn" id="seidr-cmd-action-save">Save action</button>',
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-cmd-action-del">Delete</button>',
       "</div>"
     ].join("");
+    const slotEl = host.querySelector("#seidr-cmd-action-slot");
+    const actEl = host.querySelector("#seidr-cmd-action-activity");
+    if (slotEl) slotEl.value = slot;
+    if (actEl) actEl.value = a.activity || "";
   }
   function readPersonDraft(root4) {
     if (editPersonId == null) return null;
@@ -12110,11 +12218,6 @@
   // src/reactions/ui.ts
   var editId = null;
   var draft = null;
-  var trigFilters = [];
-  function syncTrigFiltersLen(n) {
-    while (trigFilters.length < n) trigFilters.push("");
-    if (trigFilters.length > n) trigFilters.length = n;
-  }
   function escapeHtml4(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
@@ -12151,12 +12254,11 @@
     const list = filterSlot ? seidrCmdListActivitiesForSlot(filterSlot) : seidrCmdListAllActivities();
     const extra = selected && !list.some(function(o) {
       return o.id === selected;
-    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (saved)</option>" : "";
-    const empty = !selected ? '<option value="" selected>\u2014 Activity \u2014</option>' : '<option value="">\u2014 Activity \u2014</option>';
+    }) ? '<option value="' + escapeHtml4(selected) + '">' + escapeHtml4(selected) + " (saved)</option>" : "";
     const opts4 = list.map(function(o) {
-      return '<option value="' + escapeHtml4(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml4(o.label) + "</option>";
+      return '<option value="' + escapeHtml4(o.id) + '">' + escapeHtml4(o.label) + "</option>";
     }).join("");
-    return empty + extra + opts4;
+    return '<option value="">\u2014 Activity \u2014</option>' + extra + opts4;
   }
   function animationOptionsHtml(selectedId) {
     const list = seidrListAnimations();
@@ -12186,13 +12288,21 @@
     const known = slots.some(function(s) {
       return s.id === sel;
     });
-    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '" selected>' + escapeHtml4(sel) + " (saved)</option>" : "";
+    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '">' + escapeHtml4(sel) + " (saved)</option>" : "";
     return '<option value="">' + escapeHtml4(emptyLabel) + "</option>" + extra + slots.map(function(s) {
-      return '<option value="' + escapeHtml4(s.id) + '"' + (s.id === sel ? " selected" : "") + ">" + escapeHtml4(s.label) + " (" + escapeHtml4(s.id) + ")</option>";
+      return '<option value="' + escapeHtml4(s.id) + '">' + escapeHtml4(s.label) + " (" + escapeHtml4(s.id) + ")</option>";
     }).join("");
   }
+  function resolveFilterSlot(t) {
+    const saved = String(t.filterSlot || "").trim();
+    if (saved) return saved;
+    const match = String(t.slot || "").trim();
+    if (match) return match;
+    if (t.activity) return seidrCmdActivityPrimarySlot(t.activity);
+    return "";
+  }
   function triggerRowHtml(t, index) {
-    const filterSlot = trigFilters[index] || "";
+    const filterSlot = resolveFilterSlot(t);
     const matchSlot = t.slot || "";
     return [
       '<div class="seidr-settings-sec" data-rxn-trig="' + index + '" style="margin-top:8px;padding:8px;">',
@@ -12208,7 +12318,7 @@
       '<span class="seidr-settings-field-label">On slot</span>',
       "<select data-rxn-trig-slot>" + slotOptionsHtml(matchSlot, "Any slot") + "</select>",
       "</div>",
-      '<p class="seidr-settings-hint">Filter by Slot narrows the Activity list (Caress lives on many zones). On slot is the match filter when the activity fires (Any = activity name only).</p>',
+      '<p class="seidr-settings-hint">Filter by Slot narrows the Activity list and is saved with the reaction. On slot is the match filter when it fires (Any = activity name only).</p>',
       '<div class="seidr-settings-row" style="margin-top:6px;gap:12px;display:flex;flex-wrap:wrap;align-items:center;">',
       '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-perf' + (t.whenIPerform ? " checked" : "") + " /> I perform</label>",
       '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-onme' + (t.whenOnMe ? " checked" : "") + " /> On me</label>",
@@ -12216,6 +12326,21 @@
       "</div>",
       "</div>"
     ].join("");
+  }
+  function applyTriggerSelectValues(root4, activities) {
+    const rows = root4.querySelectorAll("[data-rxn-trig]");
+    for (let i = 0; i < rows.length; i++) {
+      const t = activities[i];
+      if (!t) continue;
+      const row = rows[i];
+      const filterEl = row.querySelector("[data-rxn-trig-filter]");
+      const actEl = row.querySelector("[data-rxn-trig-act]");
+      const slotEl = row.querySelector("[data-rxn-trig-slot]");
+      const filterSlot = resolveFilterSlot(t);
+      if (filterEl) filterEl.value = filterSlot;
+      if (actEl) actEl.value = t.activity || "";
+      if (slotEl) slotEl.value = t.slot || "";
+    }
   }
   function stepSummary(step) {
     if (step.kind === "say") {
@@ -12310,22 +12435,32 @@
     const phrase = (phraseEl && phraseEl.value || "").trim().slice(0, SEIDR_REACTION_PHRASE_MAX);
     const onClimax = !!(climaxEl && climaxEl.checked);
     const activities = [];
-    const nextFilters = [];
     root4.querySelectorAll("[data-rxn-trig]").forEach(function(row) {
       const act2 = row.querySelector("[data-rxn-trig-act]")?.value || "";
       const filter = row.querySelector("[data-rxn-trig-filter]")?.value || "";
       const slot = row.querySelector("[data-rxn-trig-slot]")?.value || "";
       const whenIPerform = !!row.querySelector("[data-rxn-trig-perf]")?.checked;
       const whenOnMe = !!row.querySelector("[data-rxn-trig-onme]")?.checked;
-      nextFilters.push(String(filter).trim());
+      const activity = String(act2).trim();
+      let filterSlot = String(filter).trim();
+      const matchSlot = String(slot).trim();
+      if (!filterSlot && activity) {
+        if (matchSlot && seidrCmdListActivitiesForSlot(matchSlot).some(function(o) {
+          return o.id === activity;
+        })) {
+          filterSlot = matchSlot;
+        } else {
+          filterSlot = seidrCmdActivityPrimarySlot(activity);
+        }
+      }
       activities.push({
-        activity: String(act2).trim(),
+        activity,
         whenIPerform,
         whenOnMe,
-        slot: String(slot).trim()
+        slot: matchSlot,
+        filterSlot
       });
     });
-    trigFilters = nextFilters;
     const steps = [];
     root4.querySelectorAll("[data-rxn-step]").forEach(function(card) {
       const kind = card.querySelector("[data-rxn-step-kind]")?.value || "say";
@@ -12374,7 +12509,6 @@
       host.innerHTML = "";
       return;
     }
-    syncTrigFiltersLen(draft.activities.length);
     const firstAnim = seidrListAnimations()[0];
     const triggersHtml = draft.activities.length ? draft.activities.map(triggerRowHtml).join("") : '<p class="seidr-settings-hint">No activity triggers. Add one, a Phrase, or On climax.</p>';
     const stepsHtml = draft.steps.map(stepCardHtml).join("");
@@ -12413,6 +12547,7 @@
       '<p class="seidr-cmd-msg" id="seidr-rxn-msg"></p>',
       firstAnim ? "" : '<p class="seidr-settings-hint">Tip: define Animations first if you want Animation steps.</p>'
     ].join("");
+    applyTriggerSelectValues(host, draft.activities);
     wireEditor(root4);
   }
   function rebuildFromDom(root4) {
@@ -12448,7 +12583,6 @@
         const next = readDraftFromDom(root4);
         if (!next || idx < 0) return;
         next.activities.splice(idx, 1);
-        trigFilters.splice(idx, 1);
         draft = next;
         renderEditor(root4);
       });
@@ -12457,6 +12591,30 @@
       sel.addEventListener("change", function() {
         const next = readDraftFromDom(root4);
         if (!next) return;
+        draft = next;
+        renderEditor(root4);
+      });
+    });
+    root4.querySelectorAll("[data-rxn-trig-act]").forEach(function(sel) {
+      sel.addEventListener("change", function() {
+        const next = readDraftFromDom(root4);
+        if (!next) return;
+        for (let i = 0; i < next.activities.length; i++) {
+          const t = next.activities[i];
+          if (!t.activity) continue;
+          const cur = String(t.filterSlot || "");
+          const stillOk = !cur || seidrCmdListActivitiesForSlot(cur).some(function(o) {
+            return o.id === t.activity;
+          });
+          if (stillOk && cur) continue;
+          if (t.slot && seidrCmdListActivitiesForSlot(t.slot).some(function(o) {
+            return o.id === t.activity;
+          })) {
+            t.filterSlot = t.slot;
+          } else {
+            t.filterSlot = seidrCmdActivityPrimarySlot(t.activity);
+          }
+        }
         draft = next;
         renderEditor(root4);
       });
@@ -12546,9 +12704,6 @@
     if (!r) return;
     editId = id;
     draft = JSON.parse(JSON.stringify(r));
-    trigFilters = draft.activities.map(function() {
-      return "";
-    });
     renderList(root4);
     wireList(root4);
     renderEditor(root4);
