@@ -32,6 +32,8 @@ export type SeidrActionEffects = {
 	arousal?: { enabled: boolean; activity: string; reverse?: boolean };
 	sound?: { enabled: boolean; sound: string };
 	pose?: { enabled: boolean; pose: string };
+	/** Play a Seidr Animation (pose/face clip or Wiggle) on the local Player when this action runs. */
+	animation?: { enabled: boolean; animationId: number };
 };
 
 /** Optional restraint allowlist entry (Asset.Name on an Item* group). Empty list = no filter. */
@@ -604,6 +606,13 @@ function normalizeEffects(raw: unknown): SeidrActionEffects {
 			pose: typeof e.pose.pose === "string" && e.pose.pose
 				? e.pose.pose
 				: "Kneel",
+		};
+	}
+	if (e.animation && typeof e.animation === "object") {
+		const id = Number((e.animation as { animationId?: number }).animationId);
+		out.animation = {
+			enabled: !!e.animation.enabled,
+			animationId: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0,
 		};
 	}
 	return out;

@@ -4,17 +4,38 @@ import {
 	SEIDR_ANIMATIONS_MAX,
 	SEIDR_ANIM_STEPS_MAX,
 	SEIDR_ANIM_WAIT_TOTAL_MAX,
+	SEIDR_WIGGLES_MAX,
+	seidrAnimIsWiggle,
 	seidrAnimWaitTotal,
+	seidrCountClipAnimations,
+	seidrCountWiggleAnimations,
 	seidrDefaultAnimation,
 	seidrNormalizeAnimation,
 	seidrNormalizeAnimationsBag,
 	type SeidrAnimation,
 	type SeidrAnimationsBag,
+	type SeidrWiggleSlot,
 } from "./model";
+import { seidrMergeStockWiggles } from "./wigglePresets";
+
+let stockMergeBusy = false;
 
 export function seidrGetAnimationsBag(): SeidrAnimationsBag {
 	const s = seidrGetSettings() as { animations?: unknown };
-	return seidrNormalizeAnimationsBag(s.animations);
+	let bag = seidrNormalizeAnimationsBag(s.animations);
+	if (!stockMergeBusy) {
+		stockMergeBusy = true;
+		try {
+			const merged = seidrMergeStockWiggles(bag);
+			if (merged.added > 0) {
+				seidrSaveAnimationsBag(merged.bag);
+				bag = merged.bag;
+			}
+		} finally {
+			stockMergeBusy = false;
+		}
+	}
+	return bag;
 }
 
 export function seidrSaveAnimationsBag(bag: SeidrAnimationsBag): { ok: boolean; error?: string } {
@@ -24,6 +45,14 @@ export function seidrSaveAnimationsBag(bag: SeidrAnimationsBag): { ok: boolean; 
 
 export function seidrListAnimations(): SeidrAnimation[] {
 	return seidrGetAnimationsBag().list.slice();
+}
+
+export function seidrListClipAnimations(): SeidrAnimation[] {
+	return seidrListAnimations().filter(function (a) { return !seidrAnimIsWiggle(a); });
+}
+
+export function seidrListWiggleAnimations(): SeidrAnimation[] {
+	return seidrListAnimations().filter(function (a) { return seidrAnimIsWiggle(a); });
 }
 
 export function seidrFindAnimationById(id: number): SeidrAnimation | null {
@@ -53,17 +82,41 @@ export function seidrFilterAnimationsByPrefix(prefix: string): SeidrAnimation[] 
 	});
 }
 
+function wigglePrimaryTaken(
+	bag: SeidrAnimationsBag,
+	slot: SeidrWiggleSlot,
+	assetName: string,
+	exceptId: number
+): boolean {
+	for (let i = 0; i < bag.list.length; i++) {
+		const a = bag.list[i];
+		if (a.id === exceptId) continue;
+		if (a.kind === "wiggle" && a.slot === slot && a.primary && a.primary.assetName === assetName) {
+			return true;
+		}
+	}
+	return false;
+}
+
 export function seidrUpsertAnimation(anim: SeidrAnimation): { ok: boolean; error?: string; animation?: SeidrAnimation } {
 	const norm = seidrNormalizeAnimation(anim);
 	if (!norm) return { ok: false, error: "Invalid animation" };
 	if (!norm.name.trim()) return { ok: false, error: "Name required" };
-	if (norm.steps.length > SEIDR_ANIM_STEPS_MAX) {
-		return { ok: false, error: "Max " + SEIDR_ANIM_STEPS_MAX + " steps" };
+
+	if (seidrAnimIsWiggle(norm)) {
+		if (!norm.primary || !norm.secondary || !norm.slot) {
+			return { ok: false, error: "Wiggle needs primary and secondary" };
+		}
+	} else {
+		if (norm.steps.length > SEIDR_ANIM_STEPS_MAX) {
+			return { ok: false, error: "Max " + SEIDR_ANIM_STEPS_MAX + " steps" };
+		}
+		const total = seidrAnimWaitTotal(norm.steps);
+		if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
+			return { ok: false, error: "Total wait exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s" };
+		}
 	}
-	const total = seidrAnimWaitTotal(norm.steps);
-	if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
-		return { ok: false, error: "Total wait exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s" };
-	}
+
 	const bag = seidrGetAnimationsBag();
 	const nameKey = norm.name.toLowerCase();
 	for (let i = 0; i < bag.list.length; i++) {
@@ -71,6 +124,12 @@ export function seidrUpsertAnimation(anim: SeidrAnimation): { ok: boolean; error
 			return { ok: false, error: "Name already used" };
 		}
 	}
+	if (seidrAnimIsWiggle(norm) && norm.slot && norm.primary) {
+		if (wigglePrimaryTaken(bag, norm.slot, norm.primary.assetName, norm.id)) {
+			return { ok: false, error: "A wiggle for that item already exists" };
+		}
+	}
+
 	let found = false;
 	for (let j = 0; j < bag.list.length; j++) {
 		if (bag.list[j].id === norm.id) {
@@ -80,7 +139,11 @@ export function seidrUpsertAnimation(anim: SeidrAnimation): { ok: boolean; error
 		}
 	}
 	if (!found) {
-		if (bag.list.length >= SEIDR_ANIMATIONS_MAX) {
+		if (seidrAnimIsWiggle(norm)) {
+			if (seidrCountWiggleAnimations(bag.list) >= SEIDR_WIGGLES_MAX) {
+				return { ok: false, error: "Wiggle limit reached (" + SEIDR_WIGGLES_MAX + ")" };
+			}
+		} else if (seidrCountClipAnimations(bag.list) >= SEIDR_ANIMATIONS_MAX) {
 			return { ok: false, error: "Animation limit reached (" + SEIDR_ANIMATIONS_MAX + ")" };
 		}
 		if (norm.id < 1) {
@@ -104,7 +167,7 @@ export function seidrDeleteAnimation(id: number): { ok: boolean; error?: string 
 
 export function seidrAddAnimation(): SeidrAnimation | null {
 	const bag = seidrGetAnimationsBag();
-	if (bag.list.length >= SEIDR_ANIMATIONS_MAX) return null;
+	if (seidrCountClipAnimations(bag.list) >= SEIDR_ANIMATIONS_MAX) return null;
 	const a = seidrDefaultAnimation(bag.nextId);
 	bag.nextId = a.id + 1;
 	bag.list.push(a);

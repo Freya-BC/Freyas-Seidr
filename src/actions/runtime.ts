@@ -1,5 +1,6 @@
 /** Register user Actions as Club activities + ActivityRun side effects. */
 import { Seidr } from "../seidr";
+import { seidrPlayAnimation } from "../animations/play";
 import { seidrActionAvailable } from "./conditions";
 import { seidrSyncPose } from "../poses/apply";
 import {
@@ -359,12 +360,16 @@ function runSideEffects(action: SeidrAction, actor: any, acted: any) {
 	const fx = action.effects || {};
 	// Sound: embedded in Activity Dictionary (SeidrSound) and played via
 	// AudioPlaySoundForChatMessage on every Seidr client — same as Club Spank.
+	const self = actor === acted
+		|| (typeof actor.MemberNumber === "number" && actor.MemberNumber === acted.MemberNumber);
 	if (fx.pose && fx.pose.enabled && fx.pose.pose) {
-		const self = actor === acted
-			|| (typeof actor.MemberNumber === "number" && actor.MemberNumber === acted.MemberNumber);
 		if (self || canPoseTarget(actor, acted)) {
 			applyPose(self ? actor : acted, fx.pose.pose);
 		}
+	}
+	// Animation / Wiggle: local Player only (same as Settings → Animations playback).
+	if (fx.animation && fx.animation.enabled && fx.animation.animationId > 0 && self) {
+		seidrPlayAnimation(fx.animation.animationId).catch(function () { /* ignore */ });
 	}
 }
 

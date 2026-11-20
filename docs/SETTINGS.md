@@ -1,6 +1,6 @@
 # Settings
 
-Seidr’s settings panel is the home for almost every option: Fast Open, Drawing, Map Cuddle, command toggles, custom Activity Menu actions, chat command bindings, animations, maps, and About.
+Seidr’s settings panel is the home for almost every option: Fast Open, Drawing, Map Cuddle, command toggles, custom Activity Menu actions, chat command bindings, animations, Reaction scripts, maps, and About.
 
 Open it with:
 
@@ -9,7 +9,7 @@ Open it with:
 
 ![Settings tabs](../assets/docs/settings-tabs.png)
 
-Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**.
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Reaction** | **Maps** | **About**.
 
 ---
 
@@ -57,6 +57,17 @@ Default placement of the floating ⌂:
 - **Chat Left**, **Chat Top**, **Chat Bottom** — sit left of the chat window edge  
 
 Drag still overrides for the current session.
+
+### Fast Wiggle
+
+Optional floating button to play configured Ear / Tail / Wing wiggles (see [ANIMATIONS.md](ANIMATIONS.md)).
+
+| Setting | Default | Meaning |
+|---------|---------|---------|
+| Show Fast Wiggle Button | Off | Floating control in ChatRoom; hidden when no matching item is worn |
+| Position | Chat Bottom | Same placement options as the Room Manager launcher |
+
+Drag saves on this device only. The button is always kept clear of the Room Manager ⌂. One ready slot → click plays it; several → a small menu to the left.
 
 ### Drawing
 
@@ -166,6 +177,14 @@ Example with a custom face applied to action lines, chat, and emotes:
 
 ![Chat font in Club chat](../assets/docs/settings-general-chat-font-result.png)
 
+### Unread badge
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| Clear unread badge when focusing chat | On | Clears Club’s **Chat Message** tab/favicon notification count when you return to this browser tab or focus the chat compose box |
+
+Vanilla Club only clears that count when the window is focused **and** the chat log is scrolled to the bottom. With this on, focusing compose (or returning to the tab) clears the badge even if you were reading history. Does not change Friend List / beep unread.
+
 ### Cheats
 
 Collapsible **Cheats** block on General (self only):
@@ -181,7 +200,7 @@ Collapsible **Cheats** block on General (self only):
 Read-only usage for the synced ExtensionSettings data (all Seidr keys together):
 
 - Total stored size vs ~180 KB soft cap (+ thin progress bar)  
-- Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Commands**, **Animations**, **Settings**, **UI**  
+- Rows: **Maps** (remote only), **Rooms**, **Access**, **Backgrounds**, **Actions**, **Commands**, **Animations**, **Reactions**, **Settings**, **UI**  
 - Maps **75%** budget line (+ local maps note when present)  
 
 Refreshes when you open / refresh Settings. Saving when full is refused until you free space.
@@ -254,7 +273,34 @@ In the chat box, **Tab** opens autocomplete. Full guide: [COMMANDS.md](COMMANDS.
 
 ![Animations tab](../assets/docs/settings-animations.png)
 
-Author pose/face clips for the local Player (up to 50 animations, 20 steps, 60 s total wait). Play with `/animation` / `/ani`. Steps, face rows, and Action text screenshots: [ANIMATIONS.md](ANIMATIONS.md).
+Two sections in one bag (up to **50** total):
+
+- **Animations** — pose / face / **Wiggle-slot** clips (20 steps, 60 s total wait). Play with `/animation` / `/ani`.  
+- **Wiggle** — Ear / Tail / Wing asset-swap sets (one per base item) used by clips, Reactions, Fast Wiggle, and Action effects.
+
+Full guide (steps, wings typed Spread/Folded, Fast Wiggle): [ANIMATIONS.md](ANIMATIONS.md).
+
+---
+
+## Reaction tab
+
+Local Autoreaction scripts (up to **50**). Each reaction can trigger when:
+
+- you **perform** a listed Club activity, and/or  
+- that activity is **performed on you** (optional **Slot** filter, e.g. Ears), and/or  
+- **you** say an exact chat Phrase (case-insensitive), and/or  
+- **you** climax (orgasm, ruin, or resist).
+
+The response is a script of up to **5** steps run in order on your client only:
+
+1. **Say** — normal chat line  
+2. **Animation** — play a clip or a single named Wiggle set from the Animations tab  
+3. **Wiggle** — Ear / Tail / Wing checkboxes; plays those sets together (skips missing / not worn)  
+4. **Perform action** — a Commands Action binding, targeting **Self** or the **Issuer** (the other party of the activity; for Phrase triggers, Issuer is you)
+
+Before running, Seidr checks that animations exist and actions are available. If not, a local chat toast reports `Reaction "…" not functional: …`. Playback is not synced to other players.
+
+Full guide: [REACTIONS.md](REACTIONS.md).
 
 ---
 
@@ -277,6 +323,6 @@ First load in a chat room also posts a one-time sticky **Welcome** line in local
 
 All of the above (except background preview thumbs, **local-only** map versions and panel position/size) persist in:
 
-`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`
+`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`, `SeidrReactions`
 
 Synced with your BC account via Club ExtensionSettings; changes are uploaded after a short delay and only for the part that changed. Preview thumbnails, local-only map versions and the Room Manager panel position/size use **localStorage**.

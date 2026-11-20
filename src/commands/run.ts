@@ -5,7 +5,7 @@ import { seidrFindAnimationByName } from "../animations/store";
 import { seidrPublishActionText } from "../chat/actionText";
 import { seidrApplyClubPose, seidrCanPoseTarget } from "../poses/apply";
 import { Seidr } from "../seidr";
-import { seidrCmdActivityAvailable, seidrCmdFindItemActivity } from "./catalog";
+import { seidrRunItemActivity } from "./activityRun";
 import { seidrCmdEnableKeyForTag, type SeidrCmdEnableKey } from "./model";
 import { seidrParseCmdLine } from "./parse";
 import { seidrPoseChatTemplate } from "./poseChat";
@@ -17,8 +17,6 @@ import { seidrCmdResolveStripSlot } from "./stripCatalog";
 import { seidrCmdError, seidrCmdWarn } from "./warn";
 
 declare const Player: any;
-declare const AssetGroupGet: any;
-declare const ActivityRun: any;
 declare const ServerChatRoomGetAllowItem: any;
 declare const ChatRoomAppearanceLoadCharacter: ((C: unknown) => void) | undefined;
 
@@ -30,34 +28,12 @@ export function seidrCmdIsEnabled(tag: string): boolean {
 }
 
 function runItemActivity(target: any, zone: string, activityName: string): boolean {
-	if (!seidrCmdActivityAvailable(target, zone, activityName)) {
-		seidrCmdError(
-			"Activity \"" + activityName + "\" on " + zone + " is not available on that person right now."
-		);
+	const result = seidrRunItemActivity(target, zone, activityName);
+	if (!result.ok) {
+		seidrCmdError(result.error || "Failed to run activity.");
 		return false;
 	}
-	const ia = seidrCmdFindItemActivity(target, zone, activityName);
-	if (!ia) {
-		seidrCmdError("Could not resolve activity \"" + activityName + "\".");
-		return false;
-	}
-	try {
-		const family = (target && target.AssetFamily) || (Player && Player.AssetFamily) || "Female3DCG";
-		const groupName = (ia.Group && (ia.Group.Name || ia.Group)) || zone;
-		const group = typeof AssetGroupGet === "function"
-			? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone)
-			: { Name: zone };
-		if (typeof ActivityRun !== "function") {
-			seidrCmdError("ActivityRun unavailable");
-			return false;
-		}
-		ActivityRun(Player, target, group, ia, true);
-		return true;
-	} catch (e) {
-		console.warn("[Seidr Cmd] ActivityRun failed", e);
-		seidrCmdError("Failed to run activity.");
-		return false;
-	}
+	return true;
 }
 
 function executeActionCommand(memberRaw: string, actionRaw: string): boolean {

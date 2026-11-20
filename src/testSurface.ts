@@ -10,6 +10,7 @@ import {
 	seidrPlayAnimation,
 	seidrUpsertAnimation,
 } from "./animations/index";
+import { seidrUpsertReaction } from "./reactions/index";
 import { SEIDR_ACTION_POSES } from "./actions/model";
 import {
 	rmGetStore,
@@ -26,6 +27,7 @@ Seidr._test = Object.assign(Seidr._test || {}, {
 	playAnimation: seidrPlayAnimation,
 	deleteAnimation: seidrDeleteAnimation,
 	findAnimationByName: seidrFindAnimationByName,
+	upsertReaction: seidrUpsertReaction,
 	poseIds: function () {
 		return SEIDR_ACTION_POSES.map(function (p) { return p.id; });
 	},

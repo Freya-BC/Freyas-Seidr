@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "2.0.34";
+Seidr.VERSION = "2.0.56";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -55,6 +55,8 @@ Seidr.SHOW_ACTIONS = true;
 Seidr.SHOW_COMMANDS = true;
 /** Last-actor AC + letter/empty Tab Fast Select — Dev channel. */
 Seidr.SHOW_CMD_FAST_SELECT = true;
+/** Autoreaction (Settings → Reaction). */
+Seidr.SHOW_REACTIONS = true;
 Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
 Seidr.RM_DATA_VERSION = 1;
 /** Cap on the sum of packed (Base64) ExtensionSettings strings, in bytes. */
@@ -63,6 +65,7 @@ Seidr.RM_KEY_SETTINGS = "SeidrSettings";
 Seidr.RM_KEY_ACTIONS = "SeidrActions";
 Seidr.RM_KEY_COMMANDS = "SeidrCommands";
 Seidr.RM_KEY_ANIMATIONS = "SeidrAnimations";
+Seidr.RM_KEY_REACTIONS = "SeidrReactions";
 Seidr.RM_MAP_BUDGET_RATIO = 0.75;
 Seidr.RM_MAP_MAX = 10;
 Seidr.RM_MAP_VERSIONS_REMOTE_MAX = 10;

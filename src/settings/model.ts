@@ -7,6 +7,7 @@ import {
 } from "../actions/model";
 import { seidrNormalizeAnimationsBag } from "../animations/model";
 import { seidrNormalizeCommandsBag } from "../commands/model";
+import { seidrNormalizeReactionsBag } from "../reactions/model";
 
 export type RmLauncherPosition =
 	| "topLeft"
@@ -58,6 +59,10 @@ export type SeidrSettings = {
 	/** Floating ⌂ in ChatRoom; off hides it completely (ChatAdmin BC button unaffected). */
 	showQuickmenuButton: boolean;
 	launcherPosition: RmLauncherPosition;
+	/** Floating Fast Wiggle button in ChatRoom (off by default). */
+	showFastWiggleButton: boolean;
+	/** Default placement for Fast Wiggle (same enum as Room Manager). */
+	fastWigglePosition: RmLauncherPosition;
 	/** DrawCharacter pose offsets only (not hitboxes). */
 	drawOffsets: SeidrDrawOffsets;
 	/** When true, free-draw Left/Right/Cuddle/Hub offsets replace normal Pull/Cuddle. */
@@ -94,6 +99,11 @@ export type SeidrSettings = {
 	 * `0` = Preference → Chat → Font Size. Scaled like Club via canvas min-dimension / 1000.
 	 */
 	chatFontSize: number;
+	/**
+	 * When true, clear Club ChatMessage notification badge on window focus or compose focus
+	 * (bypasses vanilla “scrolled to end of chat log” requirement).
+	 */
+	clearUnreadOnFocus: boolean;
 	/** Up to 10 remote custom icons for Actions (URLs). */
 	customActionIcons: SeidrCustomActionIcon[];
 	/** User Actions bag (Activity Menu entries). Normalized in actions/model. */
@@ -102,6 +112,8 @@ export type SeidrSettings = {
 	commands?: unknown;
 	/** Pose/face animation clips. Normalized in animations/model. */
 	animations?: unknown;
+	/** Autoreaction scripts. Normalized in reactions/model. */
+	reactions?: unknown;
 };
 
 /** Max stored length for a chat font family name. */
@@ -329,6 +341,8 @@ export function seidrDefaultSettings(): SeidrSettings {
 		roomManagerEnabled: true,
 		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
+		showFastWiggleButton: false,
+		fastWigglePosition: "chatBottom",
 		drawOffsets: seidrDefaultDrawOffsets(),
 		drawAdvancedMode: false,
 		drawAdvancedOffsets: seidrDefaultDrawAdvancedOffsets(),
@@ -345,10 +359,12 @@ export function seidrDefaultSettings(): SeidrSettings {
 		fastOpenActionsSlot: "ItemTorso",
 		chatFont: "",
 		chatFontSize: 0,
+		clearUnreadOnFocus: true,
 		customActionIcons: [],
 		actions: { nextId: 1, list: [] },
 		commands: seidrNormalizeCommandsBag(null),
 		animations: seidrNormalizeAnimationsBag(null),
+		reactions: seidrNormalizeReactionsBag(null),
 	};
 }
 
@@ -361,6 +377,10 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
 	if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition as RmLauncherPosition) >= 0) {
 		base.launcherPosition = d.launcherPosition as RmLauncherPosition;
+	}
+	if (typeof d.showFastWiggleButton === "boolean") base.showFastWiggleButton = d.showFastWiggleButton;
+	if (typeof d.fastWigglePosition === "string" && POSITION_IDS.indexOf(d.fastWigglePosition as RmLauncherPosition) >= 0) {
+		base.fastWigglePosition = d.fastWigglePosition as RmLauncherPosition;
 	}
 	base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
 	if (typeof d.drawAdvancedMode === "boolean") base.drawAdvancedMode = d.drawAdvancedMode;
@@ -400,9 +420,13 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	base.fastOpenActionsSlot = normalizeFastOpenSlot(d.fastOpenActionsSlot);
 	base.chatFont = seidrNormalizeChatFont(d.chatFont);
 	base.chatFontSize = seidrNormalizeChatFontSize(d.chatFontSize);
+	if (typeof d.clearUnreadOnFocus === "boolean") {
+		base.clearUnreadOnFocus = d.clearUnreadOnFocus;
+	}
 	base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
 	base.actions = seidrNormalizeActionsBag(d.actions);
 	base.commands = seidrNormalizeCommandsBag(d.commands);
 	base.animations = seidrNormalizeAnimationsBag(d.animations);
+	base.reactions = seidrNormalizeReactionsBag(d.reactions);
 	return base;
 }

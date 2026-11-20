@@ -91,6 +91,9 @@ export function seidrEnsureSettingsShell() {
 		if (typeof Seidr.rmOnSettingsChanged === "function") {
 			try { Seidr.rmOnSettingsChanged(); } catch (e) { /* ignore */ }
 		}
+		if (typeof Seidr.fwOnSettingsChanged === "function") {
+			try { Seidr.fwOnSettingsChanged(); } catch (e) { /* ignore */ }
+		}
 	});
 }
 

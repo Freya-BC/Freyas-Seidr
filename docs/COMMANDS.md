@@ -262,4 +262,5 @@ Saved in `ExtensionSettings.SeidrCommands` (same ~180 KB soft cap as Room Manage
 - [SETTINGS.md](SETTINGS.md) — Commands tab overview, Tutorial  
 - [ACTIONS.md](ACTIONS.md) — custom Activity Menu actions (different feature)  
 - [ANIMATIONS.md](ANIMATIONS.md) — pose/face clips  
+- [REACTIONS.md](REACTIONS.md) — Autoreaction uses Commands Action bindings for Perform-action steps
 - [README.md](../README.md) — feature overview  

@@ -34,6 +34,12 @@ const ABOUT_FEATURES: AboutFeature[] = [
 		docPath: "/docs/view.html#ANIMATIONS",
 	},
 	{
+		title: "Reaction",
+		blurb:
+			"Local Autoreaction scripts: trigger when you perform an activity, someone acts on you, or you say a phrase — then run Say / Animation / Action steps.",
+		docPath: "/docs/view.html#REACTIONS",
+	},
+	{
 		title: "Chat Commands",
 		blurb:
 			"People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, /roommanager, and /wardrobe. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",

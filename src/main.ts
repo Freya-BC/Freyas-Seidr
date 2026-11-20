@@ -14,6 +14,7 @@ import "./arousalBars";
 import "./actions/index";
 import "./commands/index";
 import "./animations/index";
+import "./reactions/index";
 import "./poses/index";
 import "./fastOpen";
 import "./net";
@@ -41,16 +42,19 @@ Seidr.prepareReload = function () {
 	}
 	Seidr._booted = false;
 	Seidr._hookState = {};
-	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function (id) {
+	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-fw-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
-	["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function (id) {
+	["seidr-rm-root", "seidr-fw-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
 	if (typeof Seidr.poseDestroyUi === "function") {
 		try { Seidr.poseDestroyUi(); } catch (ePose) { /* ignore */ }
+	}
+	if (typeof Seidr.uninstallClearUnreadOnFocus === "function") {
+		try { Seidr.uninstallClearUnreadOnFocus(); } catch (eUnread) { /* ignore */ }
 	}
 	window.__SeidrPageLoaded = false;
 };
@@ -123,6 +127,12 @@ function installHooks() {
 	}
 	if (typeof Seidr.installPoses === "function") {
 		try { Seidr.installPoses(); } catch (e) { console.warn("[Seidr] Poses", e); }
+	}
+	if (typeof Seidr.installAnimations === "function") {
+		try { Seidr.installAnimations(); } catch (e) { console.warn("[Seidr] Animations", e); }
+	}
+	if (typeof Seidr.installReactions === "function") {
+		try { Seidr.installReactions(); } catch (e) { console.warn("[Seidr] Reactions", e); }
 	}
 	Seidr.installNet();
 	if (typeof Seidr.installNetStats === "function") {

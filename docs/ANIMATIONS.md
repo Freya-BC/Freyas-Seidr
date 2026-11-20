@@ -1,32 +1,41 @@
 # Animations
 
-Animations are short **pose and face** clips that play on **you** (the local Player). They do not pose other people in the room — use `/poses` for that.
+Animations are short clips that play on **you** (the local Player). They do not pose other people in the room — use `/poses` for that.
 
-Author under **`/seidr` → Animations**, then play from chat with `/animation` or `/ani`.
+Under **`/seidr` → Animations** you author:
+
+1. **Pose / face / Wiggle-slot clips** — play with `/animation` or `/ani`.
+2. **Wiggle sets** — Ear / Tail / Wing asset swaps used by those clips, Reactions, Fast Wiggle, and Action effects.
 
 ![Animations tab](../assets/docs/settings-animations.png)
 
 ## When to use this
 
-Use Animations for a scripted expression or pose sequence on yourself (wave, blush sequence, kneel then stand, and so on). Optional Action text can announce the clip to the room when it starts.
+- Scripted pose or expression sequence on yourself (wave, blush, kneel then stand).
+- Mix in **Wiggle** steps so ears / tail / wings react during the clip.
+- Optional Action text can announce the clip to the room when it starts.
 
 ## Limits
 
 | Limit | Value |
 |-------|-------|
-| Animations | 50 (`n/50` in the UI) |
-| Steps per animation | 20 |
+| Animations (clips) | 50 (`n/50` in the UI) |
+| Wiggle sets | 50 (`n/50 Wiggles` — separate from clips) |
+| Steps per clip | 20 |
 | Total wait across steps | 60 seconds |
+| Wiggle amount (per set) | 1–24 |
+| Wiggle delay | 100–5000 ms |
 
-## Creating an animation
+## Creating a clip
 
 1. Open **Settings → Animations**.
 2. **Add** an animation (or pick one from the dropdown).
-3. Set a **name** (this is what you type after `/animation` — keep it short and unique).
+3. Set a **name** (what you type after `/animation` — keep it short and unique).
 4. Add steps:
-   - **Pose** — Club pose (friendly labels such as Standing (legs), Hands up, Kneel, …) + wait seconds  
-   - **Face** — feature (Eyebrows / Eyes / Mouth / Blush / Fluids), expression, duration (`keep` / 5 / 15 / 30), + wait seconds  
-5. Optional **Action text** — public Club Action line posted when the clip **starts** (same token chips as Actions: `SourceCharacter`, `PronounPossessive`, …). Leave empty for silent play.  
+   - **Pose** — Club pose (Standing (legs), Hands up, Kneel, …) + wait seconds  
+   - **Face** — feature (Eyebrows / Eyes / Mouth / Blush / Fluids), expression, duration (`keep` / 5 / 15 / 30), + wait  
+   - **Wiggle** — check **Ear** / **Tail** / **Wing**; plays those configured Wiggle sets **at the same time** (any missing or not worn are skipped), then wait  
+5. Optional **Action text** — public Club Action line when the clip **starts** (same token chips as Actions). Leave empty for silent play.  
 6. **Save animation**.
 
 Wait steppers nudge by small increments; the UI shows the total wait for the clip. Stay under the 60 s total.
@@ -43,6 +52,10 @@ Each **+ Pose** row picks a Club pose and a **Wait (s)** before the next step. T
 
 Each **+ Face** row sets **Feature**, **Expression**, **Duration** (`keep` / timed), and **Wait (s)**.
 
+### Wiggle steps
+
+**+ Wiggle** adds Ear / Tail / Wing checkboxes. Configure the actual swap sets under **Animations → Wiggle** first. Example: check Ear + Tail so both wiggle together when the step runs; if only the tail is worn, only the tail plays.
+
 ### Action text
 
 ![Action text](../assets/docs/settings-animations-text.png)
@@ -58,10 +71,38 @@ Optional line posted once when play starts (Club tags, max 500). Same token chip
 
 - Plays on **you only** (not on other room members).
 - If Action text is set, the room sees that line once when playback starts.
-- Name match is case-insensitive against your saved animation names.
+- Name match is case-insensitive against your saved animation names (clips **and** named Wiggle sets).
 - Tab autocomplete lists your animations while the command is enabled.
 
 Unknown names warn locally in chat. Define them under Settings → Animations first.
+
+## Wiggle (Ear / Tail / Wing)
+
+Under **Animations → Wiggle**, add a set while wearing the **primary** item (Echo slots count).
+
+1. **Add Ear / Tail / Wing** while that item is worn.  
+2. Choose a **secondary** snapshot:  
+   - **Automatch** — Echo mirror names (`镜像` / Mirror) when available; for typed wings (e.g. DragonWings Spread ↔ Folded) picks the other typed option.  
+   - **Custom** — wear the other asset **or** the same wing with another type, then capture.  
+3. Colors: **Snapshot** (saved) or **Autoupdate** (use current worn colors each play).  
+4. Set **Amount** and **Delay**, then **Save**. **Test** from the editor — if the primary is not worn, Seidr equips it for the test and restores whatever was on that slot afterward.
+
+Rules of thumb:
+
+- One set per base item (e.g. one Fox Tail config).  
+- Primary must be worn to play that slot.  
+- Ear / Tail / Wing can run **together** (clip Wiggle step, Reaction Wiggle step, or overlapping plays).  
+- Wings often have no mirror — use typed Spread/Folded or two different wing assets.  
+- Stock sets are added automatically when missing (Echo mirror tails, ear pairs, **Black Kitty Ears - High** ↔ **Black Kitty Ears - Echo**, Elf Ears ↔ **Elf Ears 2**, typed Dragon wings). If a secondary never loads, install Echo (or the mod that adds it) — play reports **Asset counterpart is missing**.
+
+## Fast Wiggle
+
+**Settings → General → Fast Wiggle**: optional floating button (default position Chat Bottom).
+
+- Shows only when a configured item is worn **and** its counterpart asset is available.  
+- One ready slot → click plays it.  
+- Several → a small menu to the left (same look as the Room Manager button).  
+- Drag to move; position is saved on this device. Never overlaps the Room Manager ⌂.
 
 ## Enable / disable
 
@@ -71,9 +112,10 @@ Fast Select (when enabled) can map letter `d` + Tab to `/animation `.
 
 ## Common mistakes
 
-- Expecting the clip to run on someone else — use `/poses` for other people.
-- Forgetting to **Save animation** before testing in chat.
-- Confusing this with the **pose effect** on a Custom Action (Activity Menu) — different feature.
+- Expecting the clip to run on someone else — use `/poses` for other people.  
+- Forgetting to **Save** before testing in chat.  
+- Adding a Wiggle **step** without a matching Wiggle **set** for that slot — the step quietly skips.  
+- Confusing this with the **pose** or **Play animation** effect on a Custom Action (Activity Menu) — related, but authored under Actions.
 
 ## Storage
 
@@ -82,5 +124,6 @@ Animations live in their own synced key `ExtensionSettings.SeidrAnimations`. See
 ## Related
 
 - [COMMANDS.md](COMMANDS.md) — `/animation` / `/ani`, `/poses` / `/p`  
-- [ACTIONS.md](ACTIONS.md) — Action Menu pose effect (different feature)  
+- [ACTIONS.md](ACTIONS.md) — Activity Menu **Play animation** effect  
+- [REACTIONS.md](REACTIONS.md) — Autoreaction Animation / Wiggle steps  
 - [README.md](../README.md) — feature overview  

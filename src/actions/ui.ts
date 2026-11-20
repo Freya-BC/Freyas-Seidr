@@ -1,5 +1,6 @@
 /** Settings → Actions tab: list + editor */
 import { Seidr } from "../seidr";
+import { seidrListAnimations } from "../animations/store";
 import {
 	SEIDR_ACTION_AUDIENCES,
 	SEIDR_ACTION_CHAT_MAX,
@@ -83,6 +84,18 @@ function stringOpts(list: string[], selected: string): string {
 	return list.map(function (o) {
 		return '<option value="' + escapeHtml(o) + '"' + (o === selected ? " selected" : "") + ">" +
 			escapeHtml(o) + "</option>";
+	}).join("");
+}
+
+function animationEffectOpts(selectedId: number): string {
+	const list = seidrListAnimations();
+	if (!list.length) {
+		return '<option value="0">No animations — add under Animations</option>';
+	}
+	return '<option value="0">— Animation —</option>' + list.map(function (a) {
+		const tag = a.kind === "wiggle" ? " [wiggle]" : "";
+		return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" +
+			escapeHtml(a.name) + tag + "</option>";
 	}).join("");
 }
 
@@ -389,6 +402,7 @@ function renderEditor(root: HTMLElement) {
 	const arousal = a.effects.arousal || { enabled: false, activity: "Caress", reverse: false };
 	const sound = a.effects.sound || { enabled: false, sound: SEIDR_ACTION_SOUNDS[0] };
 	const pose = a.effects.pose || { enabled: false, pose: "Kneel" };
+	const animFx = a.effects.animation || { enabled: false, animationId: 0 };
 	const chatOther = a.chatOther || seidrDefaultChatOther(a.name);
 	const chatSelf = a.chatSelf || seidrDefaultChatSelf(a.name);
 	if (!a.icon) a.icon = seidrDefaultActionIcon();
@@ -457,6 +471,12 @@ function renderEditor(root: HTMLElement) {
 		" /> Set pose</label>",
 		'<select id="seidr-act-pose">' + opts(SEIDR_ACTION_POSES, pose.pose) + "</select>",
 		"</div>",
+		'<div class="seidr-settings-row" style="margin-top:8px;">',
+		'<label><input type="checkbox" id="seidr-act-anim-on"' + (animFx.enabled ? " checked" : "") +
+		" /> Play animation</label>",
+		'<select id="seidr-act-anim">' + animationEffectOpts(animFx.animationId || 0) + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Play a Settings → Animations clip or Wiggle on you when this action runs (self only).</p>',
 		'<div class="seidr-settings-row seidr-settings-draw-actions" style="margin-top:12px;">',
 		'<button type="button" class="seidr-act-btn" id="seidr-act-save">Save action</button>',
 		'<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-act-delete">Delete</button>',
@@ -544,6 +564,13 @@ function readDraftFromDom(root: HTMLElement): SeidrAction | null {
 	next.effects.pose = {
 		enabled: !!(pOn && pOn.checked),
 		pose: (pSel && pSel.value) || "Kneel",
+	};
+	const anOn = root.querySelector("#seidr-act-anim-on") as HTMLInputElement | null;
+	const anSel = root.querySelector("#seidr-act-anim") as HTMLSelectElement | null;
+	const anId = anSel ? parseInt(anSel.value, 10) : 0;
+	next.effects.animation = {
+		enabled: !!(anOn && anOn.checked),
+		animationId: Number.isFinite(anId) && anId > 0 ? anId : 0,
 	};
 	draft = next;
 	return next;

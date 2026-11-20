@@ -45,6 +45,7 @@ import { SeidrState } from "../state";
 import { seidrApplyChatFont } from "./chatFont";
 import { seidrBuildActionsTab, seidrRefreshActionsTab } from "../actions/ui";
 import { seidrBuildAnimationsTab, seidrRefreshAnimationsTab } from "../animations/ui";
+import { seidrBuildReactionsTab, seidrRefreshReactionsTab } from "../reactions/ui";
 import {
 	SEIDR_CMD_ENABLE_LABELS,
 	SEIDR_FAST_SELECT_EMPTY_OPTS,
@@ -213,6 +214,18 @@ function seidrBuildGeneralHtml(): string {
 		'<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
 		"</details>",
 		'<details class="seidr-settings-sec">',
+		"<summary>Fast Wiggle</summary>",
+		'<div class="seidr-settings-row">',
+		'<label><input type="checkbox" id="seidr-set-fast-wiggle" /> Show Fast Wiggle Button</label>',
+		"</div>",
+		'<p class="seidr-settings-hint">Floating button to play configured Ear / Tail / Wing wiggles. Hidden when no matching item is worn. Never overlaps the Room Manager button.</p>',
+		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
+		'<span class="seidr-settings-field-label">Position</span>',
+		'<select id="seidr-set-fw-pos">' + opts + "</select>",
+		"</div>",
+		'<p class="seidr-settings-hint">Default placement (defaults to Chat Bottom). Drag saves on this device only.</p>',
+		"</details>",
+		'<details class="seidr-settings-sec">',
 		"<summary>Drawing</summary>",
 		'<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only — hitboxes stay put. Save Drawing to keep.</p>',
 		'<div id="seidr-set-draw-normal" class="seidr-settings-draw-block">',
@@ -293,6 +306,13 @@ function seidrBuildGeneralHtml(): string {
 		"</span>",
 		"</div>",
 		'<p class="seidr-settings-hint">Typeface and size for Club chat log and compose box. Empty font uses Preference → Graphics → Font (unavailable names fall back to that). Size uses Club base units — Small 28 / Medium 36 / Large 44; <code>0</code> or empty uses Preference → Chat → Font Size. Does not change canvas nicknames or menus.</p>',
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		"<summary>Unread badge</summary>",
+		'<div class="seidr-settings-row">',
+		'<label><input type="checkbox" id="seidr-set-clear-unread" /> Clear unread badge when focusing chat</label>',
+		"</div>",
+		'<p class="seidr-settings-hint">Clears Club’s Chat Message tab/favicon count when you return to this tab or focus the chat compose box — even if the log is scrolled up. Does not affect Friend List / beep unread.</p>',
 		"</details>",
 		'<details class="seidr-settings-sec" data-seidr-tour="commands-enable">',
 		"<summary>Commands</summary>",
@@ -399,6 +419,7 @@ export function seidrRefreshStorageUi() {
 			storageRow("Actions", b.actions),
 			storageRow("Commands", b.commands),
 			storageRow("Animations", b.animations),
+			storageRow("Reactions", b.reactions),
 			storageRow("Settings", b.settings),
 			storageRow("UI", b.ui),
 		].join("");
@@ -421,6 +442,7 @@ export function seidrBuildSettingsBody() {
 	const showActions = Seidr.SHOW_ACTIONS !== false;
 	const showCommands = Seidr.SHOW_COMMANDS !== false;
 	const showAnimations = Seidr.SHOW_COMMANDS !== false;
+	const showReactions = Seidr.SHOW_REACTIONS !== false;
 	const showMaps = rmIsShown();
 	if (tabs) {
 		tabs.innerHTML = [
@@ -433,6 +455,9 @@ export function seidrBuildSettingsBody() {
 				: "",
 			showAnimations
 				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="animations">Animations</button>'
+				: "",
+			showReactions
+				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="reaction">Reaction</button>'
 				: "",
 			showMaps
 				? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>'
@@ -453,6 +478,9 @@ export function seidrBuildSettingsBody() {
 		showAnimations
 			? '<div class="seidr-settings-pane" id="seidr-settings-pane-animations" data-seidr-pane="animations"></div>'
 			: "",
+		showReactions
+			? '<div class="seidr-settings-pane" id="seidr-settings-pane-reaction" data-seidr-pane="reaction"></div>'
+			: "",
 		showMaps
 			? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>'
 			: "",
@@ -469,6 +497,10 @@ export function seidrBuildSettingsBody() {
 	if (showAnimations) {
 		const animPane = $("seidr-settings-pane-animations");
 		if (animPane) seidrBuildAnimationsTab(animPane);
+	}
+	if (showReactions) {
+		const rxnPane = $("seidr-settings-pane-reaction");
+		if (rxnPane) seidrBuildReactionsTab(rxnPane);
 	}
 	if (showMaps) {
 		const mapsPane = $("seidr-settings-pane-maps");
@@ -712,6 +744,8 @@ export function seidrRefreshSettingsUi() {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
+	const fw = $("seidr-set-fast-wiggle") as HTMLInputElement | null;
+	const fwp = $("seidr-set-fw-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const as = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
 	const cn = $("seidr-set-cluster-names") as HTMLSelectElement | null;
@@ -721,9 +755,12 @@ export function seidrRefreshSettingsUi() {
 	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
 	const cf = $("seidr-set-chat-font") as HTMLInputElement | null;
 	const cfs = $("seidr-set-chat-font-size") as HTMLInputElement | null;
+	const cu = $("seidr-set-clear-unread") as HTMLInputElement | null;
 	if (en) en.checked = !!s.roomManagerEnabled;
 	if (qm) qm.checked = s.showQuickmenuButton !== false;
 	if (pos) pos.value = s.launcherPosition;
+	if (fw) fw.checked = !!s.showFastWiggleButton;
+	if (fwp) fwp.value = s.fastWigglePosition || "chatBottom";
 	if (am) am.value = s.arousalBarMode;
 	if (as) as.value = s.arousalBarScope;
 	if (cn) cn.value = s.clusterNameMode || "hitbox";
@@ -733,6 +770,7 @@ export function seidrRefreshSettingsUi() {
 	if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
 	if (cf) cf.value = s.chatFont || "";
 	if (cfs) cfs.value = s.chatFontSize > 0 ? String(s.chatFontSize) : "";
+	if (cu) cu.checked = s.clearUnreadOnFocus !== false;
 	seidrBeginDrawDraft();
 	seidrBeginMapDrawDraft();
 	seidrRefreshStorageUi();
@@ -765,12 +803,15 @@ export function seidrRefreshSettingsUi() {
 		seidrRefreshCommandsTab();
 		seidrRefreshAnimationsTab();
 	}
+	if (Seidr.SHOW_REACTIONS !== false) seidrRefreshReactionsTab();
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
+	const fw = $("seidr-set-fast-wiggle") as HTMLInputElement | null;
+	const fwp = $("seidr-set-fw-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const ascope = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
 	const cn = $("seidr-set-cluster-names") as HTMLSelectElement | null;
@@ -780,6 +821,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const fos = $("seidr-set-fast-open-slot") as HTMLSelectElement | null;
 	const cf = $("seidr-set-chat-font") as HTMLInputElement | null;
 	const cfs = $("seidr-set-chat-font-size") as HTMLInputElement | null;
+	const cu = $("seidr-set-clear-unread") as HTMLInputElement | null;
 	const openRm = $("seidr-set-open-rm") as HTMLButtonElement | null;
 	const openMsg = $("seidr-set-open-rm-msg");
 	function persist() {
@@ -787,6 +829,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			roomManagerEnabled: !!(en && en.checked),
 			showQuickmenuButton: !!(qm && qm.checked),
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
+			showFastWiggleButton: !!(fw && fw.checked),
+			fastWigglePosition: (fwp && fwp.value ? fwp.value : "chatBottom") as RmLauncherPosition,
 			arousalBarMode: (am && am.value ? am.value : "off") as SeidrArousalBarMode,
 			arousalBarScope: (ascope && ascope.value ? ascope.value : "seidrCluster") as SeidrArousalBarScope,
 			clusterNameMode: (cn && cn.value ? cn.value : "hitbox") as SeidrClusterNameMode,
@@ -796,6 +840,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso",
 			chatFont: cf ? cf.value : "",
 			chatFontSize: seidrNormalizeChatFontSize(cfs ? cfs.value : 0),
+			clearUnreadOnFocus: !!(cu && cu.checked),
 		};
 		const saved = seidrSaveSettings(patch);
 		if (saved.ok) {
@@ -809,6 +854,8 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (en) en.addEventListener("change", persist);
 	if (qm) qm.addEventListener("change", persist);
 	if (pos) pos.addEventListener("change", persist);
+	if (fw) fw.addEventListener("change", persist);
+	if (fwp) fwp.addEventListener("change", persist);
 	if (am) am.addEventListener("change", persist);
 	if (ascope) ascope.addEventListener("change", persist);
 	if (cns) cns.addEventListener("change", persist);
@@ -816,6 +863,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (fo) fo.addEventListener("change", persist);
 	if (fos) fos.addEventListener("change", persist);
 	if (fom) fom.addEventListener("change", persist);
+	if (cu) cu.addEventListener("change", persist);
 	if (cf) {
 		cf.addEventListener("change", persist);
 		cf.addEventListener("blur", persist);

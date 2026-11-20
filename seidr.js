@@ -1,4 +1,4 @@
-/* Seidr v2.0.34 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.56 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.34";
+  Seidr.VERSION = "2.0.56";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -49,6 +49,7 @@
   Seidr.SHOW_ACTIONS = true;
   Seidr.SHOW_COMMANDS = true;
   Seidr.SHOW_CMD_FAST_SELECT = true;
+  Seidr.SHOW_REACTIONS = true;
   Seidr.RM_STORAGE_KEY = "SeidrRoomManager";
   Seidr.RM_DATA_VERSION = 1;
   Seidr.RM_MAX_BYTES = 18e4;
@@ -56,6 +57,7 @@
   Seidr.RM_KEY_ACTIONS = "SeidrActions";
   Seidr.RM_KEY_COMMANDS = "SeidrCommands";
   Seidr.RM_KEY_ANIMATIONS = "SeidrAnimations";
+  Seidr.RM_KEY_REACTIONS = "SeidrReactions";
   Seidr.RM_MAP_BUDGET_RATIO = 0.75;
   Seidr.RM_MAP_MAX = 10;
   Seidr.RM_MAP_VERSIONS_REMOTE_MAX = 10;
@@ -1411,6 +1413,13 @@
         pose: typeof e.pose.pose === "string" && e.pose.pose ? e.pose.pose : "Kneel"
       };
     }
+    if (e.animation && typeof e.animation === "object") {
+      const id = Number(e.animation.animationId);
+      out.animation = {
+        enabled: !!e.animation.enabled,
+        animationId: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0
+      };
+    }
     return out;
   }
   function seidrNormalizeAction(raw, fallbackId) {
@@ -1492,9 +1501,36 @@
 
   // src/animations/model.ts
   var SEIDR_ANIMATIONS_MAX = 50;
+  var SEIDR_WIGGLES_MAX = 50;
   var SEIDR_ANIM_STEPS_MAX = 20;
   var SEIDR_ANIM_WAIT_TOTAL_MAX = 60;
   var SEIDR_ANIM_NAME_MAX = 40;
+  var SEIDR_WIGGLE_COUNT_MAX = 24;
+  var SEIDR_WIGGLE_DELAY_MIN_MS = 100;
+  var SEIDR_WIGGLE_DELAY_MAX_MS = 5e3;
+  var WIGGLE_SLOT_ORDER = ["ear", "tail", "wing"];
+  function seidrNormalizeWiggleSlots(raw) {
+    const seen = {};
+    if (Array.isArray(raw)) {
+      for (let i = 0; i < raw.length; i++) {
+        const s = String(raw[i] || "");
+        if (WIGGLE_SLOT_ORDER.indexOf(s) >= 0) seen[s] = true;
+      }
+    }
+    const out = [];
+    for (let i = 0; i < WIGGLE_SLOT_ORDER.length; i++) {
+      if (seen[WIGGLE_SLOT_ORDER[i]]) out.push(WIGGLE_SLOT_ORDER[i]);
+    }
+    return out;
+  }
+  function seidrWiggleSlotsLabel(slots) {
+    if (!slots.length) return "(none)";
+    return slots.map(function(s) {
+      if (s === "ear") return "Ear";
+      if (s === "wing") return "Wing";
+      return "Tail";
+    }).join(" + ");
+  }
   var SEIDR_ANIM_FACE_MAP = {
     Eyebrows: ["Raised", "Lowered", "OneRaised", "Harsh", "Angry", "Soft"],
     Eyes: [
@@ -1550,10 +1586,21 @@
     ]
   };
   var SEIDR_ANIM_FACE_DURATIONS = ["keep", "5", "15", "30"];
+  var SEIDR_WIGGLE_SLOTS = [
+    { id: "ear", label: "Ear", baseGroup: "HairAccessory2" },
+    { id: "tail", label: "Tail", baseGroup: "TailStraps" },
+    { id: "wing", label: "Wing", baseGroup: "Wings" }
+  ];
+  var SEIDR_WIGGLE_DEFAULTS = {
+    ear: { count: 12, delayMs: 175 },
+    tail: { count: 6, delayMs: 800 },
+    wing: { count: 6, delayMs: 500 }
+  };
   var POSE_IDS = SEIDR_ACTION_POSES.map(function(p) {
     return p.id;
   });
   var FACE_FEATURES = ["Eyebrows", "Eyes", "Mouth", "Blush", "Fluids"];
+  var WIGGLE_SLOT_IDS = ["ear", "tail", "wing"];
   function clampWait(raw) {
     let n = typeof raw === "number" ? raw : parseFloat(String(raw));
     if (!Number.isFinite(n) || n < 0) n = 0.5;
@@ -1565,14 +1612,53 @@
     for (let i = 0; i < steps.length; i++) sum += Number(steps[i].wait) || 0;
     return Math.round(sum * 100) / 100;
   }
+  function seidrCountClipAnimations(list) {
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (!seidrAnimIsWiggle(list[i])) n++;
+    }
+    return n;
+  }
+  function seidrCountWiggleAnimations(list) {
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (seidrAnimIsWiggle(list[i])) n++;
+    }
+    return n;
+  }
+  function seidrAnimIsWiggle(anim) {
+    return !!(anim && anim.kind === "wiggle");
+  }
   function seidrDefaultAnimPoseStep() {
     return { kind: "pose", pose: "Kneel", wait: 0.5 };
   }
   function seidrDefaultAnimFaceStep() {
     return { kind: "face", feature: "Eyes", expression: "Closed", duration: "keep", wait: 0.5 };
   }
+  function seidrDefaultAnimWiggleStep(slots) {
+    const s = seidrNormalizeWiggleSlots(slots && slots.length ? slots : ["tail"]);
+    return { kind: "wiggle", slots: s.length ? s : ["tail"], wait: 0.5 };
+  }
   function seidrDefaultAnimation(id) {
-    return { id, name: "Animation " + id, steps: [seidrDefaultAnimPoseStep()], chatText: "" };
+    return { id, name: "Animation " + id, kind: "clip", steps: [seidrDefaultAnimPoseStep()], chatText: "" };
+  }
+  function seidrDefaultWiggleAnimation(id, slot, group, primary, secondary) {
+    const defs = SEIDR_WIGGLE_DEFAULTS[slot] || SEIDR_WIGGLE_DEFAULTS.tail;
+    const slotLabel2 = slot === "ear" ? "Ear" : slot === "wing" ? "Wing" : "Tail";
+    return {
+      id,
+      name: slotLabel2 + " \xB7 " + (primary.assetName || "Wiggle").slice(0, 28),
+      kind: "wiggle",
+      steps: [],
+      chatText: "",
+      slot,
+      group,
+      primary,
+      secondary,
+      colorMode: "snapshot",
+      count: defs.count,
+      delayMs: defs.delayMs
+    };
   }
   function seidrDefaultAnimationsBag() {
     return { nextId: 1, list: [] };
@@ -1603,20 +1689,81 @@
       wait: clampWait(d.wait)
     };
   }
+  function sanitizeWiggleStep(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    if (d.kind !== "wiggle") return null;
+    const slots = seidrNormalizeWiggleSlots(d.slots);
+    if (!slots.length) return null;
+    return { kind: "wiggle", slots, wait: clampWait(d.wait) };
+  }
   function seidrNormalizeAnimStep(raw) {
     if (!raw || typeof raw !== "object") return null;
     const kind = raw.kind;
     if (kind === "pose") return sanitizePoseStep(raw);
     if (kind === "face") return sanitizeFaceStep(raw);
+    if (kind === "wiggle") return sanitizeWiggleStep(raw);
     return null;
   }
-  function seidrNormalizeAnimation(raw, fallbackId) {
+  function cloneColor(raw) {
+    if (typeof raw === "string") return raw;
+    if (Array.isArray(raw)) {
+      const out = [];
+      for (let i = 0; i < raw.length; i++) {
+        const v = raw[i];
+        if (typeof v === "string") out.push(v);
+      }
+      return out.length ? out : void 0;
+    }
+    return void 0;
+  }
+  function cloneProperty(raw) {
+    if (raw == null || typeof raw !== "object") return void 0;
+    try {
+      return JSON.parse(JSON.stringify(raw));
+    } catch (e) {
+      return void 0;
+    }
+  }
+  function seidrNormalizeWiggleFrame(raw) {
     if (!raw || typeof raw !== "object") return null;
     const d = raw;
-    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : fallbackId && fallbackId > 0 ? fallbackId : 0;
-    if (!id) return null;
-    let name = String(d.name || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_ANIM_NAME_MAX);
-    if (!name) name = "Animation " + id;
+    const assetName = String(d.assetName || "").trim();
+    if (!assetName) return null;
+    const frame = { assetName: assetName.slice(0, 80) };
+    const color = cloneColor(d.color);
+    if (color !== void 0) frame.color = color;
+    const prop = cloneProperty(d.property);
+    if (prop !== void 0) frame.property = prop;
+    if (d.typedState != null && String(d.typedState).trim() !== "") {
+      frame.typedState = String(d.typedState).trim().slice(0, 40);
+    }
+    return frame;
+  }
+  function seidrWiggleFramesDiffer(a, b) {
+    if (!a || !b || !a.assetName || !b.assetName) return false;
+    if (a.assetName !== b.assetName) return true;
+    const ta = a.typedState != null ? String(a.typedState) : "";
+    const tb = b.typedState != null ? String(b.typedState) : "";
+    if (ta !== tb) return true;
+    return false;
+  }
+  function seidrClampWiggleCount(raw, fallback) {
+    let n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+    if (!Number.isFinite(n) || n < 1) n = fallback;
+    n = Math.floor(n);
+    if (n > SEIDR_WIGGLE_COUNT_MAX) n = SEIDR_WIGGLE_COUNT_MAX;
+    return n;
+  }
+  function seidrClampWiggleDelayMs(raw, fallback) {
+    let n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
+    if (!Number.isFinite(n)) n = fallback;
+    n = Math.floor(n);
+    if (n < SEIDR_WIGGLE_DELAY_MIN_MS) n = SEIDR_WIGGLE_DELAY_MIN_MS;
+    if (n > SEIDR_WIGGLE_DELAY_MAX_MS) n = SEIDR_WIGGLE_DELAY_MAX_MS;
+    return n;
+  }
+  function normalizeClipAnimation(d, id, name) {
     const steps = [];
     if (Array.isArray(d.steps)) {
       for (let i = 0; i < d.steps.length && steps.length < SEIDR_ANIM_STEPS_MAX; i++) {
@@ -1635,7 +1782,50 @@
       }
     }
     const chatText = typeof d.chatText === "string" && d.chatText.trim() ? d.chatText.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : "";
-    return { id, name, steps, chatText };
+    return { id, name, kind: "clip", steps, chatText };
+  }
+  function normalizeWiggleAnimation(d, id, name) {
+    let slot = String(d.slot || "tail");
+    if (WIGGLE_SLOT_IDS.indexOf(slot) < 0) slot = "tail";
+    const defs = SEIDR_WIGGLE_DEFAULTS[slot];
+    const primary = seidrNormalizeWiggleFrame(d.primary);
+    const secondary = seidrNormalizeWiggleFrame(d.secondary);
+    if (!primary || !secondary) return null;
+    let group = String(d.group || "").trim();
+    if (!group) {
+      const meta = SEIDR_WIGGLE_SLOTS.find(function(s) {
+        return s.id === slot;
+      });
+      group = meta ? meta.baseGroup : "TailStraps";
+    }
+    let colorMode = d.colorMode === "autoupdate" ? "autoupdate" : "snapshot";
+    const chatText = typeof d.chatText === "string" && d.chatText.trim() ? d.chatText.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : "";
+    return {
+      id,
+      name,
+      kind: "wiggle",
+      steps: [],
+      chatText,
+      slot,
+      group: group.slice(0, 80),
+      primary,
+      secondary,
+      colorMode,
+      count: seidrClampWiggleCount(d.count, defs.count),
+      delayMs: seidrClampWiggleDelayMs(d.delayMs, defs.delayMs)
+    };
+  }
+  function seidrNormalizeAnimation(raw, fallbackId) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : fallbackId && fallbackId > 0 ? fallbackId : 0;
+    if (!id) return null;
+    let name = String(d.name || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_ANIM_NAME_MAX);
+    if (!name) name = "Animation " + id;
+    if (d.kind === "wiggle") {
+      return normalizeWiggleAnimation(d, id, name);
+    }
+    return normalizeClipAnimation(d, id, name);
   }
   function seidrNormalizeAnimationsBag(raw) {
     const base = seidrDefaultAnimationsBag();
@@ -1643,10 +1833,25 @@
     const d = raw;
     const list = [];
     const seen = {};
+    const wiggleKeys = {};
+    let clipCount = 0;
+    let wiggleCount = 0;
     if (Array.isArray(d.list)) {
-      for (let i = 0; i < d.list.length && list.length < SEIDR_ANIMATIONS_MAX; i++) {
+      for (let i = 0; i < d.list.length; i++) {
         const a = seidrNormalizeAnimation(d.list[i]);
         if (!a || seen[a.id]) continue;
+        if (seidrAnimIsWiggle(a)) {
+          if (wiggleCount >= SEIDR_WIGGLES_MAX) continue;
+          if (a.slot && a.primary) {
+            const key = a.slot + "::" + a.primary.assetName;
+            if (wiggleKeys[key]) continue;
+            wiggleKeys[key] = true;
+          }
+          wiggleCount++;
+        } else {
+          if (clipCount >= SEIDR_ANIMATIONS_MAX) continue;
+          clipCount++;
+        }
         seen[a.id] = true;
         list.push(a);
         if (a.id >= base.nextId) base.nextId = a.id + 1;
@@ -1867,6 +2072,147 @@
     return { id, name: "", slot: "ItemTorso", activity: "" };
   }
 
+  // src/reactions/model.ts
+  var SEIDR_REACTIONS_MAX = 50;
+  var SEIDR_REACTION_STEPS_MAX = 5;
+  var SEIDR_REACTION_NAME_MAX = 40;
+  var SEIDR_REACTION_PHRASE_MAX = 80;
+  var SEIDR_REACTION_ACTIVITIES_MAX = 12;
+  function seidrDefaultReactionActivityTrigger() {
+    return { activity: "", whenIPerform: false, whenOnMe: true, slot: "" };
+  }
+  function seidrDefaultReactionSayStep() {
+    return { kind: "say", text: "" };
+  }
+  function seidrDefaultReactionAnimationStep(animationId) {
+    return { kind: "animation", animationId: animationId && animationId > 0 ? animationId : 0 };
+  }
+  function seidrDefaultReactionWiggleStep(slots) {
+    const s = seidrNormalizeWiggleSlots(slots && slots.length ? slots : ["tail"]);
+    return { kind: "wiggle", slots: s.length ? s : ["tail"] };
+  }
+  function seidrDefaultReactionActionStep() {
+    return { kind: "action", actionName: "", target: "issuer" };
+  }
+  function seidrDefaultReaction(id) {
+    return {
+      id,
+      name: "Reaction " + id,
+      enabled: true,
+      activities: [seidrDefaultReactionActivityTrigger()],
+      phrase: "",
+      onClimax: false,
+      steps: [seidrDefaultReactionSayStep()]
+    };
+  }
+  function seidrDefaultReactionsBag() {
+    return { nextId: 1, list: [] };
+  }
+  function sanitizeActivityTrigger(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const activity = String(d.activity || "").trim().slice(0, 64);
+    const slot = typeof d.slot === "string" ? d.slot.trim().slice(0, 48) : "";
+    return {
+      activity,
+      whenIPerform: d.whenIPerform === true,
+      whenOnMe: d.whenOnMe === true,
+      slot
+    };
+  }
+  function seidrNormalizeReactionStep(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const kind = raw.kind;
+    if (kind === "say") {
+      const text = typeof raw.text === "string" ? String(raw.text).slice(0, SEIDR_ACTION_CHAT_MAX) : "";
+      return { kind: "say", text };
+    }
+    if (kind === "animation") {
+      const id = Number(raw.animationId);
+      return {
+        kind: "animation",
+        animationId: Number.isFinite(id) && id > 0 ? Math.floor(id) : 0
+      };
+    }
+    if (kind === "wiggle") {
+      const slots = seidrNormalizeWiggleSlots(raw.slots);
+      if (!slots.length) return null;
+      return { kind: "wiggle", slots };
+    }
+    if (kind === "action") {
+      const actionName = String(raw.actionName || "").trim().slice(0, 48);
+      const target = raw.target === "self" ? "self" : "issuer";
+      return { kind: "action", actionName, target };
+    }
+    return null;
+  }
+  function seidrNormalizeReaction(raw, fallbackId) {
+    if (!raw || typeof raw !== "object") return null;
+    const d = raw;
+    const id = typeof d.id === "number" && d.id > 0 ? Math.floor(d.id) : fallbackId && fallbackId > 0 ? fallbackId : 0;
+    if (!id) return null;
+    let name = String(d.name || "").trim().replace(/\s+/g, " ").slice(0, SEIDR_REACTION_NAME_MAX);
+    if (!name) name = "Reaction " + id;
+    const enabled = d.enabled !== false;
+    const activities = [];
+    if (Array.isArray(d.activities)) {
+      for (let i = 0; i < d.activities.length && activities.length < SEIDR_REACTION_ACTIVITIES_MAX; i++) {
+        const t = sanitizeActivityTrigger(d.activities[i]);
+        if (t) activities.push(t);
+      }
+    }
+    const phraseRaw = typeof d.phrase === "string" ? d.phrase.trim() : "";
+    const phrase = phraseRaw ? phraseRaw.slice(0, SEIDR_REACTION_PHRASE_MAX) : "";
+    const onClimax = d.onClimax === true;
+    const steps = [];
+    if (Array.isArray(d.steps)) {
+      for (let i = 0; i < d.steps.length && steps.length < SEIDR_REACTION_STEPS_MAX; i++) {
+        const st = seidrNormalizeReactionStep(d.steps[i]);
+        if (st) steps.push(st);
+      }
+    }
+    if (!steps.length) steps.push(seidrDefaultReactionSayStep());
+    return {
+      id,
+      name,
+      enabled,
+      activities,
+      phrase,
+      onClimax,
+      steps
+    };
+  }
+  function seidrNormalizeReactionsBag(raw) {
+    const base = seidrDefaultReactionsBag();
+    if (!raw || typeof raw !== "object") return base;
+    const d = raw;
+    const list = [];
+    const seen = {};
+    if (Array.isArray(d.list)) {
+      for (let i = 0; i < d.list.length && list.length < SEIDR_REACTIONS_MAX; i++) {
+        const r = seidrNormalizeReaction(d.list[i]);
+        if (!r || seen[r.id]) continue;
+        seen[r.id] = true;
+        list.push(r);
+        if (r.id >= base.nextId) base.nextId = r.id + 1;
+      }
+    }
+    if (typeof d.nextId === "number" && d.nextId > base.nextId) {
+      base.nextId = Math.floor(d.nextId);
+    }
+    base.list = list;
+    return base;
+  }
+  function seidrReactionHasTrigger(r) {
+    if (r.onClimax) return true;
+    if (r.phrase && String(r.phrase).trim()) return true;
+    for (let i = 0; i < r.activities.length; i++) {
+      const a = r.activities[i];
+      if (a.activity && String(a.activity).trim() && (a.whenIPerform || a.whenOnMe)) return true;
+    }
+    return false;
+  }
+
   // src/settings/model.ts
   var SEIDR_CHAT_FONT_MAX = 64;
   var SEIDR_CHAT_FONT_SIZE_MIN = 16;
@@ -2055,6 +2401,8 @@
       roomManagerEnabled: true,
       showQuickmenuButton: true,
       launcherPosition: "chatTop",
+      showFastWiggleButton: false,
+      fastWigglePosition: "chatBottom",
       drawOffsets: seidrDefaultDrawOffsets(),
       drawAdvancedMode: false,
       drawAdvancedOffsets: seidrDefaultDrawAdvancedOffsets(),
@@ -2071,10 +2419,12 @@
       fastOpenActionsSlot: "ItemTorso",
       chatFont: "",
       chatFontSize: 0,
+      clearUnreadOnFocus: true,
       customActionIcons: [],
       actions: { nextId: 1, list: [] },
       commands: seidrNormalizeCommandsBag(null),
-      animations: seidrNormalizeAnimationsBag(null)
+      animations: seidrNormalizeAnimationsBag(null),
+      reactions: seidrNormalizeReactionsBag(null)
     };
   }
   function seidrNormalizeSettings(raw) {
@@ -2086,6 +2436,10 @@
     if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;
     if (typeof d.launcherPosition === "string" && POSITION_IDS.indexOf(d.launcherPosition) >= 0) {
       base.launcherPosition = d.launcherPosition;
+    }
+    if (typeof d.showFastWiggleButton === "boolean") base.showFastWiggleButton = d.showFastWiggleButton;
+    if (typeof d.fastWigglePosition === "string" && POSITION_IDS.indexOf(d.fastWigglePosition) >= 0) {
+      base.fastWigglePosition = d.fastWigglePosition;
     }
     base.drawOffsets = seidrNormalizeDrawOffsets(d.drawOffsets);
     if (typeof d.drawAdvancedMode === "boolean") base.drawAdvancedMode = d.drawAdvancedMode;
@@ -2115,10 +2469,14 @@
     base.fastOpenActionsSlot = normalizeFastOpenSlot(d.fastOpenActionsSlot);
     base.chatFont = seidrNormalizeChatFont(d.chatFont);
     base.chatFontSize = seidrNormalizeChatFontSize(d.chatFontSize);
+    if (typeof d.clearUnreadOnFocus === "boolean") {
+      base.clearUnreadOnFocus = d.clearUnreadOnFocus;
+    }
     base.customActionIcons = seidrNormalizeCustomActionIcons(d.customActionIcons);
     base.actions = seidrNormalizeActionsBag(d.actions);
     base.commands = seidrNormalizeCommandsBag(d.commands);
     base.animations = seidrNormalizeAnimationsBag(d.animations);
+    base.reactions = seidrNormalizeReactionsBag(d.reactions);
     return base;
   }
 
@@ -2326,7 +2684,7 @@
 
   // src/roomManager/storage.ts
   var SAVE_DEBOUNCE_MS = 1500;
-  var DOMAINS = ["rm", "settings", "actions", "commands", "animations"];
+  var DOMAINS = ["rm", "settings", "actions", "commands", "animations", "reactions"];
   var _store = null;
   var _lastBytes = 0;
   var _sent = {};
@@ -2351,6 +2709,10 @@
         return Seidr.RM_KEY_ACTIONS || "SeidrActions";
       case "commands":
         return Seidr.RM_KEY_COMMANDS || "SeidrCommands";
+      case "animations":
+        return Seidr.RM_KEY_ANIMATIONS || "SeidrAnimations";
+      case "reactions":
+        return Seidr.RM_KEY_REACTIONS || "SeidrReactions";
       default:
         return Seidr.RM_KEY_ANIMATIONS || "SeidrAnimations";
     }
@@ -2420,7 +2782,7 @@
     const settings = store.settings || {};
     const rest = {};
     Object.keys(settings).forEach(function(k) {
-      if (k === "actions" || k === "commands" || k === "animations") return;
+      if (k === "actions" || k === "commands" || k === "animations" || k === "reactions") return;
       rest[k] = settings[k];
     });
     return {
@@ -2435,11 +2797,12 @@
       settings: rest,
       actions: settings.actions,
       commands: settings.commands,
-      animations: settings.animations
+      animations: settings.animations,
+      reactions: settings.reactions
     };
   }
   function isDefaultBag(id, value) {
-    if (id !== "actions" && id !== "commands" && id !== "animations") return false;
+    if (id !== "actions" && id !== "commands" && id !== "animations" && id !== "reactions") return false;
     try {
       const def = seidrDefaultSettings();
       return JSON.stringify(value) === JSON.stringify(def[id]);
@@ -2463,7 +2826,7 @@
     const settings = {};
     const rest = unpack(es[keyOf("settings")]);
     if (rest && typeof rest === "object") Object.assign(settings, rest);
-    ["actions", "commands", "animations"].forEach(function(id) {
+    ["actions", "commands", "animations", "reactions"].forEach(function(id) {
       const bag = unpack(es[keyOf(id)]);
       if (bag != null) settings[id] = bag;
     });
@@ -2639,10 +3002,11 @@
     const actions = settings.actions;
     const commands = settings.commands;
     const animations = settings.animations;
+    const reactions = settings.reactions;
     const settingsRest = {};
     try {
       Object.keys(settings).forEach(function(k) {
-        if (k === "actions" || k === "commands" || k === "animations") return;
+        if (k === "actions" || k === "commands" || k === "animations" || k === "reactions") return;
         settingsRest[k] = settings[k];
       });
     } catch (e) {
@@ -2660,6 +3024,9 @@
       }),
       animations: rmSliceBytes({
         animations: animations != null ? animations : { nextId: 1, list: [] }
+      }),
+      reactions: rmSliceBytes({
+        reactions: reactions != null ? reactions : { nextId: 1, list: [] }
       }),
       settings: rmSliceBytes({ settings: settingsRest }),
       ui: 0,
@@ -5826,133 +6193,6 @@
   }
   Seidr.installArousalBars = seidrInstallArousalBars;
 
-  // src/actions/conditions.ts
-  function slotsForItemRef(ref, actionSlots) {
-    const out = [];
-    if (ref.slot) out.push(ref.slot);
-    const zones = actionSlots || [];
-    for (let i = 0; i < zones.length; i++) {
-      const s = zones[i];
-      if (s && out.indexOf(s) < 0) out.push(s);
-    }
-    return out;
-  }
-  function charWearsListedItem(C, items, actionSlots) {
-    if (!C || typeof InventoryGet !== "function") return false;
-    for (let i = 0; i < items.length; i++) {
-      const ref = items[i];
-      if (!ref || !ref.name) continue;
-      const slots = slotsForItemRef(ref, actionSlots);
-      for (let j = 0; j < slots.length; j++) {
-        try {
-          const worn = InventoryGet(C, slots[j]);
-          if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
-        } catch (e) {
-        }
-      }
-    }
-    return false;
-  }
-  function seidrActionItemsOk(action, source, target) {
-    const items = action && action.items;
-    if (!items || !items.length) return true;
-    let onTarget = action.itemsOnTarget !== false;
-    let onSource = !!action.itemsOnSource;
-    if (!onTarget && !onSource) onTarget = true;
-    const zones = action.slots || [];
-    if (onTarget && !charWearsListedItem(target, items, zones)) return false;
-    if (onSource && !charWearsListedItem(source, items, zones)) return false;
-    return true;
-  }
-  function charOf(who, source, target) {
-    return who === "source" ? source : target;
-  }
-  function evalRule(rule, source, target) {
-    const C = charOf(rule.who, source, target);
-    if (!C) return false;
-    let ok = false;
-    try {
-      switch (rule.type) {
-        case "wearing":
-          ok = !!(rule.slot && typeof InventoryGet === "function" && InventoryGet(C, rule.slot));
-          break;
-        case "isGagged":
-          ok = typeof C.CanTalk === "function" ? !C.CanTalk() : false;
-          break;
-        case "isBlind":
-          ok = typeof C.IsBlind === "function" ? !!C.IsBlind() : false;
-          break;
-        case "isDeaf":
-          ok = typeof C.IsDeaf === "function" ? !!C.IsDeaf() : false;
-          break;
-        case "canUseHands":
-          ok = typeof C.CanInteract === "function" ? !!C.CanInteract() : true;
-          break;
-        case "canMoveLegs":
-          ok = typeof C.CanWalk === "function" ? !!C.CanWalk() : true;
-          break;
-        case "canChangePose": {
-          const pose = rule.pose || "Kneel";
-          if (typeof PoseCanChangeUnaided === "function") ok = !!PoseCanChangeUnaided(C, pose);
-          else if (typeof C.CanChangeToPose === "function") ok = !!C.CanChangeToPose(pose);
-          else ok = true;
-          break;
-        }
-        case "accessible": {
-          const zone = rule.zone || "vagina";
-          if (zone === "penis" && typeof C.AccessPenis === "function") ok = !!C.AccessPenis();
-          else if (zone === "vagina" && typeof C.AccessVulva === "function") ok = !!C.AccessVulva();
-          else if (zone === "nipples" && typeof C.AccessBreastFull === "function") ok = !!C.AccessBreastFull();
-          else ok = true;
-          break;
-        }
-        case "hasPenis":
-          ok = typeof C.HasPenis === "function" ? !!C.HasPenis() : false;
-          break;
-        case "hasVagina":
-          ok = typeof C.HasVagina === "function" ? !!C.HasVagina() : false;
-          break;
-        case "hasBreasts":
-          ok = typeof C.HasBreasts === "function" ? !!C.HasBreasts() : false;
-          break;
-        default:
-          ok = false;
-      }
-    } catch (e) {
-      ok = false;
-    }
-    return rule.not ? !ok : ok;
-  }
-  function seidrActionConditionsOk(action, source, target) {
-    const groups = action && action.conditions && action.conditions.groups;
-    if (!groups || !groups.length) return true;
-    for (let i = 0; i < groups.length; i++) {
-      const rules = groups[i] && groups[i].rules;
-      if (!rules || !rules.length) continue;
-      let all = true;
-      for (let j = 0; j < rules.length; j++) {
-        if (!evalRule(rules[j], source, target)) {
-          all = false;
-          break;
-        }
-      }
-      if (all) return true;
-    }
-    return false;
-  }
-  function seidrActionAudienceOk(action, source, target) {
-    if (!source || !target) return false;
-    const self = source === target || typeof source.MemberNumber === "number" && typeof target.MemberNumber === "number" && source.MemberNumber === target.MemberNumber;
-    if (action.audience === "selfOnly") return self;
-    if (action.audience === "othersOnly") return !self;
-    return true;
-  }
-  function seidrActionAvailable(action, source, target) {
-    if (!seidrActionAudienceOk(action, source, target)) return false;
-    if (!seidrActionItemsOk(action, source, target)) return false;
-    return seidrActionConditionsOk(action, source, target);
-  }
-
   // src/chat/actionText.ts
   var SEIDR_ACTION_CONTENT_KEY = "SEIDR_PLAYER_CUSTOM_DIALOG";
   var SEIDR_ACTION_MISSING_TAG = 'MISSING TEXT IN "Interface.csv": SEIDR_PLAYER_CUSTOM_DIALOG';
@@ -6184,6 +6424,1358 @@
     seidrApplyClubPose(target, pose);
     seidrPublishActionText(seidrPoseChatTemplate(pose, "other"), Player, target);
     return true;
+  }
+
+  // src/animations/wiggleSlots.ts
+  var ECHO_SUFFIXES = ["_\u7B28\u7B28\u86CBLuzi", "_\u7B28\u7B28\u7B28\u86CBLuzi2"];
+  function slotMeta(slot) {
+    return SEIDR_WIGGLE_SLOTS.find(function(s) {
+      return s.id === slot;
+    }) || SEIDR_WIGGLE_SLOTS[1];
+  }
+  function seidrWiggleBaseGroup(slot) {
+    return slotMeta(slot).baseGroup;
+  }
+  function seidrWiggleGroupsForSlot(slot) {
+    const base = seidrWiggleBaseGroup(slot);
+    const groups = [base];
+    for (let i = 0; i < ECHO_SUFFIXES.length; i++) {
+      groups.push(base + ECHO_SUFFIXES[i]);
+    }
+    if (slot === "tail") {
+      groups.push("Luzi_TailStraps_0");
+      groups.push("Luzi_TailStraps_1");
+    }
+    if (slot === "wing") {
+      groups.push("Wings_\u7B28\u7B28\u86CBLuzi");
+    }
+    return groups;
+  }
+  function itemDescription(item) {
+    try {
+      if (item && item.Asset) {
+        if (item.Asset.Description) return String(item.Asset.Description);
+        if (item.Asset.Name) return String(item.Asset.Name);
+      }
+    } catch (e) {
+    }
+    return "";
+  }
+  function itemTypedState(item) {
+    try {
+      const typed = item && item.Property && item.Property.TypeRecord && item.Property.TypeRecord.typed;
+      if (typed != null && String(typed).trim()) return String(typed);
+    } catch (e) {
+    }
+    return void 0;
+  }
+  function seidrCaptureWornFrame(character, group) {
+    if (!character || !group || typeof InventoryGet !== "function") return null;
+    let item;
+    try {
+      item = InventoryGet(character, group);
+    } catch (e) {
+      return null;
+    }
+    if (!item || !item.Asset || !item.Asset.Name) return null;
+    const slotEntry = SEIDR_WIGGLE_SLOTS.find(function(s) {
+      return seidrWiggleGroupsForSlot(s.id).indexOf(group) >= 0;
+    });
+    if (!slotEntry) return null;
+    let color;
+    try {
+      if (typeof item.Color === "string" || Array.isArray(item.Color)) color = item.Color;
+    } catch (e) {
+    }
+    let property;
+    try {
+      if (item.Property && typeof item.Property === "object") {
+        property = JSON.parse(JSON.stringify(item.Property));
+      }
+    } catch (e) {
+    }
+    return {
+      slot: slotEntry.id,
+      group,
+      assetName: String(item.Asset.Name),
+      description: itemDescription(item) || String(item.Asset.Name),
+      color,
+      property,
+      typedState: itemTypedState(item)
+    };
+  }
+  function seidrScanWornWiggleItems(character) {
+    const C = character || (typeof Player !== "undefined" ? Player : null);
+    if (!C) return [];
+    const out = [];
+    const seen = {};
+    for (let s = 0; s < SEIDR_WIGGLE_SLOTS.length; s++) {
+      const slot = SEIDR_WIGGLE_SLOTS[s].id;
+      const groups = seidrWiggleGroupsForSlot(slot);
+      for (let g = 0; g < groups.length; g++) {
+        const worn = seidrCaptureWornFrame(C, groups[g]);
+        if (!worn) continue;
+        const key = worn.group + "::" + worn.assetName;
+        if (seen[key]) continue;
+        seen[key] = true;
+        out.push(worn);
+      }
+    }
+    return out;
+  }
+  function seidrWornToFrame(worn) {
+    const frame = { assetName: seidrWiggleCanonicalName(worn.assetName) };
+    if (worn.color !== void 0) frame.color = worn.color;
+    if (worn.property !== void 0) frame.property = worn.property;
+    if (worn.typedState) frame.typedState = worn.typedState;
+    return frame;
+  }
+  function seidrWiggleNameEquals(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return seidrWiggleCanonicalName(a) === seidrWiggleCanonicalName(b);
+  }
+  var SEIDR_WIGGLE_ECHO_REAL_NAME = {
+    PuppyTailStrapMirror: "\u7A7F\u6234\u5F0F\u72D7\u5C3E\u955C\u50CF",
+    WolfTailStrap3Mirror: "\u767D\u8272\u7A7F\u6234\u5F0F\u72FC\u5C3E\u955C\u50CF",
+    KittenTailStrap1Mirror: "\u7A7F\u6234\u5F0F\u6D45\u8272\u732B\u5C3E\u955C\u50CF",
+    PuppyTailStrap1Mirror: "\u7A7F\u6234\u5F0F\u8F6F\u5C0F\u72D7\u5C3E\u955C\u50CF",
+    WolfTailStrap1Mirror: "\u5927\u578B\u7A7F\u6234\u5F0F\u72FC\u5C3E\u955C\u50CF",
+    WolfTailStrap2Mirror: "\u5C0F\u578B\u7A7F\u6234\u5F0F\u72FC\u5C3E\u955C\u50CF",
+    KittenTailStrap2Mirror: "\u5C0F\u578B\u7A7F\u6234\u5F0F\u8F6F\u732B\u5C3E\u955C\u50CF",
+    TailStrapMirror: "\u7A7F\u6234\u5F0F\u732B\u5C3E\u955C\u50CF",
+    RaccoonStrapMirror: "\u7A7F\u6234\u5F0F\u6D63\u718A\u5C3E\u955C\u50CF",
+    SnowLeopardTail: "\u96EA\u8C79\u5C3E\u5DF4",
+    SnowLeopardTailMirror: "\u96EA\u8C79\u5C3E\u5DF4\u955C\u50CF",
+    /** Echo HA2 sibling of Club KittenEars1 (High) — not Club HA1 BlackCatEarsMirror (Low). */
+    BlackKittyEarsEcho: "\u9ED1\u732B\u8033\u955C\u50CF",
+    ElfEars2: "\u7CBE\u7075\u80332",
+    /** Echo EN "Droopy Bunny Ears" — sibling of Club BunnyEars1. */
+    DroopyBunnyEars: "\u8037\u62C9\u4E0B\u6765\u7684\u8033\u6735"
+  };
+  var SEIDR_WIGGLE_ECHO_ENGLISH_ID = (function() {
+    const out = {};
+    const keys = Object.keys(SEIDR_WIGGLE_ECHO_REAL_NAME);
+    for (let i = 0; i < keys.length; i++) {
+      out[SEIDR_WIGGLE_ECHO_REAL_NAME[keys[i]]] = keys[i];
+    }
+    return out;
+  })();
+  var SEIDR_WIGGLE_ASSET_LABEL = {
+    PuppyTailStrapMirror: "Puppy Tail Strap (Mirror)",
+    WolfTailStrap3Mirror: "Wolf White Tail Strap (Mirror)",
+    KittenTailStrap1Mirror: "Light Kitten Tail Strap (Mirror)",
+    PuppyTailStrap1Mirror: "Puppy Fluffy Tail Strap (Mirror)",
+    WolfTailStrap1Mirror: "Wolf Large Tail Strap (Mirror)",
+    WolfTailStrap2Mirror: "Wolf Small Tail Strap (Mirror)",
+    KittenTailStrap2Mirror: "Small Fluffy Kitten Tail Strap (Mirror)",
+    TailStrapMirror: "Kitty Tail Strap (Mirror)",
+    RaccoonStrapMirror: "Raccoon Tail Strap (Mirror)",
+    SnowLeopardTail: "Snow Leopard Tail",
+    SnowLeopardTailMirror: "Snow Leopard Tail (Mirror)",
+    BlackKittyEarsEcho: "Black Kitty Ears - Echo",
+    ElfEars2: "Elf Ears 2",
+    DroopyBunnyEars: "Droopy Bunny Ears",
+    KittenEars1: "Black Kitty Ears - High",
+    BlackCatEarsMirror: "Black Kitty Ears - Low",
+    ElfEars: "Elf Ears",
+    BunnyEars1: "Bunny Ears"
+  };
+  function seidrWiggleCanonicalName(assetName) {
+    const raw = String(assetName || "");
+    if (!raw) return raw;
+    if (SEIDR_WIGGLE_ECHO_ENGLISH_ID[raw]) return SEIDR_WIGGLE_ECHO_ENGLISH_ID[raw];
+    return raw;
+  }
+  function seidrWiggleRealAssetName(assetName) {
+    const raw = String(assetName || "");
+    if (!raw) return raw;
+    if (SEIDR_WIGGLE_ECHO_REAL_NAME[raw]) return SEIDR_WIGGLE_ECHO_REAL_NAME[raw];
+    return raw;
+  }
+  function seidrWiggleAssetLabel(assetName, fallbackDesc) {
+    const canon = seidrWiggleCanonicalName(assetName);
+    if (SEIDR_WIGGLE_ASSET_LABEL[canon]) return SEIDR_WIGGLE_ASSET_LABEL[canon];
+    if (fallbackDesc && fallbackDesc !== assetName && !/[\u4e00-\u9fff]/.test(fallbackDesc)) {
+      return fallbackDesc;
+    }
+    return canon;
+  }
+  var SEIDR_WIGGLE_MIRROR_TO_PRIMARY = {
+    PuppyTailStrapMirror: "PuppyTailStrap",
+    WolfTailStrap3Mirror: "WolfTailStrap3",
+    KittenTailStrap1Mirror: "KittenTailStrap1",
+    PuppyTailStrap1Mirror: "PuppyTailStrap1",
+    WolfTailStrap1Mirror: "WolfTailStrap1",
+    WolfTailStrap2Mirror: "WolfTailStrap2",
+    KittenTailStrap2Mirror: "KittenTailStrap2",
+    TailStrapMirror: "TailStrap",
+    RaccoonStrapMirror: "RaccoonStrap",
+    SnowLeopardTailMirror: "SnowLeopardTail",
+    BlackKittyEarsEcho: "KittenEars1",
+    ElfEars2: "ElfEars"
+  };
+  var SEIDR_WIGGLE_PRIMARY_TO_MIRROR = (function() {
+    const out = {};
+    const keys = Object.keys(SEIDR_WIGGLE_MIRROR_TO_PRIMARY);
+    for (let i = 0; i < keys.length; i++) {
+      out[SEIDR_WIGGLE_MIRROR_TO_PRIMARY[keys[i]]] = keys[i];
+    }
+    return out;
+  })();
+  var ECHO_MIRROR_TO_PRIMARY = SEIDR_WIGGLE_MIRROR_TO_PRIMARY;
+  var ECHO_PRIMARY_TO_MIRROR = SEIDR_WIGGLE_PRIMARY_TO_MIRROR;
+  function stripMirrorMarkers(s) {
+    return String(s || "").replace(/\(镜像\)/g, "").replace(/镜像/g, "").replace(/\(Mirror\)/gi, "").replace(/\bMirror\b/gi, "").replace(/_Luzi$/i, "").replace(/[:：]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+  function looksLikeMirror(name, desc) {
+    const s = (name + " " + desc).toLowerCase();
+    return s.indexOf("\u955C\u50CF") >= 0 || s.indexOf("mirror") >= 0;
+  }
+  function assetDescription(group, name) {
+    try {
+      if (typeof AssetGet === "function") {
+        const a = AssetGet("Female3DCG", group, name);
+        if (a && a.Description) return String(a.Description);
+      }
+    } catch (e) {
+    }
+    return name;
+  }
+  function listAssetsInGroup(group) {
+    const out = [];
+    const seen = {};
+    function push(name, description) {
+      if (!name || seen[name]) return;
+      seen[name] = true;
+      out.push({ name, description: description || name });
+    }
+    try {
+      if (typeof Asset !== "undefined" && Array.isArray(Asset)) {
+        for (let i = 0; i < Asset.length; i++) {
+          const a = Asset[i];
+          if (!a || !a.Name) continue;
+          const g = a.Group && (a.Group.Name || a.Group);
+          if (String(g) !== group && String(a.GroupName || "") !== group) continue;
+          push(String(a.Name), a.Description ? String(a.Description) : String(a.Name));
+        }
+      }
+    } catch (e) {
+    }
+    try {
+      const bag = window.AssetFemale3DCG;
+      if (bag && typeof bag === "object") {
+        const list = bag[group];
+        if (Array.isArray(list)) {
+          for (let j = 0; j < list.length; j++) {
+            const a = list[j];
+            if (!a || !a.Name) continue;
+            push(String(a.Name), a.Description ? String(a.Description) : String(a.Name));
+          }
+        }
+      }
+    } catch (e2) {
+    }
+    const echoNames = Object.keys(ECHO_MIRROR_TO_PRIMARY);
+    for (let e = 0; e < echoNames.length; e++) {
+      const n = echoNames[e];
+      try {
+        if (typeof AssetGet === "function" && AssetGet("Female3DCG", group, n)) {
+          push(n, assetDescription(group, n));
+        }
+      } catch (err) {
+      }
+    }
+    return out;
+  }
+  function scoreMirrorMatch(primaryName, primaryDesc, candidate) {
+    const pCanon = seidrWiggleCanonicalName(primaryName);
+    const cCanon = seidrWiggleCanonicalName(candidate.name);
+    if (seidrWiggleNameEquals(candidate.name, primaryName)) return 0;
+    const mirror = looksLikeMirror(candidate.name, candidate.description);
+    if (ECHO_PRIMARY_TO_MIRROR[pCanon] === cCanon) return 100;
+    if (ECHO_MIRROR_TO_PRIMARY[cCanon] === pCanon) return 100;
+    if (ECHO_PRIMARY_TO_MIRROR[cCanon] === pCanon) return 100;
+    if (ECHO_MIRROR_TO_PRIMARY[pCanon] === cCanon) return 100;
+    if (candidate.name === primaryName + "\u955C\u50CF" || primaryName === candidate.name + "\u955C\u50CF") return 90;
+    const pKey = stripMirrorMarkers(primaryName);
+    const cKey = stripMirrorMarkers(candidate.name);
+    if (mirror && pKey && cKey && pKey === cKey) return 85;
+    const pDesc = stripMirrorMarkers(primaryDesc || primaryName);
+    const cDesc = stripMirrorMarkers(candidate.description || candidate.name);
+    if (mirror && pDesc && cDesc && pDesc === cDesc) return 80;
+    if (mirror && pDesc && cDesc && (cDesc.indexOf(pDesc) >= 0 || pDesc.indexOf(cDesc) >= 0) && Math.min(pDesc.length, cDesc.length) >= 4) {
+      return 60;
+    }
+    if (mirror && pKey && cKey && (cKey.indexOf(pKey) >= 0 || pKey.indexOf(cKey) >= 0) && Math.min(pKey.length, cKey.length) >= 2) {
+      return 40;
+    }
+    return 0;
+  }
+  function seidrListWiggleSecondaryCandidates(slot, group, primaryAssetName) {
+    const baseGroup2 = seidrWiggleBaseGroup(slot);
+    const candidates = listAssetsInGroup(group).concat(
+      group !== baseGroup2 ? listAssetsInGroup(baseGroup2) : []
+    );
+    const primaryDesc = assetDescription(baseGroup2, primaryAssetName) || assetDescription(group, primaryAssetName);
+    const out = [];
+    const seen = {};
+    let bestScore = 0;
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const cCanon = seidrWiggleCanonicalName(c.name);
+      if (seen[cCanon] || seidrWiggleNameEquals(c.name, primaryAssetName)) continue;
+      seen[cCanon] = true;
+      seen[c.name] = true;
+      const score = scoreMirrorMatch(primaryAssetName, primaryDesc, c);
+      if (score > bestScore) bestScore = score;
+      out.push({
+        name: cCanon,
+        description: seidrWiggleAssetLabel(cCanon, c.description),
+        automatch: false,
+        score
+      });
+    }
+    const knownMirror = ECHO_PRIMARY_TO_MIRROR[seidrWiggleCanonicalName(primaryAssetName)];
+    if (knownMirror && !seen[knownMirror] && !seen[seidrWiggleRealAssetName(knownMirror)]) {
+      out.push({
+        name: knownMirror,
+        description: seidrWiggleAssetLabel(knownMirror),
+        automatch: false,
+        score: 100
+      });
+      bestScore = 100;
+    }
+    if (bestScore > 0) {
+      for (let j = 0; j < out.length; j++) {
+        if (out[j].score === bestScore) out[j].automatch = true;
+      }
+    }
+    out.sort(function(a, b) {
+      if (a.automatch !== b.automatch) return a.automatch ? -1 : 1;
+      if (b.score !== a.score) return b.score - a.score;
+      return a.description.localeCompare(b.description);
+    });
+    return out.map(function(o) {
+      const canon = seidrWiggleCanonicalName(o.name);
+      return {
+        name: canon,
+        description: seidrWiggleAssetLabel(canon, o.description),
+        automatch: o.automatch
+      };
+    });
+  }
+  function typedOptionCount(group, assetName) {
+    try {
+      const bag = window.AssetFemale3DCGExtended;
+      const cfg = bag && bag[group] && bag[group][assetName];
+      if (cfg && Array.isArray(cfg.Options) && cfg.Options.length >= 2) {
+        const arch = cfg.Archetype;
+        const isTyped = arch === "typed" || typeof ExtendedArchetype !== "undefined" && arch === ExtendedArchetype.TYPED;
+        if (isTyped) return cfg.Options.length;
+      }
+    } catch (e) {
+    }
+    try {
+      if (typeof AssetGet === "function") {
+        const a = AssetGet("Female3DCG", group, assetName);
+        if (a && Array.isArray(a.CreateLayerTypes) && a.CreateLayerTypes.indexOf("typed") >= 0) {
+          const data = a.ArchetypeData;
+          if (data && Array.isArray(data.options) && data.options.length >= 2) {
+            return data.options.length;
+          }
+          return 2;
+        }
+      }
+    } catch (e2) {
+    }
+    return 0;
+  }
+  function seidrFindAutomatchSecondaryFrame(slot, group, primaryAssetName, primaryTypedState) {
+    const pCanon = seidrWiggleCanonicalName(primaryAssetName);
+    if (ECHO_PRIMARY_TO_MIRROR[pCanon]) {
+      return { assetName: ECHO_PRIMARY_TO_MIRROR[pCanon] };
+    }
+    if (ECHO_MIRROR_TO_PRIMARY[pCanon]) {
+      return { assetName: ECHO_MIRROR_TO_PRIMARY[pCanon] };
+    }
+    const list = seidrListWiggleSecondaryCandidates(slot, group, primaryAssetName);
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].automatch) return { assetName: list[i].name };
+    }
+    const n = typedOptionCount(group, primaryAssetName);
+    if (n >= 2) {
+      const cur = primaryTypedState != null && String(primaryTypedState).trim() !== "" ? parseInt(String(primaryTypedState), 10) : 0;
+      const curN = Number.isFinite(cur) ? cur : 0;
+      let alt = curN === 0 ? 1 : 0;
+      if (alt >= n) alt = curN === 0 ? Math.min(1, n - 1) : 0;
+      if (alt === curN && n > 1) alt = (curN + 1) % n;
+      return { assetName: primaryAssetName, typedState: String(alt) };
+    }
+    return null;
+  }
+  function seidrWiggleAssetNamesToTry(assetName) {
+    const canon = seidrWiggleCanonicalName(assetName);
+    const real = seidrWiggleRealAssetName(canon);
+    const names = [];
+    function push(n) {
+      if (n && names.indexOf(n) < 0) names.push(n);
+    }
+    push(canon);
+    push(real);
+    push(assetName);
+    return names;
+  }
+  function seidrWiggleAssetLoadable(group, assetName) {
+    if (!group || !assetName || typeof AssetGet !== "function") return false;
+    const names = seidrWiggleAssetNamesToTry(assetName);
+    const groups = [group];
+    const base = seidrWiggleBaseGroupFromGroup(group);
+    if (base && base !== group) groups.push(base);
+    for (let g = 0; g < groups.length; g++) {
+      for (let n = 0; n < names.length; n++) {
+        try {
+          if (AssetGet("Female3DCG", groups[g], names[n])) return true;
+        } catch (e) {
+        }
+      }
+    }
+    return false;
+  }
+  function seidrWiggleBaseGroupFromGroup(group) {
+    for (let i = 0; i < SEIDR_WIGGLE_SLOTS.length; i++) {
+      const groups = seidrWiggleGroupsForSlot(SEIDR_WIGGLE_SLOTS[i].id);
+      if (groups.indexOf(group) >= 0) return SEIDR_WIGGLE_SLOTS[i].baseGroup;
+    }
+    return group;
+  }
+  function seidrWiggleCounterpartReady(anim, playGroup) {
+    if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.secondary) return false;
+    const group = playGroup || anim.group || (anim.slot ? seidrWiggleBaseGroup(anim.slot) : "");
+    if (!group) return false;
+    const primaryName = anim.primary.assetName;
+    const secondaryName = anim.secondary.assetName;
+    if (!primaryName || !secondaryName) return false;
+    if (!seidrWiggleAssetLoadable(group, primaryName)) return false;
+    const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
+    const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
+    if (seidrWiggleNameEquals(secondaryName, primaryName)) {
+      return sTyped !== "" && sTyped !== pTyped;
+    }
+    return seidrWiggleAssetLoadable(group, secondaryName);
+  }
+  var SEIDR_WIGGLE_COUNTERPART_MISSING = "Asset counterpart is missing";
+  function seidrWigglePrimaryIsWorn(anim, character) {
+    if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.primary.assetName) return false;
+    const C = character || (typeof Player !== "undefined" ? Player : null);
+    if (!C) return false;
+    const want = anim.primary.assetName;
+    const groups = anim.group ? [anim.group].concat(
+      anim.slot ? seidrWiggleGroupsForSlot(anim.slot).filter(function(g) {
+        return g !== anim.group;
+      }) : []
+    ) : anim.slot ? seidrWiggleGroupsForSlot(anim.slot) : [];
+    for (let i = 0; i < groups.length; i++) {
+      const worn = seidrCaptureWornFrame(C, groups[i]);
+      if (worn && seidrWiggleNameEquals(worn.assetName, want)) return true;
+    }
+    return false;
+  }
+  function seidrResolveWigglePlayGroup(anim, character) {
+    if (!anim || anim.kind !== "wiggle" || !anim.primary) return null;
+    const C = character || (typeof Player !== "undefined" ? Player : null);
+    if (!C) return null;
+    const want = anim.primary.assetName;
+    if (anim.group) {
+      const onCfg = seidrCaptureWornFrame(C, anim.group);
+      if (onCfg && seidrWiggleNameEquals(onCfg.assetName, want)) return anim.group;
+    }
+    if (!anim.slot) return anim.group || null;
+    const groups = seidrWiggleGroupsForSlot(anim.slot);
+    for (let i = 0; i < groups.length; i++) {
+      const worn = seidrCaptureWornFrame(C, groups[i]);
+      if (worn && seidrWiggleNameEquals(worn.assetName, want)) return groups[i];
+    }
+    return null;
+  }
+  function seidrFindWiggleByPrimary(slot, assetName) {
+    const key = seidrWiggleCanonicalName(String(assetName || ""));
+    const list = seidrListAnimations();
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (a.kind === "wiggle" && a.slot === slot && a.primary && seidrWiggleNameEquals(a.primary.assetName, key)) {
+        return a;
+      }
+    }
+    return null;
+  }
+  function seidrReadyWiggleBySlot(character) {
+    const worn = seidrScanWornWiggleItems(character);
+    const out = {};
+    for (let i = 0; i < worn.length; i++) {
+      const w = worn[i];
+      if (out[w.slot]) continue;
+      const anim = seidrFindWiggleByPrimary(w.slot, w.assetName);
+      if (!anim || !seidrWigglePrimaryIsWorn(anim, character)) continue;
+      const group = seidrResolveWigglePlayGroup(anim, character);
+      if (!seidrWiggleCounterpartReady(anim, group)) continue;
+      out[w.slot] = anim;
+    }
+    return out;
+  }
+
+  // src/animations/wigglePresets.ts
+  var PRIMARY_LABEL = {
+    KittenTailStrap1: "Light Kitten",
+    KittenTailStrap2: "Fluffy Kitten",
+    PuppyTailStrap: "Puppy",
+    PuppyTailStrap1: "Fluffy Puppy",
+    WolfTailStrap1: "Wolf Large",
+    WolfTailStrap2: "Wolf Small",
+    WolfTailStrap3: "Wolf White",
+    TailStrap: "Kitty",
+    RaccoonStrap: "Raccoon",
+    SnowLeopardTail: "Snow Leopard",
+    KittenEars1: "Black Kitty High",
+    BunnyEars1: "Bunny",
+    ElfEars: "Elf",
+    MouseEars1: "Mouse",
+    DragonWings: "Dragon"
+  };
+  var EAR_SIBLINGS = [
+    // Club High ↔ Echo HA2 (not Club HA1 BlackCatEarsMirror / Low)
+    { primary: "KittenEars1", secondary: "BlackKittyEarsEcho", label: "Black Kitty High" },
+    // Club BunnyEars1 ↔ Echo Droopy Bunny Ears
+    { primary: "BunnyEars1", secondary: "DroopyBunnyEars", label: "Bunny" },
+    { primary: "ElfEars", secondary: "ElfEars2", label: "Elf" },
+    { primary: "MouseEars1", secondary: "MouseEars2", label: "Mouse" }
+  ];
+  var EAR_STOCK_REMOVED = [
+    "WolfEars1",
+    "FoxEars1",
+    "PuppyEars1",
+    "Ears1"
+  ];
+  function baseGroup(slot) {
+    const meta = SEIDR_WIGGLE_SLOTS.find(function(s) {
+      return s.id === slot;
+    });
+    return meta ? meta.baseGroup : "TailStraps";
+  }
+  function slotPrefix(slot) {
+    if (slot === "ear") return "Ear";
+    if (slot === "wing") return "Wing";
+    return "Tail";
+  }
+  function buildStockPairs() {
+    const out = [];
+    const seen = {};
+    function push(p) {
+      const key = p.slot + "::" + p.primary;
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(p);
+    }
+    const primaries = Object.keys(SEIDR_WIGGLE_PRIMARY_TO_MIRROR);
+    for (let i = 0; i < primaries.length; i++) {
+      const primary = primaries[i];
+      const secondary = SEIDR_WIGGLE_PRIMARY_TO_MIRROR[primary];
+      let slot = "tail";
+      if (primary === "ElfEars" || primary.indexOf("Ears") >= 0 || primary === "BlackKittyEarsEcho") {
+        slot = "ear";
+      }
+      if (slot === "ear") continue;
+      push({
+        slot,
+        primary,
+        secondary,
+        label: PRIMARY_LABEL[primary] || primary
+      });
+    }
+    for (let e = 0; e < EAR_SIBLINGS.length; e++) {
+      const row = EAR_SIBLINGS[e];
+      push({
+        slot: "ear",
+        primary: row.primary,
+        secondary: row.secondary,
+        label: row.label
+      });
+    }
+    push({
+      slot: "wing",
+      primary: "DragonWings",
+      secondary: "DragonWings",
+      label: "Dragon",
+      primaryTyped: "0",
+      secondaryTyped: "1"
+    });
+    return out;
+  }
+  function stockToAnimation(id, pair) {
+    const defs = SEIDR_WIGGLE_DEFAULTS[pair.slot];
+    const primary = { assetName: pair.primary };
+    const secondary = { assetName: pair.secondary };
+    if (pair.primaryTyped != null) primary.typedState = pair.primaryTyped;
+    if (pair.secondaryTyped != null) secondary.typedState = pair.secondaryTyped;
+    return {
+      id,
+      name: (slotPrefix(pair.slot) + " \xB7 " + pair.label).slice(0, 40),
+      kind: "wiggle",
+      steps: [],
+      chatText: "",
+      slot: pair.slot,
+      group: baseGroup(pair.slot),
+      primary,
+      secondary,
+      colorMode: "autoupdate",
+      count: defs.count,
+      delayMs: defs.delayMs
+    };
+  }
+  function hasWigglePrimary(bag, slot, assetName) {
+    for (let i = 0; i < bag.list.length; i++) {
+      const a = bag.list[i];
+      if (a.kind === "wiggle" && a.slot === slot && a.primary && seidrWiggleNameEquals(a.primary.assetName, assetName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  function repairWiggleFrames(bag) {
+    let fixed = 0;
+    for (let i = 0; i < bag.list.length; i++) {
+      const a = bag.list[i];
+      if (a.kind !== "wiggle") continue;
+      let changed = false;
+      if (a.primary && a.primary.assetName) {
+        const c = seidrWiggleCanonicalName(a.primary.assetName);
+        if (c !== a.primary.assetName) {
+          a.primary.assetName = c;
+          changed = true;
+        }
+      }
+      if (a.secondary && a.secondary.assetName) {
+        let c = seidrWiggleCanonicalName(a.secondary.assetName);
+        if (a.primary && seidrWiggleNameEquals(a.primary.assetName, "KittenEars1") && (c === "BlackCatEarsMirror" || a.secondary.assetName === "BlackCatEarsMirror")) {
+          c = "BlackKittyEarsEcho";
+        }
+        if (a.primary && seidrWiggleNameEquals(a.primary.assetName, "BunnyEars1") && (c === "BunnyEars2" || c === "FloppyBunnyEars" || a.secondary.assetName === "BunnyEars2" || a.secondary.assetName === "FloppyBunnyEars")) {
+          c = "DroopyBunnyEars";
+        }
+        if (c !== a.secondary.assetName) {
+          a.secondary.assetName = c;
+          changed = true;
+        }
+      }
+      if (changed) fixed++;
+    }
+    return fixed;
+  }
+  function pruneRemovedEarStock(bag) {
+    const before = bag.list.length;
+    bag.list = bag.list.filter(function(a) {
+      if (a.kind !== "wiggle" || a.slot !== "ear" || !a.primary) return true;
+      const name = seidrWiggleCanonicalName(a.primary.assetName);
+      for (let i = 0; i < EAR_STOCK_REMOVED.length; i++) {
+        if (seidrWiggleNameEquals(name, EAR_STOCK_REMOVED[i])) return false;
+      }
+      return true;
+    });
+    return before - bag.list.length;
+  }
+  function seidrMergeStockWiggles(bag) {
+    const pruned = pruneRemovedEarStock(bag);
+    const repaired = repairWiggleFrames(bag);
+    const pairs = buildStockPairs();
+    let added = 0;
+    let nextId = bag.nextId;
+    for (let i = 0; i < pairs.length; i++) {
+      if (seidrCountWiggleAnimations(bag.list) >= SEIDR_WIGGLES_MAX) break;
+      const p = pairs[i];
+      if (hasWigglePrimary(bag, p.slot, p.primary)) continue;
+      const anim = stockToAnimation(nextId, p);
+      nextId = anim.id + 1;
+      bag.list.push(anim);
+      added++;
+    }
+    bag.nextId = nextId;
+    return { bag, added: added + pruned + (repaired > 0 ? repaired : 0) };
+  }
+
+  // src/animations/store.ts
+  var stockMergeBusy = false;
+  function seidrGetAnimationsBag() {
+    const s = seidrGetSettings();
+    let bag = seidrNormalizeAnimationsBag(s.animations);
+    if (!stockMergeBusy) {
+      stockMergeBusy = true;
+      try {
+        const merged = seidrMergeStockWiggles(bag);
+        if (merged.added > 0) {
+          seidrSaveAnimationsBag(merged.bag);
+          bag = merged.bag;
+        }
+      } finally {
+        stockMergeBusy = false;
+      }
+    }
+    return bag;
+  }
+  function seidrSaveAnimationsBag(bag) {
+    const normalized = seidrNormalizeAnimationsBag(bag);
+    return seidrSaveSettings({ animations: normalized });
+  }
+  function seidrListAnimations() {
+    return seidrGetAnimationsBag().list.slice();
+  }
+  function seidrListClipAnimations() {
+    return seidrListAnimations().filter(function(a) {
+      return !seidrAnimIsWiggle(a);
+    });
+  }
+  function seidrListWiggleAnimations() {
+    return seidrListAnimations().filter(function(a) {
+      return seidrAnimIsWiggle(a);
+    });
+  }
+  function seidrFindAnimationById(id) {
+    const list = seidrListAnimations();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+  function seidrFindAnimationByName(name) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key) return null;
+    const list = seidrListAnimations();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].name.toLowerCase() === key) return list[i];
+    }
+    return null;
+  }
+  function seidrFilterAnimationsByPrefix(prefix) {
+    const pfx = String(prefix || "").trim().toLowerCase();
+    const list = seidrListAnimations();
+    if (!pfx) return list;
+    return list.filter(function(a) {
+      return a.name.toLowerCase().indexOf(pfx) >= 0;
+    });
+  }
+  function wigglePrimaryTaken(bag, slot, assetName, exceptId) {
+    for (let i = 0; i < bag.list.length; i++) {
+      const a = bag.list[i];
+      if (a.id === exceptId) continue;
+      if (a.kind === "wiggle" && a.slot === slot && a.primary && a.primary.assetName === assetName) {
+        return true;
+      }
+    }
+    return false;
+  }
+  function seidrUpsertAnimation(anim) {
+    const norm2 = seidrNormalizeAnimation(anim);
+    if (!norm2) return { ok: false, error: "Invalid animation" };
+    if (!norm2.name.trim()) return { ok: false, error: "Name required" };
+    if (seidrAnimIsWiggle(norm2)) {
+      if (!norm2.primary || !norm2.secondary || !norm2.slot) {
+        return { ok: false, error: "Wiggle needs primary and secondary" };
+      }
+    } else {
+      if (norm2.steps.length > SEIDR_ANIM_STEPS_MAX) {
+        return { ok: false, error: "Max " + SEIDR_ANIM_STEPS_MAX + " steps" };
+      }
+      const total = seidrAnimWaitTotal(norm2.steps);
+      if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
+        return { ok: false, error: "Total wait exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s" };
+      }
+    }
+    const bag = seidrGetAnimationsBag();
+    const nameKey = norm2.name.toLowerCase();
+    for (let i = 0; i < bag.list.length; i++) {
+      if (bag.list[i].id !== norm2.id && bag.list[i].name.toLowerCase() === nameKey) {
+        return { ok: false, error: "Name already used" };
+      }
+    }
+    if (seidrAnimIsWiggle(norm2) && norm2.slot && norm2.primary) {
+      if (wigglePrimaryTaken(bag, norm2.slot, norm2.primary.assetName, norm2.id)) {
+        return { ok: false, error: "A wiggle for that item already exists" };
+      }
+    }
+    let found = false;
+    for (let j = 0; j < bag.list.length; j++) {
+      if (bag.list[j].id === norm2.id) {
+        bag.list[j] = norm2;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      if (seidrAnimIsWiggle(norm2)) {
+        if (seidrCountWiggleAnimations(bag.list) >= SEIDR_WIGGLES_MAX) {
+          return { ok: false, error: "Wiggle limit reached (" + SEIDR_WIGGLES_MAX + ")" };
+        }
+      } else if (seidrCountClipAnimations(bag.list) >= SEIDR_ANIMATIONS_MAX) {
+        return { ok: false, error: "Animation limit reached (" + SEIDR_ANIMATIONS_MAX + ")" };
+      }
+      if (norm2.id < 1) {
+        norm2.id = bag.nextId;
+        bag.nextId = norm2.id + 1;
+      } else if (norm2.id >= bag.nextId) {
+        bag.nextId = norm2.id + 1;
+      }
+      bag.list.push(norm2);
+    }
+    const saved = seidrSaveAnimationsBag(bag);
+    if (!saved.ok) return { ok: false, error: saved.error || "Save failed" };
+    return { ok: true, animation: norm2 };
+  }
+  function seidrDeleteAnimation(id) {
+    const bag = seidrGetAnimationsBag();
+    bag.list = bag.list.filter(function(a) {
+      return a.id !== id;
+    });
+    return seidrSaveAnimationsBag(bag);
+  }
+  function seidrAddAnimation() {
+    const bag = seidrGetAnimationsBag();
+    if (seidrCountClipAnimations(bag.list) >= SEIDR_ANIMATIONS_MAX) return null;
+    const a = seidrDefaultAnimation(bag.nextId);
+    bag.nextId = a.id + 1;
+    bag.list.push(a);
+    const saved = seidrSaveAnimationsBag(bag);
+    if (!saved.ok) return null;
+    return a;
+  }
+
+  // src/animations/wigglePlay.ts
+  function emptyRun() {
+    return { generation: 0, timers: [], playing: false };
+  }
+  var bySlot = {
+    ear: emptyRun(),
+    tail: emptyRun(),
+    wing: emptyRun()
+  };
+  function cancelSlot(slot) {
+    const s = bySlot[slot];
+    s.generation++;
+    for (let i = 0; i < s.timers.length; i++) clearTimeout(s.timers[i]);
+    s.timers = [];
+    s.playing = false;
+  }
+  function seidrCancelWiggle(slot) {
+    if (slot) {
+      cancelSlot(slot);
+      return;
+    }
+    cancelSlot("ear");
+    cancelSlot("tail");
+    cancelSlot("wing");
+  }
+  function roomHasOthers() {
+    try {
+      if (typeof ChatRoomCharacter === "undefined" || !Array.isArray(ChatRoomCharacter)) return false;
+      const me = Player && Player.MemberNumber;
+      for (let i = 0; i < ChatRoomCharacter.length; i++) {
+        const C = ChatRoomCharacter[i];
+        if (C && typeof C.MemberNumber === "number" && C.MemberNumber !== me) return true;
+      }
+    } catch (e) {
+    }
+    return false;
+  }
+  function currentAssetName(group) {
+    try {
+      const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+      if (item && item.Asset && item.Asset.Name) return String(item.Asset.Name);
+    } catch (e) {
+    }
+    return "";
+  }
+  function currentTypedState(group) {
+    try {
+      const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+      const typed = item && item.Property && item.Property.TypeRecord && item.Property.TypeRecord.typed;
+      if (typed != null) return String(typed);
+    } catch (e) {
+    }
+    return "";
+  }
+  function coerceTyped(raw) {
+    if (raw == null || raw === "") return void 0;
+    if (/^-?\d+$/.test(raw)) return parseInt(raw, 10);
+    return raw;
+  }
+  function applyFrame(group, frame, syncWire) {
+    if (!frame || !frame.assetName || typeof InventoryWear !== "function") return;
+    const wearName = seidrWiggleRealAssetName(frame.assetName);
+    const wornName = currentAssetName(group);
+    const wornTyped = currentTypedState(group);
+    const nextTyped = frame.typedState != null ? String(frame.typedState) : "";
+    if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped) return;
+    const color = frame.color !== void 0 ? frame.color : void 0;
+    let item;
+    try {
+      item = InventoryWear(Player, wearName, group, color, void 0, void 0, void 0, false);
+    } catch (e) {
+      try {
+        item = InventoryWear(Player, wearName, group, color);
+      } catch (e2) {
+        return;
+      }
+    }
+    if (item) {
+      if (frame.property != null && typeof frame.property === "object") {
+        try {
+          item.Property = JSON.parse(JSON.stringify(frame.property));
+        } catch (e) {
+        }
+      }
+      if (nextTyped !== "") {
+        try {
+          if (!item.Property) item.Property = {};
+          if (!item.Property.TypeRecord) item.Property.TypeRecord = {};
+          item.Property.TypeRecord.typed = coerceTyped(nextTyped);
+        } catch (e) {
+        }
+      }
+    }
+    try {
+      if (typeof CharacterRefresh === "function") CharacterRefresh(Player, false);
+    } catch (e) {
+    }
+    if (syncWire && typeof ChatRoomCharacterItemUpdate === "function") {
+      try {
+        ChatRoomCharacterItemUpdate(Player, group);
+      } catch (e) {
+      }
+    }
+  }
+  function buildPlayFrames(anim, group) {
+    if (!anim.primary || !anim.secondary) return null;
+    const primary = {
+      assetName: anim.primary.assetName,
+      color: anim.primary.color,
+      property: anim.primary.property,
+      typedState: anim.primary.typedState
+    };
+    const secondary = {
+      assetName: anim.secondary.assetName,
+      color: anim.secondary.color,
+      property: anim.secondary.property,
+      typedState: anim.secondary.typedState
+    };
+    if (anim.colorMode === "autoupdate") {
+      const worn = seidrCaptureWornFrame(Player, group);
+      if (worn) {
+        if (worn.color !== void 0) {
+          primary.color = worn.color;
+          secondary.color = worn.color;
+        }
+        if (worn.property !== void 0) {
+          primary.property = worn.property;
+        }
+      }
+    }
+    return { primary, secondary };
+  }
+  function clearSlotItem(group, syncWire) {
+    try {
+      if (typeof InventoryRemove === "function") {
+        InventoryRemove(Player, group, true);
+      }
+    } catch (e) {
+      try {
+        if (typeof InventoryRemove === "function") InventoryRemove(Player, group);
+      } catch (e2) {
+      }
+    }
+    try {
+      if (typeof CharacterRefresh === "function") CharacterRefresh(Player, false);
+    } catch (e3) {
+    }
+    if (syncWire && typeof ChatRoomCharacterItemUpdate === "function") {
+      try {
+        ChatRoomCharacterItemUpdate(Player, group);
+      } catch (e4) {
+      }
+    }
+  }
+  function seidrPlayWiggleTest(anim) {
+    if (!anim || anim.kind !== "wiggle") {
+      return Promise.resolve({ ok: false, error: "Not a wiggle animation" });
+    }
+    if (typeof Player === "undefined" || !Player) {
+      return Promise.resolve({ ok: false, error: "Not logged in" });
+    }
+    if (!anim.primary || !anim.secondary || !anim.primary.assetName) {
+      return Promise.resolve({ ok: false, error: "Incomplete wiggle frames" });
+    }
+    const slot = anim.slot || "tail";
+    const preferGroup = anim.group || seidrWiggleBaseGroup(slot);
+    if (!seidrWiggleCounterpartReady(anim, preferGroup)) {
+      return Promise.resolve({ ok: false, error: SEIDR_WIGGLE_COUNTERPART_MISSING });
+    }
+    const syncWire = roomHasOthers();
+    let restoreGroup = null;
+    let restoreFrame = null;
+    let didSwap = false;
+    if (!seidrWigglePrimaryIsWorn(anim, Player)) {
+      let group = preferGroup;
+      let worn = seidrCaptureWornFrame(Player, preferGroup);
+      if (!worn) {
+        const groups = seidrWiggleGroupsForSlot(slot);
+        for (let i = 0; i < groups.length; i++) {
+          worn = seidrCaptureWornFrame(Player, groups[i]);
+          if (worn) {
+            group = groups[i];
+            break;
+          }
+        }
+      }
+      restoreGroup = group;
+      restoreFrame = worn ? seidrWornToFrame(worn) : null;
+      const equip = {
+        assetName: anim.primary.assetName,
+        color: anim.primary.color,
+        property: anim.primary.property,
+        typedState: anim.primary.typedState
+      };
+      applyFrame(group, equip, syncWire);
+      if (!seidrWigglePrimaryIsWorn(anim, Player)) {
+        return Promise.resolve({ ok: false, error: "Could not equip wiggle primary for test" });
+      }
+      didSwap = true;
+    }
+    return seidrPlayWiggle(anim).then(function(r) {
+      if (didSwap && restoreGroup) {
+        if (restoreFrame && restoreFrame.assetName) {
+          applyFrame(restoreGroup, restoreFrame, syncWire);
+        } else {
+          clearSlotItem(restoreGroup, syncWire);
+        }
+      }
+      return { ok: r.ok, error: r.error, restored: didSwap };
+    });
+  }
+  function seidrPlayWiggle(anim) {
+    if (!anim || anim.kind !== "wiggle") {
+      return Promise.resolve({ ok: false, error: "Not a wiggle animation" });
+    }
+    if (typeof Player === "undefined" || !Player) {
+      return Promise.resolve({ ok: false, error: "Not logged in" });
+    }
+    if (!seidrWigglePrimaryIsWorn(anim, Player)) {
+      return Promise.resolve({ ok: false, error: "Configured item is not worn" });
+    }
+    const group = seidrResolveWigglePlayGroup(anim, Player);
+    if (!group) {
+      return Promise.resolve({ ok: false, error: "Configured item is not worn" });
+    }
+    if (!seidrWiggleCounterpartReady(anim, group)) {
+      return Promise.resolve({ ok: false, error: SEIDR_WIGGLE_COUNTERPART_MISSING });
+    }
+    const frames = buildPlayFrames(anim, group);
+    if (!frames) {
+      return Promise.resolve({ ok: false, error: "Incomplete wiggle frames" });
+    }
+    const slot = anim.slot || "tail";
+    const defs = SEIDR_WIGGLE_DEFAULTS[slot];
+    const count = seidrClampWiggleCount(anim.count, defs.count);
+    const delayMs = seidrClampWiggleDelayMs(anim.delayMs, defs.delayMs);
+    const syncWire = roomHasOthers();
+    cancelSlot(slot);
+    const run = bySlot[slot];
+    const gen = run.generation;
+    run.playing = true;
+    const sequence = [];
+    for (let i = 0; i < count; i++) {
+      sequence.push(i % 2 === 0 ? frames.secondary : frames.primary);
+    }
+    return new Promise(function(resolve) {
+      let idx = 0;
+      function finish(ok, error) {
+        if (gen === run.generation) run.playing = false;
+        resolve(ok ? { ok: true } : { ok: false, error });
+      }
+      function tick2() {
+        if (gen !== run.generation) {
+          finish(false, "Wiggle cancelled");
+          return;
+        }
+        if (idx >= sequence.length) {
+          finish(true);
+          return;
+        }
+        applyFrame(group, sequence[idx], syncWire);
+        idx++;
+        if (idx >= sequence.length) {
+          finish(true);
+          return;
+        }
+        const t = setTimeout(tick2, delayMs);
+        run.timers.push(t);
+      }
+      tick2();
+    });
+  }
+  function slotsHaveCounterpartMissing(slots) {
+    const worn = seidrScanWornWiggleItems(Player);
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      for (let w = 0; w < worn.length; w++) {
+        if (worn[w].slot !== slot) continue;
+        const anim = seidrFindWiggleByPrimary(slot, worn[w].assetName);
+        if (!anim || !seidrWigglePrimaryIsWorn(anim, Player)) continue;
+        const group = seidrResolveWigglePlayGroup(anim, Player);
+        if (!seidrWiggleCounterpartReady(anim, group)) return true;
+      }
+    }
+    return false;
+  }
+  function seidrPlayWiggleSlots(slots) {
+    if (typeof Player === "undefined" || !Player) {
+      return Promise.resolve({ ok: false, played: 0, error: "Not logged in" });
+    }
+    const want = seidrNormalizeWiggleSlots(slots);
+    if (!want.length) {
+      return Promise.resolve({ ok: true, played: 0 });
+    }
+    const ready2 = seidrReadyWiggleBySlot(Player);
+    const jobs = [];
+    for (let i = 0; i < want.length; i++) {
+      const anim = ready2[want[i]];
+      if (anim) jobs.push(seidrPlayWiggle(anim));
+    }
+    if (!jobs.length) {
+      if (slotsHaveCounterpartMissing(want)) {
+        return Promise.resolve({ ok: false, played: 0, error: SEIDR_WIGGLE_COUNTERPART_MISSING });
+      }
+      return Promise.resolve({ ok: true, played: 0 });
+    }
+    return Promise.all(jobs).then(function(results) {
+      let played = 0;
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].ok) played++;
+      }
+      return { ok: true, played };
+    });
+  }
+
+  // src/animations/play.ts
+  var playing = false;
+  function applyPose(C, pose) {
+    if (!C || !pose) return;
+    try {
+      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
+      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
+    } catch (e) {
+    }
+    seidrSyncPose(C);
+  }
+  function applyFace(C, step) {
+    if (!C || typeof CharacterSetFacialExpression !== "function") return;
+    const group = String(step.feature || "Eyes");
+    const expr = step.expression ? String(step.expression) : null;
+    let timer = null;
+    if (step.duration && step.duration !== "keep") timer = Number(step.duration) || null;
+    try {
+      CharacterSetFacialExpression(C, group, expr, timer);
+    } catch (e) {
+    }
+  }
+  function waitMs(sec) {
+    const n = Number(sec) || 0;
+    if (n <= 0) return null;
+    return new Promise(function(resolve) {
+      setTimeout(resolve, Math.round(n * 1e3));
+    });
+  }
+  async function runClipStep(step) {
+    if (step.kind === "wiggle") {
+      await seidrPlayWiggleSlots(step.slots);
+    } else if (step.kind === "pose") {
+      applyPose(Player, step.pose);
+    } else if (step.kind === "face") {
+      applyFace(Player, step);
+    }
+    const delay = waitMs(step.wait);
+    if (delay) await delay;
+  }
+  function playClip(anim) {
+    if (!anim.steps.length) {
+      return Promise.resolve({ ok: false, error: "Unknown or empty animation" });
+    }
+    playing = true;
+    if (anim.chatText && String(anim.chatText).trim()) {
+      seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
+    }
+    const steps = anim.steps.slice();
+    return (async function() {
+      try {
+        for (let i = 0; i < steps.length; i++) {
+          const st = steps[i];
+          if (!st) continue;
+          await runClipStep(st);
+        }
+        return { ok: true };
+      } catch (e) {
+        seidrCancelWiggle();
+        return { ok: false, error: "Animation interrupted" };
+      } finally {
+        playing = false;
+      }
+    })();
+  }
+  function seidrPlayAnimation(ref) {
+    let anim = null;
+    if (typeof ref === "number") anim = seidrFindAnimationById(ref);
+    else anim = seidrFindAnimationByName(String(ref));
+    if (!anim) {
+      return Promise.resolve({ ok: false, error: "Unknown or empty animation" });
+    }
+    if (typeof Player === "undefined" || !Player) {
+      return Promise.resolve({ ok: false, error: "Not logged in" });
+    }
+    if (seidrAnimIsWiggle(anim)) {
+      if (anim.chatText && String(anim.chatText).trim()) {
+        seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
+      }
+      return seidrPlayWiggle(anim).catch(function() {
+        return { ok: false, error: "Wiggle interrupted" };
+      });
+    }
+    if (playing) {
+      return Promise.resolve({ ok: false, error: "An animation is already playing" });
+    }
+    return playClip(anim);
+  }
+
+  // src/actions/conditions.ts
+  function slotsForItemRef(ref, actionSlots) {
+    const out = [];
+    if (ref.slot) out.push(ref.slot);
+    const zones = actionSlots || [];
+    for (let i = 0; i < zones.length; i++) {
+      const s = zones[i];
+      if (s && out.indexOf(s) < 0) out.push(s);
+    }
+    return out;
+  }
+  function charWearsListedItem(C, items, actionSlots) {
+    if (!C || typeof InventoryGet !== "function") return false;
+    for (let i = 0; i < items.length; i++) {
+      const ref = items[i];
+      if (!ref || !ref.name) continue;
+      const slots = slotsForItemRef(ref, actionSlots);
+      for (let j = 0; j < slots.length; j++) {
+        try {
+          const worn = InventoryGet(C, slots[j]);
+          if (worn && worn.Asset && worn.Asset.Name === ref.name) return true;
+        } catch (e) {
+        }
+      }
+    }
+    return false;
+  }
+  function seidrActionItemsOk(action, source, target) {
+    const items = action && action.items;
+    if (!items || !items.length) return true;
+    let onTarget = action.itemsOnTarget !== false;
+    let onSource = !!action.itemsOnSource;
+    if (!onTarget && !onSource) onTarget = true;
+    const zones = action.slots || [];
+    if (onTarget && !charWearsListedItem(target, items, zones)) return false;
+    if (onSource && !charWearsListedItem(source, items, zones)) return false;
+    return true;
+  }
+  function charOf(who, source, target) {
+    return who === "source" ? source : target;
+  }
+  function evalRule(rule, source, target) {
+    const C = charOf(rule.who, source, target);
+    if (!C) return false;
+    let ok = false;
+    try {
+      switch (rule.type) {
+        case "wearing":
+          ok = !!(rule.slot && typeof InventoryGet === "function" && InventoryGet(C, rule.slot));
+          break;
+        case "isGagged":
+          ok = typeof C.CanTalk === "function" ? !C.CanTalk() : false;
+          break;
+        case "isBlind":
+          ok = typeof C.IsBlind === "function" ? !!C.IsBlind() : false;
+          break;
+        case "isDeaf":
+          ok = typeof C.IsDeaf === "function" ? !!C.IsDeaf() : false;
+          break;
+        case "canUseHands":
+          ok = typeof C.CanInteract === "function" ? !!C.CanInteract() : true;
+          break;
+        case "canMoveLegs":
+          ok = typeof C.CanWalk === "function" ? !!C.CanWalk() : true;
+          break;
+        case "canChangePose": {
+          const pose = rule.pose || "Kneel";
+          if (typeof PoseCanChangeUnaided === "function") ok = !!PoseCanChangeUnaided(C, pose);
+          else if (typeof C.CanChangeToPose === "function") ok = !!C.CanChangeToPose(pose);
+          else ok = true;
+          break;
+        }
+        case "accessible": {
+          const zone = rule.zone || "vagina";
+          if (zone === "penis" && typeof C.AccessPenis === "function") ok = !!C.AccessPenis();
+          else if (zone === "vagina" && typeof C.AccessVulva === "function") ok = !!C.AccessVulva();
+          else if (zone === "nipples" && typeof C.AccessBreastFull === "function") ok = !!C.AccessBreastFull();
+          else ok = true;
+          break;
+        }
+        case "hasPenis":
+          ok = typeof C.HasPenis === "function" ? !!C.HasPenis() : false;
+          break;
+        case "hasVagina":
+          ok = typeof C.HasVagina === "function" ? !!C.HasVagina() : false;
+          break;
+        case "hasBreasts":
+          ok = typeof C.HasBreasts === "function" ? !!C.HasBreasts() : false;
+          break;
+        default:
+          ok = false;
+      }
+    } catch (e) {
+      ok = false;
+    }
+    return rule.not ? !ok : ok;
+  }
+  function seidrActionConditionsOk(action, source, target) {
+    const groups = action && action.conditions && action.conditions.groups;
+    if (!groups || !groups.length) return true;
+    for (let i = 0; i < groups.length; i++) {
+      const rules = groups[i] && groups[i].rules;
+      if (!rules || !rules.length) continue;
+      let all = true;
+      for (let j = 0; j < rules.length; j++) {
+        if (!evalRule(rules[j], source, target)) {
+          all = false;
+          break;
+        }
+      }
+      if (all) return true;
+    }
+    return false;
+  }
+  function seidrActionAudienceOk(action, source, target) {
+    if (!source || !target) return false;
+    const self = source === target || typeof source.MemberNumber === "number" && typeof target.MemberNumber === "number" && source.MemberNumber === target.MemberNumber;
+    if (action.audience === "selfOnly") return self;
+    if (action.audience === "othersOnly") return !self;
+    return true;
+  }
+  function seidrActionAvailable(action, source, target) {
+    if (!seidrActionAudienceOk(action, source, target)) return false;
+    if (!seidrActionItemsOk(action, source, target)) return false;
+    return seidrActionConditionsOk(action, source, target);
   }
 
   // src/actions/store.ts
@@ -6554,7 +8146,7 @@
     removeStaleActivities(keep);
     ensureLabels(actions);
   }
-  function applyPose(C, pose) {
+  function applyPose2(C, pose) {
     if (!C || !pose) return;
     try {
       if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
@@ -6576,11 +8168,15 @@
   }
   function runSideEffects(action, actor, acted) {
     const fx = action.effects || {};
+    const self = actor === acted || typeof actor.MemberNumber === "number" && actor.MemberNumber === acted.MemberNumber;
     if (fx.pose && fx.pose.enabled && fx.pose.pose) {
-      const self = actor === acted || typeof actor.MemberNumber === "number" && actor.MemberNumber === acted.MemberNumber;
       if (self || canPoseTarget(actor, acted)) {
-        applyPose(self ? actor : acted, fx.pose.pose);
+        applyPose2(self ? actor : acted, fx.pose.pose);
       }
+    }
+    if (fx.animation && fx.animation.enabled && fx.animation.animationId > 0 && self) {
+      seidrPlayAnimation(fx.animation.animationId).catch(function() {
+      });
     }
   }
   function prereqOk(actionId, acting, acted) {
@@ -6734,102 +8330,6 @@
   Seidr.installActions = seidrInstallActions;
   Seidr.syncUserActions = seidrSyncUserActions;
 
-  // src/animations/store.ts
-  function seidrGetAnimationsBag() {
-    const s = seidrGetSettings();
-    return seidrNormalizeAnimationsBag(s.animations);
-  }
-  function seidrSaveAnimationsBag(bag) {
-    const normalized = seidrNormalizeAnimationsBag(bag);
-    return seidrSaveSettings({ animations: normalized });
-  }
-  function seidrListAnimations() {
-    return seidrGetAnimationsBag().list.slice();
-  }
-  function seidrFindAnimationById(id) {
-    const list = seidrListAnimations();
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].id === id) return list[i];
-    }
-    return null;
-  }
-  function seidrFindAnimationByName(name) {
-    const key = String(name || "").trim().toLowerCase();
-    if (!key) return null;
-    const list = seidrListAnimations();
-    for (let i = 0; i < list.length; i++) {
-      if (list[i].name.toLowerCase() === key) return list[i];
-    }
-    return null;
-  }
-  function seidrFilterAnimationsByPrefix(prefix) {
-    const pfx = String(prefix || "").trim().toLowerCase();
-    const list = seidrListAnimations();
-    if (!pfx) return list;
-    return list.filter(function(a) {
-      return a.name.toLowerCase().indexOf(pfx) >= 0;
-    });
-  }
-  function seidrUpsertAnimation(anim) {
-    const norm2 = seidrNormalizeAnimation(anim);
-    if (!norm2) return { ok: false, error: "Invalid animation" };
-    if (!norm2.name.trim()) return { ok: false, error: "Name required" };
-    if (norm2.steps.length > SEIDR_ANIM_STEPS_MAX) {
-      return { ok: false, error: "Max " + SEIDR_ANIM_STEPS_MAX + " steps" };
-    }
-    const total = seidrAnimWaitTotal(norm2.steps);
-    if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
-      return { ok: false, error: "Total wait exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s" };
-    }
-    const bag = seidrGetAnimationsBag();
-    const nameKey = norm2.name.toLowerCase();
-    for (let i = 0; i < bag.list.length; i++) {
-      if (bag.list[i].id !== norm2.id && bag.list[i].name.toLowerCase() === nameKey) {
-        return { ok: false, error: "Name already used" };
-      }
-    }
-    let found = false;
-    for (let j = 0; j < bag.list.length; j++) {
-      if (bag.list[j].id === norm2.id) {
-        bag.list[j] = norm2;
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      if (bag.list.length >= SEIDR_ANIMATIONS_MAX) {
-        return { ok: false, error: "Animation limit reached (" + SEIDR_ANIMATIONS_MAX + ")" };
-      }
-      if (norm2.id < 1) {
-        norm2.id = bag.nextId;
-        bag.nextId = norm2.id + 1;
-      } else if (norm2.id >= bag.nextId) {
-        bag.nextId = norm2.id + 1;
-      }
-      bag.list.push(norm2);
-    }
-    const saved = seidrSaveAnimationsBag(bag);
-    if (!saved.ok) return { ok: false, error: saved.error || "Save failed" };
-    return { ok: true, animation: norm2 };
-  }
-  function seidrDeleteAnimation(id) {
-    const bag = seidrGetAnimationsBag();
-    bag.list = bag.list.filter(function(a) {
-      return a.id !== id;
-    });
-    return seidrSaveAnimationsBag(bag);
-  }
-  function seidrAddAnimation() {
-    const bag = seidrGetAnimationsBag();
-    if (bag.list.length >= SEIDR_ANIMATIONS_MAX) return null;
-    const a = seidrDefaultAnimation(bag.nextId);
-    bag.nextId = a.id + 1;
-    bag.list.push(a);
-    const saved = seidrSaveAnimationsBag(bag);
-    if (!saved.ok) return null;
-    return a;
-  }
-
   // src/commands/catalog.ts
   function activityDictLookup(key) {
     try {
@@ -6891,6 +8391,24 @@
         { id: "ItemFeet", label: "Feet" },
         { id: "ItemBoots", label: "Boots" }
       ];
+    }
+    out.sort(function(a, b) {
+      return a.label.localeCompare(b.label);
+    });
+    return out;
+  }
+  function seidrCmdListAllActivities() {
+    const out = [];
+    const seen = {};
+    try {
+      if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return out;
+      for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+        const a = ActivityFemale3DCG[i];
+        if (!a || !a.Name || seen[a.Name]) continue;
+        seen[a.Name] = true;
+        out.push({ id: a.Name, label: activityLabel(a.Name) });
+      }
+    } catch (e) {
     }
     out.sort(function(a, b) {
       return a.label.localeCompare(b.label);
@@ -7820,76 +9338,34 @@
     });
   }
 
-  // src/animations/play.ts
-  var playing = false;
-  function applyPose2(C, pose) {
-    if (!C || !pose) return;
+  // src/commands/activityRun.ts
+  function seidrRunItemActivity(target, zone, activityName) {
+    if (!target || !zone || !activityName) {
+      return { ok: false, error: "Missing target, slot, or activity" };
+    }
+    if (!seidrCmdActivityAvailable(target, zone, activityName)) {
+      return {
+        ok: false,
+        error: 'Activity "' + activityName + '" on ' + zone + " is not available right now"
+      };
+    }
+    const ia = seidrCmdFindItemActivity(target, zone, activityName);
+    if (!ia) {
+      return { ok: false, error: 'Could not resolve activity "' + activityName + '"' };
+    }
     try {
-      if (typeof PoseSetActive === "function") PoseSetActive(C, pose, false);
-      else if (typeof CharacterSetActivePose === "function") CharacterSetActivePose(C, pose);
-    } catch (e) {
-    }
-    seidrSyncPose(C);
-  }
-  function applyFace(C, step) {
-    if (!C || typeof CharacterSetFacialExpression !== "function") return;
-    const group = String(step.feature || "Eyes");
-    const expr = step.expression ? String(step.expression) : null;
-    let timer = null;
-    if (step.duration && step.duration !== "keep") timer = Number(step.duration) || null;
-    try {
-      CharacterSetFacialExpression(C, group, expr, timer);
-    } catch (e) {
-    }
-  }
-  function applyStep(step, C) {
-    if (!step || !C) return;
-    if (step.kind === "pose") applyPose2(C, step.pose);
-    else if (step.kind === "face") applyFace(C, step);
-  }
-  function waitMs(sec) {
-    const n = Number(sec) || 0;
-    if (n <= 0) return null;
-    return new Promise(function(resolve) {
-      setTimeout(resolve, Math.round(n * 1e3));
-    });
-  }
-  function seidrPlayAnimation(ref) {
-    let anim = null;
-    if (typeof ref === "number") anim = seidrFindAnimationById(ref);
-    else anim = seidrFindAnimationByName(String(ref));
-    if (!anim || !anim.steps.length) {
-      return Promise.resolve({ ok: false, error: "Unknown or empty animation" });
-    }
-    if (typeof Player === "undefined" || !Player) {
-      return Promise.resolve({ ok: false, error: "Not logged in" });
-    }
-    if (playing) {
-      return Promise.resolve({ ok: false, error: "An animation is already playing" });
-    }
-    playing = true;
-    if (anim.chatText && String(anim.chatText).trim()) {
-      seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
-    }
-    const steps = anim.steps.slice();
-    let i = 0;
-    function next() {
-      while (i < steps.length) {
-        const st = steps[i++];
-        if (!st) continue;
-        applyStep(st, Player);
-        const delay = waitMs(st.wait);
-        if (delay) {
-          return delay.then(next).catch(function() {
-            playing = false;
-            return { ok: false, error: "Animation interrupted" };
-          });
-        }
+      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
+      const groupName = ia.Group && (ia.Group.Name || ia.Group) || zone;
+      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone) : { Name: zone };
+      if (typeof ActivityRun !== "function") {
+        return { ok: false, error: "ActivityRun unavailable" };
       }
-      playing = false;
-      return Promise.resolve({ ok: true });
+      ActivityRun(Player, target, group, ia, true);
+      return { ok: true };
+    } catch (e) {
+      console.warn("[Seidr] ActivityRun failed", e);
+      return { ok: false, error: "Failed to run activity" };
     }
-    return next();
   }
 
   // src/commands/stripCatalog.ts
@@ -8034,32 +9510,12 @@
     return bag.enabled[key] !== false;
   }
   function runItemActivity(target, zone, activityName) {
-    if (!seidrCmdActivityAvailable(target, zone, activityName)) {
-      seidrCmdError(
-        'Activity "' + activityName + '" on ' + zone + " is not available on that person right now."
-      );
+    const result = seidrRunItemActivity(target, zone, activityName);
+    if (!result.ok) {
+      seidrCmdError(result.error || "Failed to run activity.");
       return false;
     }
-    const ia = seidrCmdFindItemActivity(target, zone, activityName);
-    if (!ia) {
-      seidrCmdError('Could not resolve activity "' + activityName + '".');
-      return false;
-    }
-    try {
-      const family = target && target.AssetFamily || Player && Player.AssetFamily || "Female3DCG";
-      const groupName = ia.Group && (ia.Group.Name || ia.Group) || zone;
-      const group = typeof AssetGroupGet === "function" ? AssetGroupGet(family, typeof groupName === "string" ? groupName : zone) : { Name: zone };
-      if (typeof ActivityRun !== "function") {
-        seidrCmdError("ActivityRun unavailable");
-        return false;
-      }
-      ActivityRun(Player, target, group, ia, true);
-      return true;
-    } catch (e) {
-      console.warn("[Seidr Cmd] ActivityRun failed", e);
-      seidrCmdError("Failed to run activity.");
-      return false;
-    }
+    return true;
   }
   function executeActionCommand(memberRaw, actionRaw) {
     const mem = seidrCmdResolveMember(memberRaw);
@@ -8310,15 +9766,15 @@
   }
   function ensureRoot() {
     ensureStyles();
-    let root3 = document.getElementById("seidr-cmd-ac");
-    if (root3) return root3;
-    root3 = document.createElement("div");
-    root3.id = "seidr-cmd-ac";
-    root3.className = "seidr-cmd-ac";
-    root3.setAttribute("role", "listbox");
-    root3.hidden = true;
-    document.body.appendChild(root3);
-    return root3;
+    let root4 = document.getElementById("seidr-cmd-ac");
+    if (root4) return root4;
+    root4 = document.createElement("div");
+    root4.id = "seidr-cmd-ac";
+    root4.className = "seidr-cmd-ac";
+    root4.setAttribute("role", "listbox");
+    root4.hidden = true;
+    document.body.appendChild(root4);
+    return root4;
   }
   function seidrCmdAcIsOpen() {
     return state.open;
@@ -8329,51 +9785,51 @@
     state.items = [];
     state.index = 0;
     state.assistTag = null;
-    const root3 = document.getElementById("seidr-cmd-ac");
-    if (root3) {
-      root3.hidden = true;
-      root3.innerHTML = "";
+    const root4 = document.getElementById("seidr-cmd-ac");
+    if (root4) {
+      root4.hidden = true;
+      root4.innerHTML = "";
     }
   }
-  function positionOverInput(root3, input) {
+  function positionOverInput(root4, input) {
     const rect = input.getBoundingClientRect();
     const maxH = Math.min(240, Math.max(120, window.innerHeight - 24));
-    root3.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + "px";
-    root3.style.width = Math.max(220, Math.min(rect.width, 420)) + "px";
-    root3.style.maxHeight = maxH + "px";
+    root4.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 280)) + "px";
+    root4.style.width = Math.max(220, Math.min(rect.width, 420)) + "px";
+    root4.style.maxHeight = maxH + "px";
     const above = rect.top - 8;
     if (above > maxH + 8) {
-      root3.style.top = "auto";
-      root3.style.bottom = window.innerHeight - rect.top + 6 + "px";
+      root4.style.top = "auto";
+      root4.style.bottom = window.innerHeight - rect.top + 6 + "px";
     } else {
-      root3.style.bottom = "auto";
-      root3.style.top = rect.bottom + 6 + "px";
+      root4.style.bottom = "auto";
+      root4.style.top = rect.bottom + 6 + "px";
     }
   }
   function render() {
-    const root3 = ensureRoot();
+    const root4 = ensureRoot();
     const input = getInput();
     if (!state.open || !state.items.length || !input) {
       seidrCmdAcClose();
       return;
     }
-    root3.hidden = false;
-    positionOverInput(root3, input);
-    root3.innerHTML = state.items.map(function(it, i) {
+    root4.hidden = false;
+    positionOverInput(root4, input);
+    root4.innerHTML = state.items.map(function(it, i) {
       const on2 = i === state.index ? " seidr-cmd-ac-on" : "";
       const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml2(it.hint) + "</span>" : "";
       return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml2(it.label) + "</span>" + hint + "</button>";
     }).join("");
-    root3.querySelectorAll("[data-i]").forEach(function(btn2) {
-      btn2.addEventListener("mousedown", function(ev) {
+    root4.querySelectorAll("[data-i]").forEach(function(btn3) {
+      btn3.addEventListener("mousedown", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const i = parseInt(btn2.getAttribute("data-i") || "0", 10);
+        const i = parseInt(btn3.getAttribute("data-i") || "0", 10);
         state.index = i;
         seidrCmdAcAccept();
       });
     });
-    const on = root3.querySelector(".seidr-cmd-ac-on");
+    const on = root4.querySelector(".seidr-cmd-ac-on");
     if (on && typeof on.scrollIntoView === "function") {
       on.scrollIntoView({ block: "nearest" });
     }
@@ -8917,7 +10373,7 @@
     try {
       if (typeof ElementMenu !== "undefined" && ElementMenu && typeof ElementMenu.Create === "function" && typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.Create === "function") {
         const id = typeof ElementGenerateID === "function" ? ElementGenerateID() : "seidr-beep-reply-" + info.mn + "-" + Date.now();
-        const menu = ElementMenu.Create(
+        const menu2 = ElementMenu.Create(
           id,
           [
             ElementButton.Create(
@@ -8935,23 +10391,23 @@
             }
           }
         );
-        div.appendChild(menu);
+        div.appendChild(menu2);
         return;
       }
     } catch (e) {
       console.warn("[Seidr] beep hover Reply menu failed", e);
     }
-    const btn2 = document.createElement("button");
-    btn2.type = "button";
-    btn2.className = "seidr-beep-reply-btn ReplyButton";
-    btn2.title = "Reply";
-    btn2.textContent = "Reply";
-    btn2.addEventListener("click", function(ev) {
+    const btn3 = document.createElement("button");
+    btn3.type = "button";
+    btn3.className = "seidr-beep-reply-btn ReplyButton";
+    btn3.title = "Reply";
+    btn3.textContent = "Reply";
+    btn3.addEventListener("click", function(ev) {
       ev.preventDefault();
       ev.stopPropagation();
       onReply();
     });
-    div.appendChild(btn2);
+    div.appendChild(btn3);
   }
   function onComposeKeyDown(ev) {
     if (!activeBeepReply) return;
@@ -9199,8 +10655,8 @@
     setTimeout(function() {
       if (!seidrCmdAcIsOpen()) return;
       const ae = document.activeElement;
-      const root3 = document.getElementById("seidr-cmd-ac");
-      if (root3 && ae && root3.contains(ae)) return;
+      const root4 = document.getElementById("seidr-cmd-ac");
+      if (root4 && ae && root4.contains(ae)) return;
       seidrCmdAcClose();
     }, 50);
   }
@@ -9294,8 +10750,8 @@
       return '<option value="' + escapeHtml3(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml3(o.label) + "</option>";
     }).join("");
   }
-  function setMsg(root3, text) {
-    const el = root3.querySelector("#seidr-cmd-msg");
+  function setMsg(root4, text) {
+    const el = root4.querySelector("#seidr-cmd-msg");
     if (el) el.textContent = text || "";
   }
   function personLabel(p) {
@@ -9306,9 +10762,9 @@
     const act2 = a.activity || "(no activity)";
     return (a.name || "action" + a.id) + " \xB7 " + (a.slot || "?") + " \xB7 " + act2;
   }
-  function renderPeoplePicker(root3) {
-    const pick = root3.querySelector("#seidr-cmd-person-pick");
-    const cap = root3.querySelector("#seidr-cmd-people-cap");
+  function renderPeoplePicker(root4) {
+    const pick = root4.querySelector("#seidr-cmd-person-pick");
+    const cap = root4.querySelector("#seidr-cmd-people-cap");
     const list = seidrListCmdPeople();
     if (cap) cap.textContent = list.length + "/" + SEIDR_CMD_PEOPLE_MAX + " People";
     if (!pick) return;
@@ -9329,8 +10785,8 @@
       pick.value = String(editPersonId);
     }
   }
-  function renderPersonEditor(root3) {
-    const host = root3.querySelector("#seidr-cmd-person-editor");
+  function renderPersonEditor(root4) {
+    const host = root4.querySelector("#seidr-cmd-person-editor");
     if (!host) return;
     const list = seidrListCmdPeople();
     let p = draftPerson;
@@ -9362,9 +10818,9 @@
       "</div>"
     ].join("");
   }
-  function renderActionsPicker(root3) {
-    const pick = root3.querySelector("#seidr-cmd-action-pick");
-    const cap = root3.querySelector("#seidr-cmd-actions-cap");
+  function renderActionsPicker(root4) {
+    const pick = root4.querySelector("#seidr-cmd-action-pick");
+    const cap = root4.querySelector("#seidr-cmd-actions-cap");
     const list = seidrListCmdActions();
     if (cap) cap.textContent = list.length + "/" + SEIDR_CMD_ACTIONS_MAX + " Actions";
     if (!pick) return;
@@ -9385,8 +10841,8 @@
       pick.value = String(editActionId);
     }
   }
-  function renderActionEditor(root3) {
-    const host = root3.querySelector("#seidr-cmd-action-editor");
+  function renderActionEditor(root4) {
+    const host = root4.querySelector("#seidr-cmd-action-editor");
     if (!host) return;
     const list = seidrListCmdActions();
     let a = draftAction;
@@ -9431,10 +10887,10 @@
       "</div>"
     ].join("");
   }
-  function readPersonDraft(root3) {
+  function readPersonDraft(root4) {
     if (editPersonId == null) return null;
-    const alias = root3.querySelector("#seidr-cmd-person-alias")?.value || "";
-    const mnRaw = root3.querySelector("#seidr-cmd-person-mn")?.value || "";
+    const alias = root4.querySelector("#seidr-cmd-person-alias")?.value || "";
+    const mnRaw = root4.querySelector("#seidr-cmd-person-mn")?.value || "";
     const digits = String(mnRaw).replace(/[^\d]/g, "");
     return {
       id: editPersonId,
@@ -9442,39 +10898,39 @@
       memberNumber: digits ? parseInt(digits, 10) : 0
     };
   }
-  function readActionDraft(root3) {
+  function readActionDraft(root4) {
     if (editActionId == null) return null;
     return {
       id: editActionId,
-      name: (root3.querySelector("#seidr-cmd-action-name")?.value || "").trim(),
-      slot: (root3.querySelector("#seidr-cmd-action-slot")?.value || "ItemTorso").trim(),
-      activity: (root3.querySelector("#seidr-cmd-action-activity")?.value || "").trim()
+      name: (root4.querySelector("#seidr-cmd-action-name")?.value || "").trim(),
+      slot: (root4.querySelector("#seidr-cmd-action-slot")?.value || "ItemTorso").trim(),
+      activity: (root4.querySelector("#seidr-cmd-action-activity")?.value || "").trim()
     };
   }
-  function syncPersonDraftFromDom(root3) {
-    const d = readPersonDraft(root3);
+  function syncPersonDraftFromDom(root4) {
+    const d = readPersonDraft(root4);
     if (d) draftPerson = d;
   }
-  function syncActionDraftFromDom(root3) {
-    const d = readActionDraft(root3);
+  function syncActionDraftFromDom(root4) {
+    const d = readActionDraft(root4);
     if (d) draftAction = d;
   }
-  function refreshPeopleSection(root3) {
-    renderPeoplePicker(root3);
-    const pick = root3.querySelector("#seidr-cmd-person-pick");
+  function refreshPeopleSection(root4) {
+    renderPeoplePicker(root4);
+    const pick = root4.querySelector("#seidr-cmd-person-pick");
     if (pick) delete pick.__seidrBound;
-    renderPersonEditor(root3);
-    bindPeople(root3);
+    renderPersonEditor(root4);
+    bindPeople(root4);
   }
-  function refreshActionsSection(root3) {
-    renderActionsPicker(root3);
-    const pick = root3.querySelector("#seidr-cmd-action-pick");
+  function refreshActionsSection(root4) {
+    renderActionsPicker(root4);
+    const pick = root4.querySelector("#seidr-cmd-action-pick");
     if (pick) delete pick.__seidrBound;
-    renderActionEditor(root3);
-    bindActions(root3);
+    renderActionEditor(root4);
+    bindActions(root4);
   }
-  function bindPeoplePicker(root3) {
-    const pick = root3.querySelector("#seidr-cmd-person-pick");
+  function bindPeoplePicker(root4) {
+    const pick = root4.querySelector("#seidr-cmd-person-pick");
     if (!pick || pick.__seidrBound) return;
     pick.__seidrBound = true;
     pick.addEventListener("change", function() {
@@ -9489,40 +10945,40 @@
           break;
         }
       }
-      renderPersonEditor(root3);
-      bindPeopleEditorOnly(root3);
+      renderPersonEditor(root4);
+      bindPeopleEditorOnly(root4);
     });
   }
-  function bindPeople(root3) {
-    bindPeoplePicker(root3);
-    bindPeopleEditorOnly(root3);
+  function bindPeople(root4) {
+    bindPeoplePicker(root4);
+    bindPeopleEditorOnly(root4);
   }
-  function bindPeopleEditorOnly(root3) {
-    root3.querySelector("#seidr-cmd-person-save")?.addEventListener("click", function() {
-      syncPersonDraftFromDom(root3);
+  function bindPeopleEditorOnly(root4) {
+    root4.querySelector("#seidr-cmd-person-save")?.addEventListener("click", function() {
+      syncPersonDraftFromDom(root4);
       if (!draftPerson) return;
       const r = seidrUpsertCmdPerson(draftPerson);
-      setMsg(root3, r.ok ? "Person saved" : r.error || "Save failed");
+      setMsg(root4, r.ok ? "Person saved" : r.error || "Save failed");
       if (r.ok && r.person) {
         editPersonId = r.person.id;
         draftPerson = Object.assign({}, r.person);
-        refreshPeopleSection(root3);
+        refreshPeopleSection(root4);
       }
     });
-    root3.querySelector("#seidr-cmd-person-del")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-cmd-person-del")?.addEventListener("click", function() {
       if (editPersonId == null) return;
       const id = editPersonId;
       const r = seidrDeleteCmdPerson(id);
-      setMsg(root3, r.ok ? "Person deleted" : r.error || "Delete failed");
+      setMsg(root4, r.ok ? "Person deleted" : r.error || "Delete failed");
       if (r.ok) {
         editPersonId = null;
         draftPerson = null;
-        refreshPeopleSection(root3);
+        refreshPeopleSection(root4);
       }
     });
   }
-  function bindActionsPicker(root3) {
-    const pick = root3.querySelector("#seidr-cmd-action-pick");
+  function bindActionsPicker(root4) {
+    const pick = root4.querySelector("#seidr-cmd-action-pick");
     if (!pick || pick.__seidrBound) return;
     pick.__seidrBound = true;
     pick.addEventListener("change", function() {
@@ -9537,19 +10993,19 @@
           break;
         }
       }
-      renderActionEditor(root3);
-      bindActionsEditorOnly(root3);
+      renderActionEditor(root4);
+      bindActionsEditorOnly(root4);
     });
   }
-  function bindActions(root3) {
-    bindActionsPicker(root3);
-    bindActionsEditorOnly(root3);
+  function bindActions(root4) {
+    bindActionsPicker(root4);
+    bindActionsEditorOnly(root4);
   }
-  function bindActionsEditorOnly(root3) {
-    root3.querySelector("#seidr-cmd-action-slot")?.addEventListener("change", function() {
-      syncActionDraftFromDom(root3);
+  function bindActionsEditorOnly(root4) {
+    root4.querySelector("#seidr-cmd-action-slot")?.addEventListener("change", function() {
+      syncActionDraftFromDom(root4);
       if (!draftAction) return;
-      const slot = root3.querySelector("#seidr-cmd-action-slot")?.value || "ItemTorso";
+      const slot = root4.querySelector("#seidr-cmd-action-slot")?.value || "ItemTorso";
       draftAction.slot = slot;
       const acts = seidrCmdListActivitiesForSlot(slot);
       if (!acts.some(function(x) {
@@ -9557,29 +11013,29 @@
       })) {
         draftAction.activity = "";
       }
-      renderActionEditor(root3);
-      bindActionsEditorOnly(root3);
+      renderActionEditor(root4);
+      bindActionsEditorOnly(root4);
     });
-    root3.querySelector("#seidr-cmd-action-save")?.addEventListener("click", function() {
-      syncActionDraftFromDom(root3);
+    root4.querySelector("#seidr-cmd-action-save")?.addEventListener("click", function() {
+      syncActionDraftFromDom(root4);
       if (!draftAction) return;
       const r = seidrUpsertCmdAction(draftAction);
-      setMsg(root3, r.ok ? "Action saved" : r.error || "Save failed");
+      setMsg(root4, r.ok ? "Action saved" : r.error || "Save failed");
       if (r.ok && r.action) {
         editActionId = r.action.id;
         draftAction = Object.assign({}, r.action);
-        refreshActionsSection(root3);
+        refreshActionsSection(root4);
       }
     });
-    root3.querySelector("#seidr-cmd-action-del")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-cmd-action-del")?.addEventListener("click", function() {
       if (editActionId == null) return;
       const id = editActionId;
       const r = seidrDeleteCmdAction(id);
-      setMsg(root3, r.ok ? "Action deleted" : r.error || "Delete failed");
+      setMsg(root4, r.ok ? "Action deleted" : r.error || "Delete failed");
       if (r.ok) {
         editActionId = null;
         draftAction = null;
-        refreshActionsSection(root3);
+        refreshActionsSection(root4);
       }
     });
   }
@@ -9650,9 +11106,1467 @@
     seidrBuildCommandsTab(pane);
   }
 
+  // src/animations/fastWiggle.ts
+  var root = null;
+  var btn = null;
+  var menu = null;
+  var sessionBtnPos = null;
+  var persistedPos = null;
+  var dragMoved = false;
+  var chatLogObserver = null;
+  var installed2 = false;
+  var pollTimer = null;
+  var BTN_BASE = 44;
+  var PAD = 16;
+  var GAP2 = 8;
+  function clubScale() {
+    try {
+      const canvas = MainCanvas && MainCanvas.canvas;
+      if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+        const scale = Math.min(canvas.clientWidth, canvas.clientHeight) / 1e3;
+        if (Number.isFinite(scale) && scale > 0) return scale;
+      }
+    } catch (e) {
+    }
+    return 1;
+  }
+  function btnSize() {
+    return Math.max(28, Math.round(BTN_BASE * clubScale()));
+  }
+  function geomKey() {
+    const id = typeof Player !== "undefined" && Player && Player.MemberNumber != null ? Player.MemberNumber : "0";
+    return "SeidrFwUi_" + id;
+  }
+  function readPersistedPos() {
+    try {
+      const raw = localStorage.getItem(geomKey());
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (typeof d.fx === "number" && typeof d.fy === "number") return { fx: d.fx, fy: d.fy };
+    } catch (e) {
+    }
+    return null;
+  }
+  function writePersistedPos(fx, fy) {
+    try {
+      localStorage.setItem(geomKey(), JSON.stringify({ fx, fy }));
+    } catch (e) {
+    }
+  }
+  function chatLogEl() {
+    return document.getElementById("TextAreaChatLog");
+  }
+  function chatLogRect() {
+    const el = chatLogEl();
+    if (!el) return null;
+    return el.getBoundingClientRect();
+  }
+  function onChatRoomScreen() {
+    try {
+      return typeof CurrentScreen !== "undefined" && CurrentScreen === "ChatRoom";
+    } catch (e) {
+      return false;
+    }
+  }
+  function noCharacterDialog() {
+    try {
+      return typeof CurrentCharacter === "undefined" || CurrentCharacter == null;
+    } catch (e) {
+      return true;
+    }
+  }
+  var MENU_PAD = 6;
+  var MENU_GAP = 6;
+  function fwStylesCss() {
+    return [
+      "#seidr-fw-root { position: fixed; inset: 0; z-index: 114; pointer-events: none; }",
+      "#seidr-fw-root * { box-sizing: border-box; }",
+      "#seidr-fw-btn {",
+      "  pointer-events: auto; position: fixed; z-index: 115;",
+      "  display: none; place-items: center; padding: 0;",
+      "  border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);",
+      "  background: rgba(36, 28, 48, 0.92); color: #f0e6d4; cursor: grab;",
+      "  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
+      "  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
+      "  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
+      "  letter-spacing: 0.04em; text-transform: uppercase;",
+      "}",
+      "#seidr-fw-btn.seidr-fw-visible { display: grid; }",
+      "#seidr-fw-btn:hover { border-color: #d4a017; }",
+      "#seidr-fw-btn .seidr-fw-icon {",
+      "  user-select: none; pointer-events: none;",
+      "  display: grid; place-items: center; line-height: 1;",
+      "  width: 100%; height: 100%;",
+      "}",
+      "#seidr-fw-btn .seidr-fw-icon svg {",
+      "  display: block; width: 100%; height: 100%;",
+      "}",
+      "#seidr-fw-menu {",
+      "  pointer-events: auto; position: fixed; z-index: 116;",
+      "  display: none; flex-direction: column; gap: " + MENU_GAP + "px;",
+      "  padding: " + MENU_PAD + "px; border-radius: 10px;",
+      "  border: 1px solid rgba(255,255,255,0.14);",
+      "  background: rgba(36, 28, 48, 0.95); color: #f0e6d4;",
+      "  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
+      "  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
+      "}",
+      "#seidr-fw-menu.seidr-fw-open { display: flex; }",
+      "#seidr-fw-menu button {",
+      "  flex: 0 0 auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);",
+      "  background: rgba(42, 34, 56, 0.9); color: #f0e6d4; cursor: pointer;",
+      "  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
+      "  letter-spacing: 0.04em; text-transform: uppercase;",
+      "  display: grid; place-items: center; padding: 0;",
+      "}",
+      "#seidr-fw-menu button:hover { border-color: #d4a017; color: #d4a017; }",
+      "#seidr-fw-menu button svg { display: block; width: 100%; height: 100%; }"
+    ].join("\n");
+  }
+  function injectStyles() {
+    let style = document.getElementById("seidr-fw-styles");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "seidr-fw-styles";
+      document.head.appendChild(style);
+    }
+    style.textContent = fwStylesCss();
+  }
+  var SEIDR_ICON_GOLD = "#d4a017";
+  function slotIconLabel(slot) {
+    if (slot === "ear") return "EAR";
+    if (slot === "wing") return "WNG";
+    return "TAL";
+  }
+  function earIconHtml() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="250 20 1040 1000" aria-hidden="true" preserveAspectRatio="xMidYMid meet"><g fill="' + SEIDR_ICON_GOLD + '"><path d="M410.5 25.6c-71.3 11-131.1 67.8-143.6 136.4-2 10.9-2.1 685.2-.1 697.8 10.2 64.6 60.6 121 123.6 138.2 19.7 5.4-4.9 5.1 377.6 5 234.3 0 355.7-.4 360-1.1 33-5.2 65.3-22.6 90.5-49 13.4-14 21.1-25 29.5-41.8 10.9-21.8 15.7-41 17-68.1 1.4-25.6 1.3-650.4 0-666.6-1.3-15.5-3-24.4-7.6-38.5-17.5-54.4-65.9-97.7-124.2-111.1l-9.7-2.3-352-.1c-296.3-.2-353.4 0-361 1.2M1136 63.3c34.7 10.1 65.4 35.7 81.8 68.2 2.8 5.5 6.5 14.3 8.2 19.5 6.4 19.4 6.1-1.9 5.7 369-.3 371.4.2 340.1-6.2 359.5-6.5 19.5-16.6 35.6-32.5 51.6-21.7 22-48 35.6-75 38.9-7 .8-100.6 1-357.5.8l-348-.3-10.3-2.8c-40.6-11.2-71.7-37.1-90.4-75.4-3.7-7.6-7.1-16.7-9.1-24l-3.2-11.8v-688l2.8-10c4.1-15.1 13.8-33.8 24-46.5 20.8-26 47.9-43.1 78.2-49.5l11-2.4 355.5.2 355.5.2z"/><path d="M426.5 258c-13.3 2.9-20.3 10.1-28.7 29.3-15 34.4-23.4 71.8-26.8 119.2-1.8 25.6-.9 49.7 3.1 80.5 5.4 41.8 18.1 84 35 115.9l5 9.4-2.7 6.6c-21.5 53.2-29.8 118.8-17 135.5 5.2 6.9 15.7 8.5 22.6 3.6 5.9-4.2 7.7-9 11.5-31.6 4.3-25.6 7.2-37.6 13.7-56.4 29.1-84.2 93.8-155.7 174-192.1 63.2-28.8 136.3-38.1 209.3-26.8 61.8 9.6 127.2 41.4 171.5 83.4 25.8 24.5 43.2 47.9 59.2 79.8 18.1 36.1 27.3 65.1 34.8 109.8 4 24 5.6 28.7 11 33.2 8 6.8 20.6 3.7 25.7-6.3 3.2-6.4 4.7-20.4 3.9-37.5-1.2-27.8-6.9-55.8-17.4-86.2l-3.8-11.2 2.3-3.8c4.4-7 15.3-29.2 19.2-39.1 18.6-46.8 26.8-93.2 26.5-148.7-.3-44.2-6.7-84-19.2-120-9.8-28.3-17.5-40.2-29-44.6-10.2-3.9-32.8-2.4-56.7 3.7-61.4 15.7-130.8 57.4-189.1 113.7l-12.3 11.8-11.8-2.6c-49.7-11.2-96.2-11.1-149.6.1l-11.9 2.5-10.1-9.8C595.9 308.7 505.1 260.1 441 257.5c-5.8-.2-12.3 0-14.5.5m25 43.5c48.6 7.8 107 38.3 157 81.8 9.6 8.4 24.5 22.7 24.5 23.6 0 .3-3.3 1.9-7.3 3.5-3.9 1.6-12.8 5.6-19.6 8.8s-12.9 5.8-13.6 5.8-1.9-.8-2.6-1.7c-6.5-7.8-37.3-32.2-54.5-43-27.3-17.2-60-31.1-71.2-30.1-3.5.3-3.6.5-6.4 8.1-6.6 18.3-10 43.9-10 74.7 0 34 4.4 63.1 13.9 92.5l2.6 8-6.6 9.3c-3.6 5.1-9.1 13.3-12.2 18.2-3.1 5-6 9-6.5 9-1.1 0-7.3-14.8-10.8-26-9.9-31.3-14.1-55.9-16.3-93.8-2.6-46.5 5-101.3 19.1-136.7 4.4-11 5.7-12.7 10.3-13.4.4 0 5 .6 10.2 1.4m643 1.9c5.8 8.8 13.9 36.9 18 62 4.1 25.3 4.8 35 4.8 63.6 0 22.2-.5 30.8-2.2 44.5-4.9 39.1-15 76.1-25.7 94.3l-2.6 4.4-3.1-4.8c-1.7-2.7-7-10.8-11.8-18.1l-8.7-13.2 1.9-5.2c15.7-41.3 21.1-104.1 12.8-150-2.5-13.9-7.5-29.8-9.6-30.6-.9-.4-4.4-.1-7.7.6-31.1 6.3-80.4 34.9-111.7 64.9l-10.3 9.9-15.1-7.3c-8.2-3.9-17.4-8-20.2-9-2.9-1-5.3-2.2-5.3-2.6 0-1 21.6-21.9 29.7-28.7 44.9-37.4 97.3-65.1 140.8-74.5 9.8-2.1 11.2-2.3 18.2-2.5 5.5-.1 6.4.2 7.8 2.3"/></g></svg>';
+  }
+  function wingIconHtml() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="220 25 1010 1030" aria-hidden="true" preserveAspectRatio="xMidYMid meet"><g fill="' + SEIDR_ICON_GOLD + '"><path d="M329.6 33.1c-11.1 1.2-17.4 2.6-30.1 6.6-51 16.3-90.2 61.9-99.6 115.7-1.8 10.5-1.9 21.5-1.9 387 0 369.3 0 376.3 2 388.1 2.5 15.2 8.6 33.4 15.2 45.3 22.5 40.4 59.7 67.5 104.3 75.8 9.7 1.8 23.4 1.9 404.5 1.9 374 0 395-.1 404-1.8 30.9-5.8 55-18.6 77.6-41.1 22-22.1 32.8-41.4 41.1-73.6 1.6-6 1.7-34.3 2.1-386.5.2-271.9 0-383.1-.8-390.9-1.9-19.3-11-43-23.6-61.8-21.6-32-56.9-55.5-95.4-63.5-8-1.6-31.5-1.7-400-1.9-215.3-.1-395.1.2-399.4.7m784.9 38.3c28.7 3.6 56.9 20.1 74.6 43.5 6.1 8.2 13.9 23.3 17 32.8 1.5 4.9 2.6 6.9 3.2 6 .5-.7.6-.4.2 1-.3 1.2.1 5.9 1 10.5 1.4 7.4 1.5 47.2 1.3 381.8l-.3 373.5-2.3 8.5c-2.8 10.6-5.3 17.2-9.3 25.3-14.7 29-41.1 50.2-73.4 59l-8 2.2-389 .3c-268.5.2-391.5-.1-397.1-.8-24-3.1-45.8-14.1-64-32.4-13.3-13.3-21.5-26.5-27.4-44-1.5-4.4-2.9-7.3-3.2-6.6-.2.7-.4-.4-.4-2.6 0-2.1-.6-8.2-1.3-13.4-.9-7.4-1.1-90.5-.9-379l.3-369.5 2.9-10.5c11.6-42.5 39.9-71.5 81.4-83.3l7.7-2.2 353-.5c417.6-.6 426.3-.6 434 .4"/><path d="M290.4 313.6c-2.1 1.5-4.5 3.4-5.2 4.3-10.2 12.5-15 56.9-9.7 90.1 4.5 27.5 16.3 56 32.7 78.2 3.3 4.6 7.2 9.5 8.6 11 3.4 3.7 2.3 4.4-3.4 2.4-20-6.8-30.8 7.7-27.6 37.2.6 5.9 2.3 14.7 3.7 19.7 3.2 10.9 12.4 30.1 19.6 40.9 12.6 18.8 33 37.5 51.8 47.7 5.5 3 10.1 5.7 10.1 6.2 0 .4-1.2 1.2-2.7 1.8-7.8 2.9-13.1 13.2-11.8 22.8 1.7 12.5 12.2 29.9 27.5 45.2 22.6 22.9 49.2 34.7 84.5 37.7l9 .7.6 5.2c.7 5.7 6.9 18 8.9 17.5.6-.1.9.1.6.6-.7 1.2 8 9.6 9.2 8.8.6-.3 1.4-.1 1.8.5.5.8.2 1-.7.5-2.8-1.5 2.7 2.6 6.9 5.1 21.4 12.7 52.4 16.3 79.2 9.2 10.3-2.7 24.1-8 23.4-9-.3-.5.1-.6.8-.4.8.3 6.5-2 12.8-5.1 18.8-9.2 23.3-10.7 33-10.7 10.3-.1 16.9 2.1 27 8.8 14.9 9.9 20.7 6.4 26.4-16.1 7.2-28.4 10.6-71.7 7.6-96.5-.6-4.6-1.5-12.5-2.1-17.4-4.4-36.5-19.8-78.4-40.4-109.5-28.3-42.7-68.3-71.6-124.5-89.8-6.9-2.2-20.6-6.6-30.5-9.7-57.8-18.3-101.8-41.3-146.4-76.8-12.6-10.1-40.7-37.3-53.6-52.1-8.5-9.7-11.4-11.6-18.1-11.6-3.9 0-6.1.6-9 2.6m33.6 68.3c44.7 44.9 107.5 81.9 176.8 104.2 60.4 19.5 76.7 26.6 100.6 43.7 9.7 7 28.1 24.4 35.2 33.3 12.7 16 23.8 36.5 32.4 60.1 2.6 7.2 5 12.4 5.4 11.7.3-.8.3-.4 0 .8-.2 1.2.4 5.7 1.5 10 2.6 10.1 5.7 26.3 7.3 38.3 1.4 10.3 1.8 65.1.5 68.3-.7 1.8-.8 1.8-3.4-.1-9.6-6.8-22.8-9.9-34.5-8.3-10.5 1.5-16.6 3.6-31.8 11.4-23.8 12.1-34.6 15.9-50.6 17.8-13.9 1.6-30-2-42.1-9.3-5.8-3.5-6.4-4.7-3-5.6 3.8-.9 21.8-10.4 29.7-15.6 9.3-6.2 27.6-23.9 26.5-25.6-.5-.8-.4-1.1.1-.7.6.3 2.3-1.5 3.9-4 3.4-5.5 4.2-12.9 1.3-12.7-1 .1-1.5-.2-1.2-.7 1.5-2.5-6.5-.1-29 9-40.8 16.4-77.4 18.9-108.1 7.4-9.7-3.6-21.9-11.1-29.7-18.3-7.3-6.6-13.4-13.8-12.5-14.6.3-.3 5.6-1 11.9-1.5 46.9-3.8 81.9-14.9 99.5-31.4 5.7-5.5 7-9.5 3.5-11.4-1.2-.6-11.2-.8-26.8-.4-44.8 1.1-70.1-3.9-99.4-19.4-24.9-13.2-45.5-33.6-57-56.4-4.1-8-8.4-19.8-7.6-20.6.2-.3 6.4 1.8 13.8 4.5 39.9 15.1 72.2 19.7 105.8 15.1 13.4-1.8 21-4.9 21-8.5 0-1.9-4.5-5-9.8-7-17.3-6.2-30.1-11.4-39.6-16-6-2.9-11.3-5.1-11.9-4.7-.5.3-.7.2-.4-.3.3-.6-2.8-2.9-6.8-5.3-24.5-14.5-49.2-39-63.9-63.5-9.2-15.4-16.7-34.5-20.1-51.8-1.7-8.2-3.2-35.8-2-35.8.4 0 6.9 6.2 14.5 13.9m-37.3 147.8c-.2 1.6-.4.3-.4-2.7s.2-4.3.4-2.8c.2 1.6.2 4 0 5.5m853.1-216.4c-2.1 1.2-9.3 8.5-16.1 16.2C1073.9 385.9 1008.5 427 929 452c-40.9 12.8-45.8 14.5-63.5 22.8-13.2 6.1-27.3 14.5-39.1 23.2-12.1 9-18.6 14.9-17.7 16.3.3.5.1.7-.4.4-.6-.4-4.6 3.1-8.9 7.6-31.4 33.2-53 78.9-61.5 130.1-6 36.3-5.4 75.8 1.7 111.1 6.4 32.2 12.3 38.1 27.6 27.5 9.4-6.7 16.9-9.3 26.3-9.4 9.9-.1 14 1.3 35 11.5 29.6 14.5 49.7 19.2 72.5 17 23.6-2.2 41.7-10 55.3-23.7 6.5-6.5 11.3-15.4 12.3-22.7l.6-4.7h5.2c6.9 0 26.5-3.3 35.4-5.9 8.8-2.7 23.6-9.5 31.3-14.4 19.9-12.8 37.6-33.3 45.6-52.8 5.4-13.2 2.6-26.9-6.4-31.4-2.3-1.1-4.2-2.5-4.2-3 0-.6 3.7-3 8.2-5.5 43.8-24 76.7-74.7 76.7-118.4 0-23.5-10.1-33.9-27.4-28-2.6.9-4.9 1.4-5.2 1.2-.2-.3 1.9-3.4 4.8-6.9 28.2-35 42.4-78.7 40.5-124.9-1-23.2-5.2-41.8-11.2-50.1-5.8-7.7-15.3-10.1-22.7-5.6m-1.2 59.3c.9 6-1.9 27.6-5.1 40.4-6.8 26.9-21.2 52.1-42 73.8-23.5 24.5-47.3 39.6-85.1 53.7-23.2 8.7-26.2 10.8-21.6 14.7 4.9 4.3 22.1 7.2 42.7 7.1 28.6 0 54.8-5.4 84.3-17.2 5.6-2.3 10.6-4.1 11.1-4.1 1.5 0-2.3 10.9-7.1 20.5-11.7 23.2-32.2 43.7-56.9 56.9-10.1 5.4-26.7 11.8-36.5 14.1-20.1 4.7-21.8 4.9-56.1 4.9-24.1.1-33.5.4-34.4 1.3-3.5 3.5 4.5 12.7 17.6 20.3 19.8 11.3 45.4 18.3 76.1 21 18.4 1.6 21.4 2 21.4 2.9 0 1.5-10.7 13.1-16 17.4-11.1 8.9-27 16.7-40.4 19.7-26.2 5.8-60.7 1.2-93.6-12.5-22.6-9.5-25.6-10.4-29.4-8.9-2.5 1-1.9 6.4 1.4 13.1 4 8 16.6 21.3 27.6 29.1 8.3 5.9 27.2 16.1 32.2 17.4 3.4.9 2.7 2.1-3.3 5.7-17.3 10.5-38.9 12.3-60.8 5-4.9-1.6-16.5-6.7-25.8-11.4-22.6-11.4-29.8-13.8-41.4-13.8-10.5 0-17.7 1.8-25.8 6.7l-5.6 3.4-.8-4.7c-1.5-9-.7-54.7 1.1-68.1 8.5-61.4 31.3-109 67.4-140.6 24.1-21.1 51.3-34.9 95.2-48.5 56.4-17.4 94.1-34.8 135.5-62.4 24.8-16.6 51.2-38.5 66.5-55.2 3-3.4 5.8-6.1 6.2-6.2.4 0 1 2 1.4 4.5"/></g></svg>';
+  }
+  function tailIconHtml() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="250 20 1050 980" aria-hidden="true" preserveAspectRatio="xMidYMid meet"><g fill="' + SEIDR_ICON_GOLD + '"><path d="M410.7 25.6C336.5 37.1 274.5 98.2 266 168.2c-.8 6.8-1 102-.8 349.8l.3 340.5 2.2 9c10.8 45.6 36.7 83.7 73.4 108 22.1 14.6 44.9 23.3 70.4 27 9.9 1.4 47 1.5 362 1.3l351-.3 10-2.3c39.4-9.1 75.2-33.3 100-67.7 7.6-10.5 19.3-33.5 22.8-45 3.4-10.9 5.6-21.7 6.8-33.8.6-6.7.9-126.3.6-349.2-.3-316.1-.4-339.6-2-347.5-8.5-41.8-32.2-78.5-66.7-103.1-22.6-16.2-48.7-26.8-73.2-29.9-5.6-.7-121.9-1-355.8-.9-289.3.1-349 .3-356.3 1.5M1126 61c34.6 5.9 68.1 29.9 88.1 63.1 5.7 9.5 12 25.1 15.2 37.6l2.2 8.8v343c0 325.4-.1 343.4-1.8 351.3-6.8 31.7-25.1 60.3-51.2 80.3-12.5 9.5-27.7 17.2-45 22.6l-9 2.8-156.7.3-156.8.2v-3.1c0-6.7 3.3-23.9 6.6-34.1 5.2-15.9 14-32.3 33-61.3 20.2-30.7 27.2-42.6 35.2-60 27-59 32.7-118.3 17.2-178.6-13.5-52.7-42-98.3-89.8-143.9l-11.7-11.2-3.5 4.4c-18.5 22.8-44.7 42.4-72.7 54.3l-7.1 3.1 12 12.9c35.9 38.6 53.4 69.5 63.4 112.2 2.7 11 2.8 13.2 2.9 34.3 0 21.5-.1 23-2.8 33.5-6.7 25.7-15 42.9-32.3 67.2-5.6 7.8-5.8 8.1-25.5 32.3-29.4 36.1-44.1 60.8-56.5 94.8-3.4 9.5-8.7 30-10 38.4l-.6 4.8-118.7.2c-65.2.1-122.2.1-126.6-.1-17.8-.6-38.7-7.1-56.4-17.6-12.2-7.2-19.8-13.4-30.7-24.8-17.7-18.5-29.3-40.2-36.1-67.3-1.6-6.4-1.7-28.8-2.1-342.4-.2-248.7 0-337.8.8-344.5 6-46.4 39.4-87.6 86.7-106.8 8-3.2 22.5-6.6 32.2-7.5 13.6-1.2 700.7-.5 708.1.8"/><path d="M812.7 125.1c-19.9 1.9-44.4 8.5-64.7 17.5-32.1 14.1-65.9 40.4-89.7 69.9-27.8 34.4-46.2 76.6-51.3 117.5-3.4 27.8 1.2 63.7 11.6 90.1 7.3 18.7 22.4 45.3 32.1 56.7l2.8 3.4 8.2-2.1c27.6-7.1 56.4-23.3 75.5-42.5 12.3-12.3 11.9-10.3 4.9-24.7-10.4-21.5-13.7-36.4-12.8-58.4 1-23.6 6.8-39.5 21.7-59.3 12.4-16.5 30.1-28.7 50.6-34.8 7.3-2.1 11.1-2.6 20.9-2.7 14.8-.2 19.8.9 39.5 8.5 22.1 8.6 33.9 10.4 48.5 7.3 24.6-5.2 42.9-27 44.3-52.6 1.6-31.7-18.9-61-55.5-79.3-25.5-12.7-54.5-17.6-86.6-14.5"/><path d="M763 420.9c3 5.7-.3 11.3-15.2 25.7-11 10.6-15.3 14.1-27.3 22.1-22.1 14.8-52.2 26.3-68.8 26.3-5.5 0-6.7-.3-8.7-2.5l-2.4-2.6-1.3 2.3c-3.1 5.6.6 16.5 8.2 24.1l2.7 2.7-1.8 3.7c-2.6 5.4-2.4 13.7.4 19.4 2.6 5.3 2.7 5.9.8 5.9-.7 0-4.5 1.6-8.3 3.5-11.9 6-22.5 19-26.4 32.5-.7 2.5-1.8 5.2-2.6 6.1-1.3 1.6-1.8 6.9-.7 6.9.4 0 1.2-.7 1.8-1.5 2.1-2.8 12.3-4 34.1-3.9 27.6.2 56.8 3.9 65.7 8.5 3.4 1.8 3.9 1.8 4.5.4.3-.9.1-2.6-.5-3.8-.7-1.2-1.8-5.6-2.7-9.7-.8-4.1-2.6-9.8-4-12.6-3.6-7.3-13.1-17.2-20.9-21.8-5.9-3.4-8.1-5.6-5.8-5.6.5 0 1.9-1.9 3.2-4.2 3.3-5.9 3.4-15.7.3-21.1-3-4.9-2.9-5.7.5-5.7 3.9 0 10.1 6.5 10.9 11.4.7 4.3-.2 4.4 15.1-1.7 22.3-8.7 46.1-24.6 62.2-41.3 14.4-15 19.9-25 17-31.2-2.4-5.4-18.4-30.8-20.4-32.4-1.3-1.1-3.8-1.8-6.4-1.8-3.9 0-4.2.2-3.2 1.9M641.5 493c.3.5.1 1-.4 1-.6 0-1.1-.5-1.1-1 0-.6.2-1 .4-1 .3 0 .8.4 1.1 1m30.9 26.4c9.3 3.9 11.2 16.5 3.5 23.1-2.5 2-4.1 2.5-8.9 2.5h-5.9l-2.6-4.4c-4.9-8.3-2.8-16.7 5-20.6 4.8-2.4 4.7-2.4 8.9-.6m-55.2 81.3-4.3.4.6 3.7c2.1 12 8.9 24.9 16.9 31.9 4.8 4.1 18.9 11.3 22.3 11.3 1.3 0 2.3-.6 2.4-1.3 0-.6.4-.3.9.8q.9 1.95.9-6.9c.1-8-.1-9.1-2.4-11.8-3.8-4.5-3.5-10 .9-14.4 2.8-2.8 4.2-3.4 7.6-3.4s4.8.6 7.6 3.4c2.4 2.4 3.4 4.3 3.4 6.5 0 3.9-2.4 8.7-4.9 10-1.4.8-2 2.6-2.4 7.3-.3 3.5-.8 7.3-1.2 8.5-.7 2.1-.4 2.3 2.7 2.3 5.5 0 14.8-2.8 21.4-6.5 11-6.2 22.5-21 24.8-32.1.7-3 .6-3.1-4.6-4.2-20.1-4.4-71.3-7.4-92.6-5.5"/></g></svg>';
+  }
+  function applySlotIcon(el, slot) {
+    if (slot === "ear") {
+      el.innerHTML = earIconHtml();
+      return;
+    }
+    if (slot === "wing") {
+      el.innerHTML = wingIconHtml();
+      return;
+    }
+    if (slot === "tail") {
+      el.innerHTML = tailIconHtml();
+      return;
+    }
+    el.textContent = slotIconLabel(slot);
+  }
+  function popupIconHtml() {
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="250 20 1040 1000" aria-hidden="true" preserveAspectRatio="xMidYMid meet"><g fill="' + SEIDR_ICON_GOLD + '"><path d="M418.3 25c-18.2 1.5-44.3 9.6-62.3 19.3-44.6 24-75.2 63.2-87.3 111.6l-2.1 8.6-.4 341c-.2 248.4 0 343.6.8 350.5 5.7 47.9 35.1 94.2 77.1 121.3 19.8 12.8 39.3 20.3 64.4 24.9 5.6 1 76.8 1.3 361 1.3 335.9 0 354.4-.1 362.8-1.8 34.9-7.1 69.2-27.6 92.5-55.2 18.7-22.3 31.8-48.8 37.2-75.8 1.2-5.6 2.4-17 2.9-25.2 1.3-24.4.5-670.6-.8-679.5-8.3-54.8-41.4-100-91.8-125.4-10.4-5.3-29.3-11.8-41.3-14.3-8-1.6-29.6-1.7-356-1.9-191.1-.1-351.6.2-356.7.6m708.2 36.7c22 4.2 42.4 14.4 60.1 30 18.8 16.6 33.3 39.1 39.9 61.8 5.8 20 5.6 1 5.2 366.5l-.2 335.5-2.2 9c-5.9 25.2-17.3 46-35.3 64.8-12.4 12.9-23.8 21.4-38.5 28.7-12.5 6.1-23.1 9.8-35 12.1-10.4 2.1-695.3 2.1-706.5 0-52.2-9.5-96.7-51.5-110.8-104.5l-2.7-10.1-.3-338c-.2-337.7-.2-338 1.8-348.8 4.7-24.8 15.6-45.6 34.1-65 18.9-20 41.5-33.6 67.3-40.5l10.1-2.7 346-.5c190.3-.3 348.9-.4 352.5-.2s10.1 1 14.5 1.9"/><path d="M823 178.7c-10.7 3.7-18.4 12.6-20.2 23.4-1 5.7-.9 7.3 1.1 13.7 1.2 4 3.4 8.6 5 10.4 5.2 6 18.9 25.7 25.6 36.8 22.7 37.7 32.6 72.4 31.2 109-1.1 28.3-6.9 44-31.8 86.5-24.1 41.2-30.7 54.4-37.3 74.6-6.3 19.2-8 29.2-8 48.4-.1 29 3.5 41.7 23.9 83.5 20 40.9 23 51.5 23 81 0 15.6-.4 20.1-2.3 28.8-3.1 13.7-8.2 28.3-14.5 41.1s-7.1 19.3-3.7 28.3c5.5 14.7 23.2 22.5 38.1 16.9 10-3.8 13.6-8 23.1-26.8 22.7-45.2 29.3-90.3 19.2-131.3-3.9-15.5-8.8-27.5-24.2-58-14.9-29.5-18.2-38.6-20.2-55.4-1.9-15.5 1.4-33.6 9.5-52.6 4.5-10.5 8.9-18.6 22.4-41 21.2-35.4 29.1-51.1 35.9-71.5 13.7-40.8 13-84.6-1.8-129.4-10.7-32.1-26.3-61.4-50.2-94.3-13.4-18.4-21.2-23.9-34.3-23.7-2.7 0-7 .7-9.5 1.6m-198.7 31.1c-10.1 3.6-16 10.1-18.8 20.7-1.9 7.6-1.9 9 .5 16.7 1.3 4.3 3.6 8.5 7 12.7 12.7 15.8 28.1 41.8 35.4 59.6 11 27 13.7 50.4 9 75.8-2.4 12.6-5.6 20.2-22.8 54.7-17.6 35.1-24.3 51.2-29.9 71.5-5 18.1-6.7 28.6-7.4 45.8-1.5 37.6 6.3 63 32.8 106.7 16.3 27 22.9 41.6 26.1 57.3 1.6 8.1 1.6 33.6 0 41.2-2.7 12.7-8.8 29.4-15.5 42.5-6.3 12.2-7 14.2-7.5 20.8-.4 6.6-.2 7.7 2.7 13.7 8.7 17.6 32.2 21.9 47.3 8.7 6.8-6 22.9-37.4 29.1-56.7 6.6-20.6 8.1-29.7 8.1-51.5.1-21.8-1-29-6.9-46.6-6.1-17.9-11.7-28.8-30.4-59.3C665.8 616 660 600 658.5 577c-1.8-28.3 8-59.1 33.6-105 22.7-40.8 31.1-71.3 29.6-107.5-.7-16.5-2.4-26.9-7.1-43.1-8.4-29.3-26.3-63.7-48.4-93.6-11.2-15.1-16.9-18.9-29.2-19.5-5.5-.3-8.9.1-12.7 1.5"/><path d="M459.2 345.9c-4.6 1.2-12.8 7-24.1 17.2-21.4 19.2-38.5 41.9-50.7 67.4-27.7 57.5-27.4 123 .6 180 11 22.3 23 38.6 41.4 56.2 13.6 12.9 18.9 15.8 27.8 15 9.7-.9 16.3-6.5 18.9-16 .8-3 .6-5.1-.6-9.5-1.5-5-2.7-6.6-10.6-14.1-25.4-23.9-42.5-54.6-49.9-89.6-2.7-12.9-3.7-38.4-2.1-52.1 3.5-28.7 15.2-57.8 32.5-81.1 6.7-9 20-22.8 30.9-32 8.8-7.5 12-11.9 13.2-18.4.8-4.6-1-11.5-4.2-15.7-4.6-6-15-9.3-23.1-7.3m602.8 0c-8.5 2.8-13.3 7.7-15.1 15.8-1 4.1-.9 6.1.1 9.9 1.2 4.2 3.4 6.8 18 21.3 12.6 12.6 18.4 19.2 23.9 27.4 14.1 20.9 23.3 43.2 28.7 69.5 2.4 11.4 2.7 15 2.8 34.7 0 17.6-.3 23.9-1.8 31.5-3.8 19.4-12.6 41-24 58.5-6.6 10-12.9 17.6-23.8 28.5-7.4 7.4-8.7 9.3-9.7 13.7-3.9 16.1 10.4 28.9 27.1 24.3 4.9-1.4 12.1-7.2 24.3-19.4 27-27.2 45.1-62.3 52.6-102.1 3.1-16.1 3.7-45.9 1.4-63.1-6.3-47.4-28.8-93.6-61.5-126.5-10.1-10.1-21.5-19.6-26.7-22.3-3.8-1.9-12.8-2.9-16.3-1.7"/><path d="M519.4 408.8c-13.5 4.7-35.9 30.9-47.1 54.9-8.7 18.8-12.6 36.4-12.7 57.8q-.15 50.7 33.9 89.7c9.1 10.5 17.4 14.3 26.2 11.9 11.3-3.1 17.6-13.1 15.2-24.3-.8-3.5-2.6-6.7-6.6-11.6-17.4-21.1-24-37.4-25-61.3-.5-10.6-.2-14.3 1.7-23 3.6-17.2 10.2-30.9 21.6-45.1 3-3.6 7.7-8.6 10.5-11 5.9-5 8.9-10.1 9.6-16.9 1-9.6-4.9-18.7-14-21.4-6.3-1.9-7-1.8-13.3.3m482.6-.9c-7.6 2.3-12.2 6.4-14.5 13-3.5 10.1-1.6 15.1 10.8 28 15.6 16.4 24.3 31.6 29.2 51.5 2.5 10.1 2.7 12 2.2 25.5-.3 10.7-1.1 16.6-2.6 22.1-3.1 10.7-11.2 26.4-17.6 34-9.6 11.4-10.8 13.6-11.3 20-1.1 14.9 12.4 25.2 27 20.5 4.3-1.4 6.7-3.2 12.6-9.2 15.9-16.6 27.4-39.3 32.9-65.3 2.5-11.7 2.5-38.9 0-51.3-5.9-29.3-19.5-54.6-41.2-76.4-8.7-8.7-10.8-10.3-15.5-11.7-5.8-1.7-8.1-1.9-12-.7"/></g></svg>';
+  }
+  function setBtnXY(x, y) {
+    if (!btn) return;
+    const size = btnSize();
+    const maxX = Math.max(8, window.innerWidth - size - 8);
+    const maxY = Math.max(8, window.innerHeight - size - 8);
+    btn.style.left = Math.min(Math.max(8, x), maxX) + "px";
+    btn.style.top = Math.min(Math.max(8, y), maxY) + "px";
+    btn.style.right = "auto";
+  }
+  function applyBtnSize() {
+    if (!btn) return;
+    const s = btnSize();
+    btn.style.width = s + "px";
+    btn.style.height = s + "px";
+  }
+  function rectsOverlap(a, b, pad) {
+    return !(a.right + pad <= b.left || a.left - pad >= b.right || a.bottom + pad <= b.top || a.top - pad >= b.bottom);
+  }
+  function antiOverlapRm() {
+    if (!btn || !btn.classList.contains("seidr-fw-visible")) return;
+    const rm = document.getElementById("seidr-rm-btn");
+    if (!rm || !rm.classList.contains("seidr-rm-visible")) return;
+    const size = btnSize();
+    let guard = 0;
+    while (guard < 24) {
+      guard++;
+      const a = btn.getBoundingClientRect();
+      const b = rm.getBoundingClientRect();
+      if (!rectsOverlap(a, b, GAP2)) break;
+      let nx = a.left;
+      let ny = a.top + size + GAP2;
+      if (ny + size > window.innerHeight - 8) {
+        ny = Math.max(8, b.top);
+        nx = b.left - size - GAP2;
+        if (nx < 8) nx = b.right + GAP2;
+      }
+      setBtnXY(nx, ny);
+    }
+    placeMenu();
+  }
+  function applyLauncherPosition(pos) {
+    if (!btn) return;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const size = btnSize();
+    const chat = chatLogRect();
+    if (pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom") {
+      if (chat && chat.width > 40) {
+        const x = chat.left - size - 8;
+        let y;
+        if (pos === "chatTop") y = chat.top + 8;
+        else if (pos === "chatBottom") y = chat.bottom - size - 8;
+        else y = chat.top + chat.height / 2 - size / 2;
+        setBtnXY(x, y);
+        return;
+      }
+      setBtnXY(vw - size - PAD, vh * 0.55);
+      return;
+    }
+    const leftX = PAD;
+    const rightX = vw - size - PAD;
+    const topY = PAD;
+    const bottomY = vh - size - PAD;
+    const midY = vh / 2 - size / 2;
+    switch (pos) {
+      case "topLeft":
+        setBtnXY(leftX, topY);
+        break;
+      case "topRight":
+        setBtnXY(rightX, topY);
+        break;
+      case "bottomLeft":
+        setBtnXY(leftX, bottomY);
+        break;
+      case "bottomRight":
+        setBtnXY(rightX, bottomY);
+        break;
+      case "middleLeft":
+        setBtnXY(leftX, midY);
+        break;
+      case "middleRight":
+        setBtnXY(rightX, midY);
+        break;
+      default:
+        setBtnXY(rightX, midY);
+        break;
+    }
+  }
+  function placeFromFractions(fx, fy) {
+    setBtnXY(fx * window.innerWidth, fy * window.innerHeight);
+  }
+  function placeBtnDefault() {
+    if (!btn) return;
+    applyBtnSize();
+    if (sessionBtnPos) {
+      placeFromFractions(sessionBtnPos.fx, sessionBtnPos.fy);
+    } else if (persistedPos) {
+      placeFromFractions(persistedPos.fx, persistedPos.fy);
+    } else {
+      const settings = seidrGetSettings();
+      applyLauncherPosition(settings.fastWigglePosition || "chatBottom");
+    }
+    antiOverlapRm();
+  }
+  function menuAnchorOffsetY(n, itemH) {
+    if (n <= 0) return MENU_PAD;
+    if (n % 2 === 1) {
+      const mid = Math.floor(n / 2);
+      return MENU_PAD + mid * (itemH + MENU_GAP) + itemH / 2;
+    }
+    const a = n / 2 - 1;
+    const b = n / 2;
+    const ca = MENU_PAD + a * (itemH + MENU_GAP) + itemH / 2;
+    const cb = MENU_PAD + b * (itemH + MENU_GAP) + itemH / 2;
+    return (ca + cb) / 2;
+  }
+  function placeMenu() {
+    if (!btn || !menu || !menu.classList.contains("seidr-fw-open")) return;
+    const r = btn.getBoundingClientRect();
+    const size = btnSize();
+    const items = menu.querySelectorAll("button");
+    const n = items.length;
+    for (let i = 0; i < items.length; i++) {
+      const el = items[i];
+      el.style.width = size + "px";
+      el.style.height = size + "px";
+    }
+    const mw = MENU_PAD * 2 + size;
+    menu.style.width = mw + "px";
+    const btnCenterY = r.top + r.height / 2;
+    const anchor = menuAnchorOffsetY(n, size);
+    let top = btnCenterY - anchor;
+    const menuH = n > 0 ? MENU_PAD * 2 + n * size + Math.max(0, n - 1) * MENU_GAP : menu.offsetHeight || size;
+    const maxTop = Math.max(8, window.innerHeight - menuH - 8);
+    top = Math.min(Math.max(8, top), maxTop);
+    menu.style.left = Math.max(8, r.left - mw - GAP2) + "px";
+    menu.style.top = top + "px";
+    menu.style.right = "auto";
+  }
+  function closeMenu() {
+    if (menu) menu.classList.remove("seidr-fw-open");
+  }
+  function makeDraggable(el, onEnd) {
+    let ox = 0;
+    let oy = 0;
+    let startX = 0;
+    let startY = 0;
+    function down(ev) {
+      const t = ev.target;
+      if (t !== el && t.closest && t.closest("button") && t.closest("button") !== el) return;
+      dragMoved = false;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      const r = el.getBoundingClientRect();
+      ox = ev.clientX - r.left;
+      oy = ev.clientY - r.top;
+      el.setPointerCapture(ev.pointerId);
+      ev.preventDefault();
+    }
+    function move(ev) {
+      if (!el.hasPointerCapture(ev.pointerId)) return;
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) dragMoved = true;
+      el.style.left = ev.clientX - ox + "px";
+      el.style.top = ev.clientY - oy + "px";
+      el.style.right = "auto";
+      placeMenu();
+    }
+    function up(ev) {
+      if (!el.hasPointerCapture(ev.pointerId)) return;
+      el.releasePointerCapture(ev.pointerId);
+      if (onEnd) onEnd();
+    }
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  }
+  function playReady(anim) {
+    closeMenu();
+    seidrPlayAnimation(anim.id).catch(function() {
+    });
+  }
+  function updateBtnIcon(ready2) {
+    if (!btn) return;
+    const slots = Object.keys(ready2);
+    const icon = btn.querySelector(".seidr-fw-icon");
+    if (!icon) return;
+    if (slots.length === 1) {
+      applySlotIcon(icon, slots[0]);
+      btn.title = "Fast Wiggle \xB7 " + slots[0];
+    } else {
+      icon.innerHTML = popupIconHtml();
+      btn.title = "Fast Wiggle";
+    }
+  }
+  function openSlotMenu(ready2) {
+    if (!menu || !btn) return;
+    const order = ["ear", "tail", "wing"];
+    menu.innerHTML = "";
+    for (let i = 0; i < order.length; i++) {
+      const slot = order[i];
+      const anim = ready2[slot];
+      if (!anim) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      applySlotIcon(b, slot);
+      b.title = slot;
+      b.addEventListener("click", function(ev) {
+        ev.stopPropagation();
+        playReady(anim);
+      });
+      menu.appendChild(b);
+    }
+    menu.classList.add("seidr-fw-open");
+    requestAnimationFrame(function() {
+      placeMenu();
+    });
+    placeMenu();
+  }
+  function onBtnActivate() {
+    if (dragMoved) return;
+    const ready2 = seidrReadyWiggleBySlot();
+    const slots = Object.keys(ready2);
+    if (!slots.length) return;
+    if (slots.length === 1) {
+      playReady(ready2[slots[0]]);
+      return;
+    }
+    if (menu && menu.classList.contains("seidr-fw-open")) closeMenu();
+    else openSlotMenu(ready2);
+  }
+  function ensureShell() {
+    injectStyles();
+    if (root && document.body.contains(root)) return;
+    root = document.createElement("div");
+    root.id = "seidr-fw-root";
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "seidr-fw-btn";
+    btn.setAttribute("aria-label", "Fast Wiggle");
+    const icon = document.createElement("span");
+    icon.className = "seidr-fw-icon";
+    icon.innerHTML = popupIconHtml();
+    btn.appendChild(icon);
+    menu = document.createElement("div");
+    menu.id = "seidr-fw-menu";
+    root.appendChild(btn);
+    root.appendChild(menu);
+    document.body.appendChild(root);
+    ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
+      root.addEventListener(type, function(ev) {
+        ev.stopPropagation();
+      });
+    });
+    makeDraggable(btn, function() {
+      if (!btn) return;
+      antiOverlapRm();
+      const x = parseFloat(btn.style.left) || btn.offsetLeft;
+      const y = parseFloat(btn.style.top) || btn.offsetTop;
+      const fx = x / Math.max(1, window.innerWidth);
+      const fy = y / Math.max(1, window.innerHeight);
+      sessionBtnPos = { fx, fy };
+      persistedPos = sessionBtnPos;
+      writePersistedPos(fx, fy);
+      disconnectChatLogObserver();
+    });
+    btn.addEventListener("pointerup", function() {
+      onBtnActivate();
+    });
+    document.addEventListener("pointerdown", function(ev) {
+      if (!menu || !menu.classList.contains("seidr-fw-open")) return;
+      const t = ev.target;
+      if (menu.contains(t) || btn && btn.contains(t)) return;
+      closeMenu();
+    });
+    persistedPos = readPersistedPos();
+  }
+  function disconnectChatLogObserver() {
+    if (chatLogObserver) {
+      chatLogObserver.disconnect();
+      chatLogObserver = null;
+    }
+  }
+  function syncChatLogObserver() {
+    disconnectChatLogObserver();
+    if (!btn || !btn.classList.contains("seidr-fw-visible")) return;
+    if (sessionBtnPos || persistedPos) return;
+    const pos = seidrGetSettings().fastWigglePosition || "chatBottom";
+    if (pos !== "chatLeft" && pos !== "chatTop" && pos !== "chatBottom") return;
+    const el = chatLogEl();
+    if (!el || typeof ResizeObserver === "undefined") return;
+    chatLogObserver = new ResizeObserver(function() {
+      if (sessionBtnPos || persistedPos) return;
+      placeBtnDefault();
+    });
+    chatLogObserver.observe(el);
+  }
+  function seidrFwRelayout() {
+    if (!btn) return;
+    if (!btn.classList.contains("seidr-fw-visible")) {
+      applyBtnSize();
+      return;
+    }
+    placeBtnDefault();
+    syncChatLogObserver();
+  }
+  function seidrFwUpdateVisibility() {
+    const s = seidrGetSettings();
+    if (!s.showFastWiggleButton) {
+      if (btn) btn.classList.remove("seidr-fw-visible");
+      closeMenu();
+      disconnectChatLogObserver();
+      return;
+    }
+    const ready2 = seidrReadyWiggleBySlot();
+    const slots = Object.keys(ready2);
+    const show = onChatRoomScreen() && noCharacterDialog() && slots.length > 0;
+    ensureShell();
+    if (btn) {
+      btn.classList.toggle("seidr-fw-visible", show);
+      if (show) {
+        updateBtnIcon(ready2);
+        seidrFwRelayout();
+      } else {
+        closeMenu();
+        disconnectChatLogObserver();
+      }
+    }
+  }
+  function seidrFwOnSettingsChanged() {
+    sessionBtnPos = null;
+    persistedPos = readPersistedPos();
+    seidrFwUpdateVisibility();
+  }
+  function onResize() {
+    seidrFwRelayout();
+  }
+  function seidrInstallFastWiggle() {
+    if (installed2) {
+      seidrFwUpdateVisibility();
+      return;
+    }
+    installed2 = true;
+    ensureShell();
+    Seidr.tryHook("FastWiggle:ChatRoomLoad", "ChatRoomLoad", 11, function(args, next) {
+      const r = next(args);
+      seidrFwUpdateVisibility();
+      return r;
+    });
+    Seidr.tryHook("FastWiggle:ChatRoomSync", "ChatRoomSync", 11, function(args, next) {
+      const r = next(args);
+      seidrFwUpdateVisibility();
+      return r;
+    });
+    Seidr.tryHook("FastWiggle:ChatRoomResize", "ChatRoomResize", 11, function(args, next) {
+      const r = next(args);
+      seidrFwRelayout();
+      return r;
+    });
+    Seidr.tryHook("FastWiggle:CommonSetScreen", "CommonSetScreen", 11, function(args, next) {
+      const r = next(args);
+      seidrFwUpdateVisibility();
+      return r;
+    });
+    Seidr.tryHook("FastWiggle:CharacterSetCurrent", "CharacterSetCurrent", 11, function(args, next) {
+      const r = next(args);
+      seidrFwUpdateVisibility();
+      return r;
+    });
+    Seidr.tryHook("FastWiggle:DialogLeave", "DialogLeave", 11, function(args, next) {
+      const r = next(args);
+      seidrFwUpdateVisibility();
+      return r;
+    });
+    window.addEventListener("resize", onResize);
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function() {
+      if (seidrGetSettings().showFastWiggleButton) seidrFwUpdateVisibility();
+    }, 2e3);
+    seidrFwUpdateVisibility();
+  }
+  Seidr.fwOnSettingsChanged = seidrFwOnSettingsChanged;
+  Seidr.fwUpdateVisibility = seidrFwUpdateVisibility;
+  Seidr.fwRelayout = seidrFwRelayout;
+
   // src/animations/index.ts
   Seidr.installAnimations = function() {
+    try {
+      seidrGetAnimationsBag();
+    } catch (e) {
+    }
+    seidrInstallFastWiggle();
   };
+
+  // src/reactions/store.ts
+  function seidrGetReactionsBag() {
+    const s = seidrGetSettings();
+    return seidrNormalizeReactionsBag(s.reactions);
+  }
+  function seidrSaveReactionsBag(bag) {
+    const normalized = seidrNormalizeReactionsBag(bag);
+    return seidrSaveSettings({ reactions: normalized });
+  }
+  function seidrListReactions() {
+    return seidrGetReactionsBag().list.slice();
+  }
+  function seidrUpsertReaction(reaction) {
+    const norm2 = seidrNormalizeReaction(reaction);
+    if (!norm2) return { ok: false, error: "Invalid reaction" };
+    if (!norm2.name.trim()) return { ok: false, error: "Name required" };
+    if (!seidrReactionHasTrigger(norm2)) {
+      return { ok: false, error: "Add an activity, phrase, or climax trigger" };
+    }
+    if (norm2.steps.length > SEIDR_REACTION_STEPS_MAX) {
+      return { ok: false, error: "Max " + SEIDR_REACTION_STEPS_MAX + " steps" };
+    }
+    const bag = seidrGetReactionsBag();
+    const nameKey = norm2.name.toLowerCase();
+    for (let i = 0; i < bag.list.length; i++) {
+      if (bag.list[i].id !== norm2.id && bag.list[i].name.toLowerCase() === nameKey) {
+        return { ok: false, error: "Name already used" };
+      }
+    }
+    let found = false;
+    for (let j = 0; j < bag.list.length; j++) {
+      if (bag.list[j].id === norm2.id) {
+        bag.list[j] = norm2;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      if (bag.list.length >= SEIDR_REACTIONS_MAX) {
+        return { ok: false, error: "Reaction limit reached (" + SEIDR_REACTIONS_MAX + ")" };
+      }
+      if (norm2.id < 1) {
+        norm2.id = bag.nextId;
+        bag.nextId = norm2.id + 1;
+      } else if (norm2.id >= bag.nextId) {
+        bag.nextId = norm2.id + 1;
+      }
+      bag.list.push(norm2);
+    }
+    const saved = seidrSaveReactionsBag(bag);
+    if (!saved.ok) return { ok: false, error: saved.error || "Save failed" };
+    return { ok: true, reaction: norm2 };
+  }
+  function seidrDeleteReaction(id) {
+    const bag = seidrGetReactionsBag();
+    bag.list = bag.list.filter(function(r) {
+      return r.id !== id;
+    });
+    return seidrSaveReactionsBag(bag);
+  }
+  function seidrAddReaction() {
+    const bag = seidrGetReactionsBag();
+    if (bag.list.length >= SEIDR_REACTIONS_MAX) return null;
+    const r = seidrDefaultReaction(bag.nextId);
+    bag.nextId = r.id + 1;
+    bag.list.push(r);
+    const saved = seidrSaveReactionsBag(bag);
+    if (!saved.ok) return null;
+    return r;
+  }
+
+  // src/reactions/match.ts
+  function myMember() {
+    try {
+      if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number") {
+        return Player.MemberNumber;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function activityNamesFromMessage(data) {
+    const names = [];
+    const seen = {};
+    function add(n) {
+      const s = String(n || "").trim();
+      if (!s || seen[s]) return;
+      seen[s] = true;
+      names.push(s);
+    }
+    try {
+      if (typeof Seidr.activityNameFromMessage === "function") {
+        add(Seidr.activityNameFromMessage(data));
+      }
+    } catch (e) {
+    }
+    const match = /Chat(?:Other|Self)-[^-]+-(.+)$/.exec(data && data.Content || "");
+    if (match) add(match[1]);
+    return names;
+  }
+  function seidrActivitySlotFromMessage(data) {
+    const match = /^Chat(?:Other|Self)-([^-]+)-/.exec(data && data.Content || "");
+    if (match) return match[1];
+    try {
+      if (typeof Seidr.dictValue === "function") {
+        const keys = ["FocusGroup", "Group", "ActivityGroup", "TargetGroup"];
+        for (let i = 0; i < keys.length; i++) {
+          const v = Seidr.dictValue(data && data.Dictionary, keys[i]);
+          if (typeof v === "string" && v.trim()) return v.trim();
+          if (v && typeof v === "object" && typeof v.Name === "string") {
+            return String(v.Name);
+          }
+        }
+      }
+    } catch (e) {
+    }
+    return "";
+  }
+  function dictMember(data, key) {
+    try {
+      if (typeof Seidr.dictValue === "function") {
+        const v = Seidr.dictValue(data && data.Dictionary, key);
+        if (typeof v === "number") return v;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function activityMatchesTrigger(names, iPerform, onMe, messageSlot, trigger) {
+    const want = String(trigger.activity || "").trim().toLowerCase();
+    if (!want) return false;
+    let nameHit = false;
+    for (let i = 0; i < names.length; i++) {
+      if (names[i].toLowerCase() === want) {
+        nameHit = true;
+        break;
+      }
+    }
+    if (!nameHit) return false;
+    const wantSlot = String(trigger.slot || "").trim();
+    if (wantSlot) {
+      if (!messageSlot || messageSlot.toLowerCase() !== wantSlot.toLowerCase()) return false;
+    }
+    if (iPerform && trigger.whenIPerform) return true;
+    if (onMe && trigger.whenOnMe) return true;
+    return false;
+  }
+  function seidrIsClimaxActivityContent(content) {
+    const c = String(content || "").trim();
+    return /^Orgasm\d+$/.test(c) || /^OrgasmFail/.test(c) || /^OrgasmResist/.test(c);
+  }
+  function seidrMatchClimaxReaction(data) {
+    if (!data || data.Type !== "Activity") return null;
+    if (!seidrIsClimaxActivityContent(data.Content)) return null;
+    const me = myMember();
+    if (me == null) return null;
+    let source = dictMember(data, "SourceCharacter");
+    if (typeof source !== "number") {
+      source = typeof data.Sender === "number" ? data.Sender : null;
+    }
+    if (source !== me) return null;
+    const list = seidrListReactions();
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.enabled || !r.onClimax) continue;
+      return { reaction: r, issuerMemberNumber: me, kind: "climax" };
+    }
+    return null;
+  }
+  function seidrMatchActivityReaction(data) {
+    if (!data || data.Type !== "Activity") return null;
+    if (seidrIsClimaxActivityContent(data.Content)) return null;
+    const me = myMember();
+    if (me == null) return null;
+    const names = activityNamesFromMessage(data);
+    if (!names.length) return null;
+    const messageSlot = seidrActivitySlotFromMessage(data);
+    let source = dictMember(data, "SourceCharacter");
+    if (typeof source !== "number") {
+      source = typeof data.Sender === "number" ? data.Sender : null;
+    }
+    const target = dictMember(data, "TargetCharacter");
+    if (typeof source !== "number" || typeof target !== "number") return null;
+    const iPerform = source === me;
+    const onMe = target === me;
+    if (!iPerform && !onMe) return null;
+    const list = seidrListReactions();
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.enabled) continue;
+      let hit = false;
+      for (let j = 0; j < r.activities.length; j++) {
+        if (activityMatchesTrigger(names, iPerform, onMe, messageSlot, r.activities[j])) {
+          hit = true;
+          break;
+        }
+      }
+      if (!hit) continue;
+      let issuer = me;
+      if (onMe && source !== me) issuer = source;
+      else if (iPerform && target !== me) issuer = target;
+      return { reaction: r, issuerMemberNumber: issuer, kind: "activity" };
+    }
+    return null;
+  }
+  function seidrMatchPhraseReaction(data) {
+    if (!data || data.Type !== "Chat") return null;
+    const me = myMember();
+    if (me == null) return null;
+    if (typeof data.Sender !== "number" || data.Sender !== me) return null;
+    const content = String(data.Content || "").trim();
+    if (!content) return null;
+    const key = content.toLowerCase();
+    const list = seidrListReactions();
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.enabled) continue;
+      const phrase = String(r.phrase || "").trim();
+      if (!phrase) continue;
+      if (phrase.toLowerCase() !== key) continue;
+      return { reaction: r, issuerMemberNumber: me, kind: "phrase" };
+    }
+    return null;
+  }
+
+  // src/reactions/validate.ts
+  function myMember2() {
+    try {
+      if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number") {
+        return Player.MemberNumber;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function resolveActionTarget(step, issuerMemberNumber) {
+    const me = myMember2();
+    if (me == null || typeof Player === "undefined" || !Player) {
+      return { ok: false, reason: "Not logged in" };
+    }
+    if (step.target === "self") {
+      return { ok: true, character: Player };
+    }
+    if (issuerMemberNumber === me) {
+      return { ok: true, character: Player };
+    }
+    const C = seidrCmdFindCharacter(issuerMemberNumber);
+    if (!C) {
+      return { ok: false, reason: "Issuer is not in the room" };
+    }
+    return { ok: true, character: C };
+  }
+  function validateStep(step, issuerMemberNumber, index) {
+    const label = "step " + (index + 1);
+    if (step.kind === "say") {
+      if (!String(step.text || "").trim()) {
+        return { ok: false, reason: label + " Say text is empty" };
+      }
+      return { ok: true };
+    }
+    if (step.kind === "animation") {
+      if (!step.animationId || step.animationId < 1) {
+        return { ok: false, reason: label + " Animation is not selected" };
+      }
+      const anim = seidrFindAnimationById(step.animationId);
+      if (!anim) {
+        return { ok: false, reason: label + " Animation is missing or empty" };
+      }
+      if (anim.kind === "wiggle") {
+        if (!anim.primary || !anim.secondary || !anim.slot) {
+          return { ok: false, reason: label + " Wiggle animation is incomplete" };
+        }
+        return { ok: true };
+      }
+      if (!anim.steps.length) {
+        return { ok: false, reason: label + " Animation is missing or empty" };
+      }
+      return { ok: true };
+    }
+    if (step.kind === "wiggle") {
+      if (!step.slots || !step.slots.length) {
+        return { ok: false, reason: label + " Wiggle needs at least one slot" };
+      }
+      return { ok: true };
+    }
+    if (step.kind === "action") {
+      if (!String(step.actionName || "").trim()) {
+        return { ok: false, reason: label + " Action is not selected" };
+      }
+      const resolved = seidrCmdResolveAction(step.actionName);
+      if (resolved.ok === false) {
+        return { ok: false, reason: label + " " + (resolved.error || "Unknown action") };
+      }
+      const target = resolveActionTarget(step, issuerMemberNumber);
+      if (target.ok === false) return target;
+      try {
+        if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target.character)) {
+          return { ok: false, reason: label + " Cannot act on that person right now" };
+        }
+      } catch (e) {
+      }
+      const binding = resolved.action;
+      if (!seidrCmdActivityAvailable(target.character, binding.slot, binding.activity)) {
+        return {
+          ok: false,
+          reason: label + ' Action "' + binding.name + '" is not available right now'
+        };
+      }
+      return { ok: true };
+    }
+    return { ok: false, reason: label + " Unknown step kind" };
+  }
+  function seidrValidateReaction(reaction, issuerMemberNumber) {
+    if (!reaction || !reaction.steps || !reaction.steps.length) {
+      return { ok: false, reason: "No steps defined" };
+    }
+    for (let i = 0; i < reaction.steps.length; i++) {
+      const r = validateStep(reaction.steps[i], issuerMemberNumber, i);
+      if (r.ok === false) return r;
+    }
+    return { ok: true };
+  }
+
+  // src/reactions/run.ts
+  function myMember3() {
+    try {
+      if (typeof Player !== "undefined" && Player && typeof Player.MemberNumber === "number") {
+        return Player.MemberNumber;
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  function actionTargetCharacter(step, issuerMemberNumber) {
+    const me = myMember3();
+    if (me == null || !Player) return null;
+    if (step.target === "self" || issuerMemberNumber === me) return Player;
+    return seidrCmdFindCharacter(issuerMemberNumber);
+  }
+  function runSay(text) {
+    const msg = String(text || "").trim();
+    if (!msg) return { ok: false, error: "Empty Say text" };
+    try {
+      if (typeof ChatRoomSendChatMessage === "function") {
+        ChatRoomSendChatMessage(msg);
+        return { ok: true };
+      }
+    } catch (e) {
+      console.warn("[Seidr Reaction] Say failed", e);
+    }
+    return { ok: false, error: "Could not send chat message" };
+  }
+  async function runStep(step, issuerMemberNumber) {
+    if (step.kind === "say") return runSay(step.text);
+    if (step.kind === "animation") {
+      return seidrPlayAnimation(step.animationId);
+    }
+    if (step.kind === "wiggle") {
+      const r = await seidrPlayWiggleSlots(step.slots);
+      return { ok: r.ok, error: r.error };
+    }
+    if (step.kind === "action") {
+      const resolved = seidrCmdResolveAction(step.actionName);
+      if (resolved.ok === false) {
+        return { ok: false, error: resolved.error || "Unknown action" };
+      }
+      const target = actionTargetCharacter(step, issuerMemberNumber);
+      if (!target) return { ok: false, error: "Action target missing" };
+      try {
+        if (typeof ServerChatRoomGetAllowItem === "function" && !ServerChatRoomGetAllowItem(Player, target)) {
+          return { ok: false, error: "Cannot act on that person right now" };
+        }
+      } catch (e) {
+      }
+      return seidrRunItemActivity(target, resolved.action.slot, resolved.action.activity);
+    }
+    return { ok: false, error: "Unknown step kind" };
+  }
+  async function seidrPlayReaction(reaction, issuerMemberNumber) {
+    const pre = seidrValidateReaction(reaction, issuerMemberNumber);
+    if (pre.ok === false) {
+      return { ok: false, error: pre.reason };
+    }
+    const steps = reaction.steps.slice();
+    for (let i = 0; i < steps.length; i++) {
+      const result = await runStep(steps[i], issuerMemberNumber);
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: "step " + (i + 1) + ": " + (result.error || "failed")
+        };
+      }
+    }
+    return { ok: true };
+  }
+
+  // src/reactions/runtime.ts
+  var COOLDOWN_MS = 1500;
+  var installed3 = false;
+  var running = false;
+  var cooldownUntil = 0;
+  function busy() {
+    return running || Date.now() < cooldownUntil;
+  }
+  function finishRun() {
+    running = false;
+    cooldownUntil = Date.now() + COOLDOWN_MS;
+  }
+  function fire(match) {
+    if (busy()) return;
+    running = true;
+    const label = match.reaction.name || "#" + match.reaction.id;
+    seidrPlayReaction(match.reaction, match.issuerMemberNumber).then(function(result) {
+      if (!result.ok) {
+        seidrCmdWarn('Reaction "' + label + '" not functional: ' + (result.error || "unknown"));
+      }
+    }).catch(function(e) {
+      console.warn("[Seidr Reaction] run failed", e);
+      seidrCmdWarn('Reaction "' + label + '" not functional: run failed');
+    }).then(finishRun, finishRun);
+  }
+  Seidr.installReactions = function() {
+    if (Seidr.SHOW_REACTIONS === false) return;
+    if (installed3) return;
+    if (typeof Seidr.hookFunction !== "function") return;
+    installed3 = true;
+    Seidr.hookFunction("ChatRoomMessage", 10, function(args, next) {
+      const data = args && args[0];
+      try {
+        if (!busy() && data) {
+          const climax = seidrMatchClimaxReaction(data);
+          if (climax) fire(climax);
+          else {
+            const act2 = seidrMatchActivityReaction(data);
+            if (act2) fire(act2);
+            else {
+              const phrase = seidrMatchPhraseReaction(data);
+              if (phrase) fire(phrase);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Seidr Reaction] match failed", e);
+      }
+      return next(args);
+    });
+  };
+
+  // src/reactions/ui.ts
+  var editId = null;
+  var draft = null;
+  function escapeHtml4(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function setMsg2(root4, text) {
+    const el = root4.querySelector("#seidr-rxn-msg");
+    if (el) el.textContent = text || "";
+  }
+  function updateCap(root4) {
+    const el = root4.querySelector("#seidr-rxn-cap");
+    if (!el) return;
+    el.textContent = seidrListReactions().length + "/" + SEIDR_REACTIONS_MAX + " Reactions";
+  }
+  function renderList(root4) {
+    const list = seidrListReactions();
+    const box = root4.querySelector("#seidr-rxn-list");
+    if (!box) return;
+    updateCap(root4);
+    if (!list.length) {
+      box.innerHTML = '<p class="seidr-settings-hint">No reactions yet. Add one, pick triggers, then define up to 5 steps.</p>';
+      return;
+    }
+    const optsHtml = list.map(function(r) {
+      const mark = r.enabled ? "" : " [off]";
+      return '<option value="' + r.id + '"' + (editId === r.id ? " selected" : "") + ">" + escapeHtml4(r.name) + " (" + r.steps.length + ")" + mark + "</option>";
+    }).join("");
+    box.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Reaction</span>',
+      '<select id="seidr-rxn-pick">' + optsHtml + "</select>",
+      "</div>"
+    ].join("");
+  }
+  function activityOptionsHtml(selected) {
+    const list = seidrCmdListAllActivities();
+    const extra = selected && !list.some(function(o) {
+      return o.id === selected;
+    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (custom)</option>" : "";
+    const opts4 = list.map(function(o) {
+      return '<option value="' + escapeHtml4(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml4(o.label) + "</option>";
+    }).join("");
+    return '<option value="">\u2014 Activity \u2014</option>' + extra + opts4;
+  }
+  function animationOptionsHtml(selectedId) {
+    const list = seidrListAnimations();
+    if (!list.length) {
+      return '<option value="0">No animations defined</option>';
+    }
+    return '<option value="0">\u2014 Animation \u2014</option>' + list.map(function(a) {
+      const tag = a.kind === "wiggle" ? " [wiggle]" : "";
+      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml4(a.name) + tag + "</option>";
+    }).join("");
+  }
+  function cmdActionOptionsHtml(selected) {
+    const list = seidrListCmdActions();
+    if (!list.length) {
+      return '<option value="">No Commands actions \u2014 add under Commands</option>';
+    }
+    const extra = selected && !list.some(function(a) {
+      return a.name === selected;
+    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (missing)</option>" : "";
+    return '<option value="">\u2014 Action \u2014</option>' + extra + list.map(function(a) {
+      return '<option value="' + escapeHtml4(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + escapeHtml4(a.name) + " (" + escapeHtml4(a.activity) + ")</option>";
+    }).join("");
+  }
+  function slotOptionsHtml(selected) {
+    const sel = String(selected || "");
+    const known = SEIDR_ACTION_SLOTS.some(function(s) {
+      return s.id === sel;
+    });
+    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '" selected>' + escapeHtml4(sel) + " (custom)</option>" : "";
+    return '<option value="">Any slot</option>' + extra + SEIDR_ACTION_SLOTS.map(function(s) {
+      return '<option value="' + escapeHtml4(s.id) + '"' + (s.id === sel ? " selected" : "") + ">" + escapeHtml4(s.label) + " (" + escapeHtml4(s.id) + ")</option>";
+    }).join("");
+  }
+  function triggerRowHtml(t, index) {
+    return [
+      '<div class="seidr-settings-sec" data-rxn-trig="' + index + '" style="margin-top:8px;padding:8px;">',
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Activity</span>',
+      "<select data-rxn-trig-act>" + activityOptionsHtml(t.activity) + "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:6px;">',
+      '<span class="seidr-settings-field-label">Slot</span>',
+      "<select data-rxn-trig-slot>" + slotOptionsHtml(t.slot || "") + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Optional zone filter (e.g. Ears for ear pets). Any slot = activity name only.</p>',
+      '<div class="seidr-settings-row" style="margin-top:6px;gap:12px;display:flex;flex-wrap:wrap;align-items:center;">',
+      '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-perf' + (t.whenIPerform ? " checked" : "") + " /> I perform</label>",
+      '<label class="seidr-settings-check"><input type="checkbox" data-rxn-trig-onme' + (t.whenOnMe ? " checked" : "") + " /> On me</label>",
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-rxn-trig-del="' + index + '">Remove</button>',
+      "</div>",
+      "</div>"
+    ].join("");
+  }
+  function stepSummary(step) {
+    if (step.kind === "say") {
+      const t = String(step.text || "").trim();
+      return "Say \xB7 " + (t ? t.length > 28 ? t.slice(0, 28) + "\u2026" : t : "(empty)");
+    }
+    if (step.kind === "animation") {
+      const a = seidrListAnimations().find(function(x) {
+        return x.id === step.animationId;
+      });
+      return "Animation \xB7 " + (a ? a.name : "(none)");
+    }
+    if (step.kind === "wiggle") {
+      return "Wiggle \xB7 " + seidrWiggleSlotsLabel(step.slots);
+    }
+    return "Action \xB7 " + (step.actionName || "(none)") + " \u2192 " + (step.target === "self" ? "Self" : "Issuer");
+  }
+  function rxnSlotChecksHtml(slots) {
+    const order = [
+      { id: "ear", label: "Ear" },
+      { id: "tail", label: "Tail" },
+      { id: "wing", label: "Wing" }
+    ];
+    return order.map(function(o) {
+      const checked = slots.indexOf(o.id) >= 0 ? " checked" : "";
+      return '<label class="seidr-settings-check"><input type="checkbox" data-rxn-step-slot value="' + o.id + '"' + checked + " /> " + o.label + "</label>";
+    }).join("");
+  }
+  function stepCardHtml(step, index) {
+    const kindSel = [
+      "<select data-rxn-step-kind>",
+      '<option value="say"' + (step.kind === "say" ? " selected" : "") + ">Say</option>",
+      '<option value="animation"' + (step.kind === "animation" ? " selected" : "") + ">Animation</option>",
+      '<option value="wiggle"' + (step.kind === "wiggle" ? " selected" : "") + ">Wiggle</option>",
+      '<option value="action"' + (step.kind === "action" ? " selected" : "") + ">Perform action</option>",
+      "</select>"
+    ].join("");
+    let body = "";
+    if (step.kind === "say") {
+      body = [
+        '<p class="seidr-settings-hint" style="margin-top:8px;">Message (chat, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
+        '<textarea data-rxn-step-say maxlength="' + SEIDR_ACTION_CHAT_MAX + '" rows="2">' + escapeHtml4(step.text || "") + "</textarea>"
+      ].join("");
+    } else if (step.kind === "animation") {
+      body = [
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Animation</span>',
+        "<select data-rxn-step-anim>" + animationOptionsHtml(step.animationId) + "</select>",
+        "</div>"
+      ].join("");
+    } else if (step.kind === "wiggle") {
+      body = [
+        '<p class="seidr-settings-hint" style="margin-top:8px;">Plays configured Wiggle sets in parallel. Missing / not worn \u2192 skipped.</p>',
+        '<div class="seidr-settings-row" style="margin-top:8px;gap:12px;display:flex;flex-wrap:wrap;">',
+        rxnSlotChecksHtml(step.slots),
+        "</div>"
+      ].join("");
+    } else {
+      body = [
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Action</span>',
+        "<select data-rxn-step-action>" + cmdActionOptionsHtml(step.actionName) + "</select>",
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:8px;gap:12px;display:flex;flex-wrap:wrap;">',
+        '<label class="seidr-settings-check"><input type="radio" name="seidr-rxn-tgt-' + index + '" data-rxn-step-tgt value="self"' + (step.target === "self" ? " checked" : "") + " /> Self</label>",
+        '<label class="seidr-settings-check"><input type="radio" name="seidr-rxn-tgt-' + index + '" data-rxn-step-tgt value="issuer"' + (step.target !== "self" ? " checked" : "") + " /> Issuer</label>",
+        "</div>"
+      ].join("");
+    }
+    return [
+      '<details class="seidr-settings-sec" data-rxn-step="' + index + '" open>',
+      "<summary>" + escapeHtml4(stepSummary(step)) + "</summary>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Kind</span>',
+      kindSel,
+      "</div>",
+      body,
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-rxn-del-step="' + index + '">Remove</button>',
+      "</div>",
+      "</details>"
+    ].join("");
+  }
+  function readDraftFromDom(root4) {
+    if (!draft) return null;
+    const nameEl = root4.querySelector("#seidr-rxn-name");
+    const enEl = root4.querySelector("#seidr-rxn-enabled");
+    const phraseEl = root4.querySelector("#seidr-rxn-phrase");
+    const climaxEl = root4.querySelector("#seidr-rxn-climax");
+    const name = (nameEl && nameEl.value || "").trim() || draft.name;
+    const enabled = !enEl || enEl.checked;
+    const phrase = (phraseEl && phraseEl.value || "").trim().slice(0, SEIDR_REACTION_PHRASE_MAX);
+    const onClimax = !!(climaxEl && climaxEl.checked);
+    const activities = [];
+    root4.querySelectorAll("[data-rxn-trig]").forEach(function(row) {
+      const act2 = row.querySelector("[data-rxn-trig-act]")?.value || "";
+      const slot = row.querySelector("[data-rxn-trig-slot]")?.value || "";
+      const whenIPerform = !!row.querySelector("[data-rxn-trig-perf]")?.checked;
+      const whenOnMe = !!row.querySelector("[data-rxn-trig-onme]")?.checked;
+      activities.push({
+        activity: String(act2).trim(),
+        whenIPerform,
+        whenOnMe,
+        slot: String(slot).trim()
+      });
+    });
+    const steps = [];
+    root4.querySelectorAll("[data-rxn-step]").forEach(function(card) {
+      const kind = card.querySelector("[data-rxn-step-kind]")?.value || "say";
+      if (kind === "animation") {
+        const id = parseInt(
+          card.querySelector("[data-rxn-step-anim]")?.value || "0",
+          10
+        );
+        steps.push({ kind: "animation", animationId: Number.isFinite(id) ? id : 0 });
+        return;
+      }
+      if (kind === "wiggle") {
+        const raw = [];
+        card.querySelectorAll("[data-rxn-step-slot]").forEach(function(el) {
+          const inp = el;
+          if (inp.checked) raw.push(inp.value);
+        });
+        const slots = seidrNormalizeWiggleSlots(raw.length ? raw : ["tail"]);
+        steps.push({ kind: "wiggle", slots: slots.length ? slots : ["tail"] });
+        return;
+      }
+      if (kind === "action") {
+        const actionName = card.querySelector("[data-rxn-step-action]")?.value || "";
+        const tgtEl = card.querySelector("[data-rxn-step-tgt]:checked");
+        const target = tgtEl && tgtEl.value === "self" ? "self" : "issuer";
+        steps.push({ kind: "action", actionName, target });
+        return;
+      }
+      const text = card.querySelector("[data-rxn-step-say]")?.value || "";
+      steps.push({ kind: "say", text: text.slice(0, SEIDR_ACTION_CHAT_MAX) });
+    });
+    return {
+      id: draft.id,
+      name: name.slice(0, SEIDR_REACTION_NAME_MAX),
+      enabled,
+      activities,
+      phrase,
+      onClimax,
+      steps: steps.length ? steps : [seidrDefaultReactionSayStep()]
+    };
+  }
+  function renderEditor(root4) {
+    const host = root4.querySelector("#seidr-rxn-editor");
+    if (!host) return;
+    if (!draft) {
+      host.innerHTML = "";
+      return;
+    }
+    const firstAnim = seidrListAnimations()[0];
+    const triggersHtml = draft.activities.length ? draft.activities.map(triggerRowHtml).join("") : '<p class="seidr-settings-hint">No activity triggers. Add one, a Phrase, or On climax.</p>';
+    const stepsHtml = draft.steps.map(stepCardHtml).join("");
+    host.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Name</span>',
+      '<input type="text" id="seidr-rxn-name" maxlength="' + SEIDR_REACTION_NAME_MAX + '" value="' + escapeHtml4(draft.name) + '" />',
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-enabled"' + (draft.enabled ? " checked" : "") + " /> Enabled</label>",
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:12px;">Triggers \u2014 activity (I perform / On me), a Phrase you say, and/or On climax.</p>',
+      '<div id="seidr-rxn-trigs">' + triggersHtml + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add-trig">+ Activity</button>',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:10px;">',
+      '<span class="seidr-settings-field-label">Phrase</span>',
+      '<input type="text" id="seidr-rxn-phrase" maxlength="' + SEIDR_REACTION_PHRASE_MAX + '" placeholder="Only when you say this exact line" value="' + escapeHtml4(draft.phrase || "") + '" />',
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-climax"' + (draft.onClimax ? " checked" : "") + ' /> On climax <span class="seidr-settings-hint">(your orgasm, ruin, or resist)</span></label>',
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:12px;">Response script \u2014 up to ' + SEIDR_REACTION_STEPS_MAX + " steps, run in order (local).</p>",
+      '<div id="seidr-rxn-steps">' + stepsHtml + "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add-say">+ Say</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add-anim">+ Animation</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add-wiggle">+ Wiggle</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add-act">+ Action</button>',
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:12px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-save">Save</button>',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-rxn-del">Delete</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-rxn-msg"></p>',
+      firstAnim ? "" : '<p class="seidr-settings-hint">Tip: define Animations first if you want Animation steps.</p>'
+    ].join("");
+    wireEditor(root4);
+  }
+  function rebuildFromDom(root4) {
+    const next = readDraftFromDom(root4);
+    if (!next) return;
+    draft = next;
+    renderEditor(root4);
+    renderList(root4);
+    wireList(root4);
+  }
+  function wireList(root4) {
+    const pick = root4.querySelector("#seidr-rxn-pick");
+    pick?.addEventListener("change", function() {
+      const id = parseInt(pick.value, 10);
+      if (Number.isFinite(id)) openReaction(root4, id);
+    });
+  }
+  function wireEditor(root4) {
+    root4.querySelector("#seidr-rxn-add-trig")?.addEventListener("click", function() {
+      const next = readDraftFromDom(root4);
+      if (!next) return;
+      if (next.activities.length >= SEIDR_REACTION_ACTIVITIES_MAX) {
+        setMsg2(root4, "Max " + SEIDR_REACTION_ACTIVITIES_MAX + " activity triggers");
+        return;
+      }
+      next.activities.push(seidrDefaultReactionActivityTrigger());
+      draft = next;
+      renderEditor(root4);
+    });
+    root4.querySelectorAll("[data-rxn-trig-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const idx = parseInt(btn3.getAttribute("data-rxn-trig-del") || "-1", 10);
+        const next = readDraftFromDom(root4);
+        if (!next || idx < 0) return;
+        next.activities.splice(idx, 1);
+        draft = next;
+        renderEditor(root4);
+      });
+    });
+    function addStep(step) {
+      const next = readDraftFromDom(root4);
+      if (!next) return;
+      if (next.steps.length >= SEIDR_REACTION_STEPS_MAX) {
+        setMsg2(root4, "Max " + SEIDR_REACTION_STEPS_MAX + " steps");
+        return;
+      }
+      next.steps.push(step);
+      draft = next;
+      renderEditor(root4);
+    }
+    root4.querySelector("#seidr-rxn-add-say")?.addEventListener("click", function() {
+      addStep(seidrDefaultReactionSayStep());
+    });
+    root4.querySelector("#seidr-rxn-add-anim")?.addEventListener("click", function() {
+      const first = seidrListAnimations()[0];
+      addStep(seidrDefaultReactionAnimationStep(first ? first.id : 0));
+    });
+    root4.querySelector("#seidr-rxn-add-wiggle")?.addEventListener("click", function() {
+      addStep(seidrDefaultReactionWiggleStep(["ear", "tail"]));
+    });
+    root4.querySelector("#seidr-rxn-add-act")?.addEventListener("click", function() {
+      const first = seidrListCmdActions()[0];
+      const step = seidrDefaultReactionActionStep();
+      if (first) step.actionName = first.name;
+      addStep(step);
+    });
+    root4.querySelectorAll("[data-rxn-del-step]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const idx = parseInt(btn3.getAttribute("data-rxn-del-step") || "-1", 10);
+        const next = readDraftFromDom(root4);
+        if (!next || idx < 0) return;
+        next.steps.splice(idx, 1);
+        if (!next.steps.length) next.steps.push(seidrDefaultReactionSayStep());
+        draft = next;
+        renderEditor(root4);
+      });
+    });
+    root4.querySelectorAll("[data-rxn-step-kind]").forEach(function(sel) {
+      sel.addEventListener("change", function() {
+        rebuildFromDom(root4);
+      });
+    });
+    root4.querySelector("#seidr-rxn-save")?.addEventListener("click", function() {
+      const next = readDraftFromDom(root4);
+      if (!next) return;
+      const saved = seidrUpsertReaction(next);
+      if (!saved.ok) {
+        setMsg2(root4, saved.error || "Save failed");
+        return;
+      }
+      draft = saved.reaction || next;
+      editId = draft.id;
+      setMsg2(root4, "Saved");
+      renderList(root4);
+      wireList(root4);
+      renderEditor(root4);
+    });
+    root4.querySelector("#seidr-rxn-del")?.addEventListener("click", function() {
+      if (!draft) return;
+      const id = draft.id;
+      const deleted = seidrDeleteReaction(id);
+      if (!deleted.ok) {
+        setMsg2(root4, deleted.error || "Delete failed");
+        return;
+      }
+      const list = seidrListReactions();
+      editId = list.length ? list[0].id : null;
+      const found = editId != null ? seidrListReactions().find(function(r) {
+        return r.id === editId;
+      }) : null;
+      draft = found ? JSON.parse(JSON.stringify(found)) : null;
+      renderList(root4);
+      wireList(root4);
+      renderEditor(root4);
+      setMsg2(root4, "Deleted");
+    });
+  }
+  function openReaction(root4, id) {
+    const r = seidrListReactions().find(function(x) {
+      return x.id === id;
+    });
+    if (!r) return;
+    editId = id;
+    draft = JSON.parse(JSON.stringify(r));
+    renderList(root4);
+    wireList(root4);
+    renderEditor(root4);
+  }
+  function ensureFirstOpen(root4) {
+    renderList(root4);
+    wireList(root4);
+    const list = seidrListReactions();
+    if (!list.length) {
+      draft = null;
+      editId = null;
+      renderEditor(root4);
+      return;
+    }
+    if (editId == null || !list.some(function(r) {
+      return r.id === editId;
+    })) {
+      openReaction(root4, list[0].id);
+      return;
+    }
+    openReaction(root4, editId);
+  }
+  function seidrBuildReactionsTab(container) {
+    editId = null;
+    draft = null;
+    container.innerHTML = [
+      '<p class="seidr-settings-hint">Auto-run a short local script when you perform an activity, someone acts on you, you say a phrase, or you climax. Cap ' + SEIDR_REACTIONS_MAX + " reactions, " + SEIDR_REACTION_STEPS_MAX + " steps. Action steps use Commands bindings.</p>",
+      '<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-add">Add reaction</button>',
+      '<span class="seidr-settings-hint" id="seidr-rxn-cap">0/' + SEIDR_REACTIONS_MAX + " Reactions</span>",
+      "</div>",
+      '<div id="seidr-rxn-list" style="margin-top:10px;"></div>',
+      '<div class="seidr-act-editor" id="seidr-rxn-editor" style="margin-top:10px;"></div>'
+    ].join("");
+    container.querySelector("#seidr-rxn-add")?.addEventListener("click", function() {
+      const r = seidrAddReaction();
+      if (!r) {
+        setMsg2(container, "Reaction limit reached");
+        return;
+      }
+      openReaction(container, r.id);
+    });
+    ensureFirstOpen(container);
+  }
+  function seidrRefreshReactionsTab() {
+    const root4 = document.getElementById("seidr-settings-pane-reaction");
+    if (!root4) return;
+    seidrBuildReactionsTab(root4);
+  }
 
   // src/poses/styles.ts
   function seidrPoseCss() {
@@ -10074,7 +12988,7 @@
   }
 
   // src/poses/index.ts
-  var installed2 = false;
+  var installed4 = false;
   function drawAfter(args, next) {
     const ret = next(args);
     try {
@@ -10096,8 +13010,8 @@
     return ret;
   }
   function seidrInstallPoses() {
-    if (installed2) return;
-    installed2 = true;
+    if (installed4) return;
+    installed4 = true;
     Seidr.tryHook("DialogDraw", "DialogDraw", 5, drawAfter);
     Seidr.tryHook("seidrPoseCharacterSetCurrent", "CharacterSetCurrent", 5, tickAfter);
     Seidr.tryHook("seidrPoseDialogChangeMode", "DialogChangeMode", 5, tickAfter);
@@ -10140,7 +13054,7 @@
   var clickCtrl = false;
   var clickAlt = false;
   var clickMeta = false;
-  var installed3 = false;
+  var installed5 = false;
   var mapClickHooked = false;
   var PREFERRED_ACTIVITY_GROUPS = [
     "ItemTorso",
@@ -10305,8 +13219,8 @@
     return ok;
   }
   function seidrInstallFastOpen() {
-    if (installed3) return;
-    installed3 = true;
+    if (installed5) return;
+    installed5 = true;
     if (typeof document !== "undefined") {
       document.addEventListener("mousedown", rememberClickMods, true);
       document.addEventListener("pointerdown", rememberClickMods, true);
@@ -11360,8 +14274,8 @@
       if (!importAdminSettings({ Custom: custom })) {
         ChatAdminData.Custom = custom;
         try {
-          const btn2 = typeof ChatAdminID !== "undefined" && ChatAdminID ? document.getElementById(ChatAdminID.customization) : document.getElementById("chat-admin-customization");
-          if (btn2) btn2.classList.toggle("chat-admin-has-custom", true);
+          const btn3 = typeof ChatAdminID !== "undefined" && ChatAdminID ? document.getElementById(ChatAdminID.customization) : document.getElementById("chat-admin-customization");
+          if (btn3) btn3.classList.toggle("chat-admin-has-custom", true);
         } catch (e) {
         }
       }
@@ -12441,7 +15355,7 @@
   }
 
   // src/roomManager/dialogs.ts
-  function escapeHtml4(s) {
+  function escapeHtml5(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function removeOverlay(overlay) {
@@ -12459,11 +15373,11 @@
       overlay.className = "seidr-rm-overlay";
       overlay.innerHTML = [
         '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
-        '<h4 id="seidr-rm-dlg-title">' + escapeHtml4(title) + "</h4>",
-        '<p class="seidr-rm-dialog-msg">' + escapeHtml4(message) + "</p>",
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml5(title) + "</h4>",
+        '<p class="seidr-rm-dialog-msg">' + escapeHtml5(message) + "</p>",
         '<div class="seidr-rm-dialog-actions">',
-        '<button type="button" data-act="cancel">' + escapeHtml4(cancelLabel) + "</button>",
-        '<button type="button" data-act="ok" class="' + okClass + '">' + escapeHtml4(okLabel) + "</button>",
+        '<button type="button" data-act="cancel">' + escapeHtml5(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="' + okClass + '">' + escapeHtml5(okLabel) + "</button>",
         "</div></div>"
       ].join("");
       document.body.appendChild(overlay);
@@ -12516,14 +15430,14 @@
       overlay.className = "seidr-rm-overlay";
       overlay.innerHTML = [
         '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
-        '<h4 id="seidr-rm-dlg-title">' + escapeHtml4(title) + "</h4>",
-        body ? '<p class="seidr-rm-dialog-msg">' + escapeHtml4(body) + "</p>" : "",
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml5(title) + "</h4>",
+        body ? '<p class="seidr-rm-dialog-msg">' + escapeHtml5(body) + "</p>" : "",
         '<div class="seidr-settings-field-row">',
-        '<input type="text" id="seidr-rm-prompt-input" maxlength="' + maxlength + '"' + (placeholder ? ' placeholder="' + escapeHtml4(placeholder) + '"' : "") + " />",
+        '<input type="text" id="seidr-rm-prompt-input" maxlength="' + maxlength + '"' + (placeholder ? ' placeholder="' + escapeHtml5(placeholder) + '"' : "") + " />",
         "</div>",
         '<div class="seidr-rm-dialog-actions">',
-        '<button type="button" data-act="cancel">' + escapeHtml4(cancelLabel) + "</button>",
-        '<button type="button" data-act="ok" class="seidr-rm-btn-primary">' + escapeHtml4(okLabel) + "</button>",
+        '<button type="button" data-act="cancel">' + escapeHtml5(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="seidr-rm-btn-primary">' + escapeHtml5(okLabel) + "</button>",
         "</div></div>"
       ].join("");
       document.body.appendChild(overlay);
@@ -12573,7 +15487,7 @@
   function $(id) {
     return document.getElementById(id);
   }
-  function setMsg2(text) {
+  function setMsg3(text) {
     const el = $("seidr-rm-msg");
     if (el) el.textContent = text || "";
     if (msgTimer) clearTimeout(msgTimer);
@@ -12682,7 +15596,7 @@
           return;
         }
         close();
-        setMsg2("Background saved");
+        setMsg3("Background saved");
         rmRefreshUi();
       });
     });
@@ -12761,7 +15675,7 @@
       ids.splice(to, 0, dragId);
       bgDragId = null;
       const ok = rmReorderBackgrounds(ids);
-      setMsg2(ok ? "Backgrounds reordered" : "Reorder failed");
+      setMsg3(ok ? "Backgrounds reordered" : "Reorder failed");
       if (ok) rmRefreshUi();
     });
     grid.addEventListener("dragend", function() {
@@ -12813,13 +15727,13 @@
       if (!canLoad2) loadBtn.title = "Join a chat room or open room settings to Load";
       loadBtn.addEventListener("click", function() {
         if (!rmCanApplyToRoom()) {
-          setMsg2("Open ChatRoom or ChatAdmin to Load");
+          setMsg3("Open ChatRoom or ChatAdmin to Load");
           return;
         }
         const room = selectedRoomPreset();
         if (room) rmSetLastRoomPreset(room);
         const r = rmApplyBackgroundEntry(b, room && room.customSizeMode);
-        setMsg2(r.ok ? "Background applied" : r.error || "Failed");
+        setMsg3(r.ok ? "Background applied" : r.error || "Failed");
       });
       card.querySelector('[data-act="edit"]').addEventListener("click", function() {
         openBgDialog(b);
@@ -12832,7 +15746,7 @@
         }).then(function(ok) {
           if (!ok) return;
           const deleted = rmDeleteBackground(b.id);
-          setMsg2(deleted ? "Background deleted" : "Delete failed");
+          setMsg3(deleted ? "Background deleted" : "Delete failed");
           rmRefreshUi();
         });
       });
@@ -12959,19 +15873,19 @@
           }
           const settings = rmReadSettings();
           if (!settings) {
-            setMsg2("No room data");
+            setMsg3("No room data");
             return;
           }
           const preset = rmSliceRoom(settings);
           store.room[name] = preset;
           rmSetLastRoomPreset(preset);
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Room config saved" : s.error || "Failed");
+          setMsg3(s.ok ? "Room config saved" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "room-overwrite") {
           const sel = $("seidr-rm-room-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select a config");
+            setMsg3("Select a config");
             return;
           }
           if (!await rmConfirm("Overwrite \u201C" + sel.value + "\u201D?", {
@@ -12980,41 +15894,41 @@
           })) return;
           const settings = rmReadSettings();
           if (!settings) {
-            setMsg2("No room data");
+            setMsg3("No room data");
             return;
           }
           const preset = rmSliceRoom(settings);
           store.room[sel.value] = preset;
           rmSetLastRoomPreset(preset);
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
+          setMsg3(s.ok ? "Overwritten" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "room-load") {
           if (!rmCanApplyToRoom()) {
-            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            setMsg3("Open ChatRoom or ChatAdmin to Load");
             return;
           }
           const sel = $("seidr-rm-room-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select a config");
+            setMsg3("Select a config");
             return;
           }
           const preset = store.room[sel.value];
           if (!preset) {
-            setMsg2("Not found");
+            setMsg3("Not found");
             return;
           }
           rmApplyRoomToEditor(preset);
           if (rmInLiveRoom()) {
             const u = rmUpdateLiveRoom();
-            setMsg2(u.ok ? "Room config loaded + updated" : u.error || "Applied to editor");
+            setMsg3(u.ok ? "Room config loaded + updated" : u.error || "Applied to editor");
           } else {
-            setMsg2("Filled ChatAdmin fields");
+            setMsg3("Filled ChatAdmin fields");
           }
         } else if (act2 === "room-delete") {
           const sel = $("seidr-rm-room-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select a config");
+            setMsg3("Select a config");
             return;
           }
           if (!await rmConfirm("Delete room config \u201C" + sel.value + "\u201D?", {
@@ -13024,7 +15938,7 @@
           })) return;
           delete store.room[sel.value];
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Deleted" : s.error || "Failed");
+          setMsg3(s.ok ? "Deleted" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "access-save") {
           const name = await rmPrompt("Save access list as:", { confirmLabel: "Save" });
@@ -13038,17 +15952,17 @@
           }
           const settings = rmReadSettings();
           if (!settings) {
-            setMsg2("No room data");
+            setMsg3("No room data");
             return;
           }
           store.access[name] = rmSliceAccess(settings);
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Access saved" : s.error || "Failed");
+          setMsg3(s.ok ? "Access saved" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "access-overwrite") {
           const sel = $("seidr-rm-access-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select access");
+            setMsg3("Select access");
             return;
           }
           if (!await rmConfirm("Overwrite \u201C" + sel.value + "\u201D?", {
@@ -13057,39 +15971,39 @@
           })) return;
           const settings = rmReadSettings();
           if (!settings) {
-            setMsg2("No room data");
+            setMsg3("No room data");
             return;
           }
           store.access[sel.value] = rmSliceAccess(settings);
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Overwritten" : s.error || "Failed");
+          setMsg3(s.ok ? "Overwritten" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "access-load") {
           if (!rmCanApplyToRoom()) {
-            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            setMsg3("Open ChatRoom or ChatAdmin to Load");
             return;
           }
           const sel = $("seidr-rm-access-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select access");
+            setMsg3("Select access");
             return;
           }
           const preset = store.access[sel.value];
           if (!preset) {
-            setMsg2("Not found");
+            setMsg3("Not found");
             return;
           }
           rmApplyAccessToEditor(preset);
           if (rmInLiveRoom()) {
             const u = rmUpdateLiveRoom();
-            setMsg2(u.ok ? "Access loaded + room updated" : u.error || "Applied");
+            setMsg3(u.ok ? "Access loaded + room updated" : u.error || "Applied");
           } else {
-            setMsg2("Filled access lists in ChatAdmin");
+            setMsg3("Filled access lists in ChatAdmin");
           }
         } else if (act2 === "access-delete") {
           const sel = $("seidr-rm-access-sel");
           if (!sel || !sel.value) {
-            setMsg2("Select access");
+            setMsg3("Select access");
             return;
           }
           if (!await rmConfirm("Delete access list \u201C" + sel.value + "\u201D?", {
@@ -13099,7 +16013,7 @@
           })) return;
           delete store.access[sel.value];
           const s = rmSaveStore();
-          setMsg2(s.ok ? "Deleted" : s.error || "Failed");
+          setMsg3(s.ok ? "Deleted" : s.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "bg-add") {
           openBgDialog();
@@ -13116,7 +16030,7 @@
               confirmLabel: "Overwrite"
             })) return;
             const r2 = rmOverwriteDefault(existing.id);
-            setMsg2(r2.ok ? "Default overwritten" : r2.error || "Failed");
+            setMsg3(r2.ok ? "Default overwritten" : r2.error || "Failed");
             rmRefreshUi();
             const mapSel2 = $("seidr-rm-map-sel");
             if (mapSel2) mapSel2.value = existing.id;
@@ -13124,7 +16038,7 @@
             return;
           }
           const r = rmSaveNewMap(name);
-          setMsg2(r.ok ? r.fellBackLocal ? "Map saved (Local \u2014 remote full). Default created." : "Map saved (Default)" : r.error || "Failed");
+          setMsg3(r.ok ? r.fellBackLocal ? "Map saved (Local \u2014 remote full). Default created." : "Map saved (Default)" : r.error || "Failed");
           rmRefreshUi();
           if (r.map) {
             const mapSel2 = $("seidr-rm-map-sel");
@@ -13134,7 +16048,7 @@
         } else if (act2 === "map-save-ver") {
           const mapId = selectedRmMapId();
           if (!mapId) {
-            setMsg2("Select a map");
+            setMsg3("Select a map");
             return;
           }
           const verName = await rmPrompt("Save new version", {
@@ -13144,17 +16058,17 @@
           });
           if (!verName) return;
           if (verName === RM_MAP_DEFAULT_NAME) {
-            setMsg2("Use Overwrite Default to update Default");
+            setMsg3("Use Overwrite Default to update Default");
             return;
           }
           const r = rmSaveNewVersion(mapId, verName);
-          setMsg2(r.ok ? "Local version saved" : r.error || "Failed");
+          setMsg3(r.ok ? "Local version saved" : r.error || "Failed");
           rmRefreshUi();
           fillVersionSelect(mapId, r.version && r.version.id);
         } else if (act2 === "map-overwrite") {
           const mapId = selectedRmMapId();
           if (!mapId) {
-            setMsg2("Select a map");
+            setMsg3("Select a map");
             return;
           }
           if (!await rmConfirm("Overwrite Default with the current room map?", {
@@ -13162,18 +16076,18 @@
             confirmLabel: "Overwrite"
           })) return;
           const r = rmOverwriteDefault(mapId);
-          setMsg2(r.ok ? "Default overwritten" : r.error || "Failed");
+          setMsg3(r.ok ? "Default overwritten" : r.error || "Failed");
           rmRefreshUi();
           fillVersionSelect(mapId, r.version && r.version.id);
         } else if (act2 === "map-load") {
           if (!rmCanApplyToRoom()) {
-            setMsg2("Open ChatRoom or ChatAdmin to Load");
+            setMsg3("Open ChatRoom or ChatAdmin to Load");
             return;
           }
           const mapId = selectedRmMapId();
           const verId = selectedRmVersionId();
           if (!mapId || !verId) {
-            setMsg2("Select a map and version");
+            setMsg3("Select a map and version");
             return;
           }
           const maps = rmListAllMaps();
@@ -13188,12 +16102,12 @@
             { title: "Load map", confirmLabel: "Load" }
           )) return;
           const r = rmLoadMapVersion(mapId, verId);
-          setMsg2(r.ok ? "Map version loaded" : r.error || "Failed");
+          setMsg3(r.ok ? "Map version loaded" : r.error || "Failed");
         } else if (act2 === "map-delete-ver") {
           const mapId = selectedRmMapId();
           const verId = selectedRmVersionId();
           if (!mapId || !verId) {
-            setMsg2("Select a map and version");
+            setMsg3("Select a map and version");
             return;
           }
           const map = rmListAllMaps().find(function(m) {
@@ -13205,7 +16119,7 @@
           const isDef = ver && rmIsDefaultVersionName(ver.name);
           const only = map && map.versions.length <= 1;
           if (isDef && !only) {
-            setMsg2("Cannot delete Default while other versions exist \u2014 use Delete map");
+            setMsg3("Cannot delete Default while other versions exist \u2014 use Delete map");
             return;
           }
           if (!await rmConfirm(only || isDef ? "Delete entire map \u201C" + (map ? map.name : "") + "\u201D?" : "Delete this local version?", {
@@ -13214,12 +16128,12 @@
             danger: true
           })) return;
           const r = rmDeleteVersion(mapId, verId);
-          setMsg2(r.ok ? only || isDef ? "Map deleted" : "Version deleted" : r.error || "Failed");
+          setMsg3(r.ok ? only || isDef ? "Map deleted" : "Version deleted" : r.error || "Failed");
           rmRefreshUi();
         } else if (act2 === "map-delete") {
           const mapId = selectedRmMapId();
           if (!mapId) {
-            setMsg2("Select a map");
+            setMsg3("Select a map");
             return;
           }
           const map = rmListAllMaps().find(function(m) {
@@ -13231,7 +16145,7 @@
             danger: true
           })) return;
           const r = rmDeleteMap(mapId);
-          setMsg2(r.ok ? "Map deleted" : r.error || "Failed");
+          setMsg3(r.ok ? "Map deleted" : r.error || "Failed");
           rmRefreshUi();
         }
       })();
@@ -13273,16 +16187,16 @@
   Seidr.rmUpdateApplyUi = rmUpdateApplyUi;
 
   // src/roomManager/shell.ts
-  var root = null;
-  var btn = null;
+  var root2 = null;
+  var btn2 = null;
   var panel2 = null;
-  var sessionBtnPos = null;
-  var dragMoved = false;
-  var chatLogObserver = null;
+  var sessionBtnPos2 = null;
+  var dragMoved2 = false;
+  var chatLogObserver2 = null;
   var panelObserver = null;
-  var BTN_BASE = 44;
-  var PAD = 16;
-  function clubScale() {
+  var BTN_BASE2 = 44;
+  var PAD2 = 16;
+  function clubScale2() {
     try {
       const canvas = MainCanvas && MainCanvas.canvas;
       if (canvas && canvas.clientWidth > 0 && canvas.clientHeight > 0) {
@@ -13293,20 +16207,20 @@
     }
     return 1;
   }
-  function btnSize() {
-    return Math.max(28, Math.round(BTN_BASE * clubScale()));
+  function btnSize2() {
+    return Math.max(28, Math.round(BTN_BASE2 * clubScale2()));
   }
-  function applyBtnSize() {
-    if (!btn) return;
-    const s = btnSize();
-    btn.style.width = s + "px";
-    btn.style.height = s + "px";
+  function applyBtnSize2() {
+    if (!btn2) return;
+    const s = btnSize2();
+    btn2.style.width = s + "px";
+    btn2.style.height = s + "px";
   }
-  function chatLogEl() {
+  function chatLogEl2() {
     return document.getElementById("TextAreaChatLog");
   }
-  function chatLogRect() {
-    const el = chatLogEl();
+  function chatLogRect2() {
+    const el = chatLogEl2();
     if (!el) return null;
     return el.getBoundingClientRect();
   }
@@ -13327,13 +16241,13 @@
     panel2.style.top = top + "px";
     panel2.style.right = "auto";
   }
-  function geomKey() {
+  function geomKey2() {
     const id = typeof Player !== "undefined" && Player && Player.MemberNumber != null ? Player.MemberNumber : "0";
     return "SeidrRmUi_" + id;
   }
   function readLocalGeom() {
     try {
-      const raw = localStorage.getItem(geomKey());
+      const raw = localStorage.getItem(geomKey2());
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
@@ -13351,7 +16265,7 @@
       clampPanel();
       return;
     }
-    const rect = chatLogRect();
+    const rect = chatLogRect2();
     if (rect && rect.width > 80 && rect.height > 80) {
       panel2.style.width = Math.max(480, Math.min(rect.width, window.innerWidth - 16)) + "px";
       panel2.style.height = Math.max(360, Math.min(rect.height, window.innerHeight - 16)) + "px";
@@ -13372,7 +16286,7 @@
       h: panel2.offsetHeight
     };
     try {
-      localStorage.setItem(geomKey(), JSON.stringify(geom));
+      localStorage.setItem(geomKey2(), JSON.stringify(geom));
     } catch (e) {
     }
   }
@@ -13385,7 +16299,7 @@
     if (geomTimer) clearTimeout(geomTimer);
     geomTimer = setTimeout(writePanelGeometry, 400);
   }
-  function makeDraggable(el, onEnd) {
+  function makeDraggable2(el, onEnd) {
     let ox = 0;
     let oy = 0;
     let startX = 0;
@@ -13393,7 +16307,7 @@
     function down(ev) {
       const t = ev.target;
       if (t !== el && t.closest && t.closest("button, select, input, a")) return;
-      dragMoved = false;
+      dragMoved2 = false;
       startX = ev.clientX;
       startY = ev.clientY;
       const r = el.getBoundingClientRect();
@@ -13404,7 +16318,7 @@
     }
     function move(ev) {
       if (!el.hasPointerCapture(ev.pointerId)) return;
-      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) dragMoved = true;
+      if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) dragMoved2 = true;
       el.style.left = ev.clientX - ox + "px";
       el.style.top = ev.clientY - oy + "px";
       el.style.right = "auto";
@@ -13419,35 +16333,35 @@
     el.addEventListener("pointerup", up);
     el.addEventListener("pointercancel", up);
   }
-  function setBtnXY(x, y) {
-    if (!btn) return;
-    const size = btnSize();
+  function setBtnXY2(x, y) {
+    if (!btn2) return;
+    const size = btnSize2();
     const maxX = Math.max(8, window.innerWidth - size - 8);
     const maxY = Math.max(8, window.innerHeight - size - 8);
-    btn.style.left = Math.min(Math.max(8, x), maxX) + "px";
-    btn.style.top = Math.min(Math.max(8, y), maxY) + "px";
-    btn.style.right = "auto";
+    btn2.style.left = Math.min(Math.max(8, x), maxX) + "px";
+    btn2.style.top = Math.min(Math.max(8, y), maxY) + "px";
+    btn2.style.right = "auto";
   }
   function storeSessionBtnPosFromPx(x, y) {
     const vw = Math.max(1, window.innerWidth);
     const vh = Math.max(1, window.innerHeight);
-    sessionBtnPos = {
+    sessionBtnPos2 = {
       fx: x / vw,
       fy: y / vh
     };
   }
   function placeSessionBtn() {
-    if (!btn || !sessionBtnPos) return;
-    const x = sessionBtnPos.fx * window.innerWidth;
-    const y = sessionBtnPos.fy * window.innerHeight;
-    setBtnXY(x, y);
+    if (!btn2 || !sessionBtnPos2) return;
+    const x = sessionBtnPos2.fx * window.innerWidth;
+    const y = sessionBtnPos2.fy * window.innerHeight;
+    setBtnXY2(x, y);
   }
-  function applyLauncherPosition(pos) {
-    if (!btn) return;
+  function applyLauncherPosition2(pos) {
+    if (!btn2) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const size = btnSize();
-    const chat = chatLogRect();
+    const size = btnSize2();
+    const chat = chatLogRect2();
     if (pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom") {
       if (chat && chat.width > 40) {
         const x = chat.left - size - 8;
@@ -13455,59 +16369,59 @@
         if (pos === "chatTop") y = chat.top + 8;
         else if (pos === "chatBottom") y = chat.bottom - size - 8;
         else y = chat.top + chat.height / 2 - size / 2;
-        setBtnXY(x, y);
+        setBtnXY2(x, y);
         return;
       }
-      setBtnXY(vw - size - PAD, vh * 0.42);
+      setBtnXY2(vw - size - PAD2, vh * 0.42);
       return;
     }
-    const leftX = PAD;
-    const rightX = vw - size - PAD;
-    const topY = PAD;
-    const bottomY = vh - size - PAD;
+    const leftX = PAD2;
+    const rightX = vw - size - PAD2;
+    const topY = PAD2;
+    const bottomY = vh - size - PAD2;
     const midY = vh / 2 - size / 2;
     switch (pos) {
       case "topLeft":
-        setBtnXY(leftX, topY);
+        setBtnXY2(leftX, topY);
         break;
       case "topRight":
-        setBtnXY(rightX, topY);
+        setBtnXY2(rightX, topY);
         break;
       case "bottomLeft":
-        setBtnXY(leftX, bottomY);
+        setBtnXY2(leftX, bottomY);
         break;
       case "bottomRight":
-        setBtnXY(rightX, bottomY);
+        setBtnXY2(rightX, bottomY);
         break;
       case "middleLeft":
-        setBtnXY(leftX, midY);
+        setBtnXY2(leftX, midY);
         break;
       case "middleRight":
-        setBtnXY(rightX, midY);
+        setBtnXY2(rightX, midY);
         break;
       default:
-        setBtnXY(rightX, midY);
+        setBtnXY2(rightX, midY);
         break;
     }
   }
-  function placeBtnDefault() {
-    if (!btn) return;
-    applyBtnSize();
-    if (sessionBtnPos) {
+  function placeBtnDefault2() {
+    if (!btn2) return;
+    applyBtnSize2();
+    if (sessionBtnPos2) {
       placeSessionBtn();
       return;
     }
     const settings = seidrGetSettings();
-    applyLauncherPosition(settings.launcherPosition || "chatTop");
+    applyLauncherPosition2(settings.launcherPosition || "chatTop");
   }
   function rmRelayoutLauncher() {
-    if (!btn) return;
-    if (!btn.classList.contains("seidr-rm-visible")) {
-      applyBtnSize();
+    if (!btn2) return;
+    if (!btn2.classList.contains("seidr-rm-visible")) {
+      applyBtnSize2();
       return;
     }
-    placeBtnDefault();
-    syncChatLogObserver();
+    placeBtnDefault2();
+    syncChatLogObserver2();
   }
   function rmOnChatRoomScreen() {
     try {
@@ -13524,7 +16438,7 @@
     }
   }
   function rmClearSessionBtnPos() {
-    sessionBtnPos = null;
+    sessionBtnPos2 = null;
   }
   var enterPlaceTimers = [];
   function clearEnterPlaceTimers() {
@@ -13537,28 +16451,28 @@
     return pos === "chatLeft" || pos === "chatTop" || pos === "chatBottom";
   }
   function chatLogReady() {
-    const r = chatLogRect();
+    const r = chatLogRect2();
     return !!(r && r.width > 40);
   }
-  function disconnectChatLogObserver() {
-    if (chatLogObserver) {
-      chatLogObserver.disconnect();
-      chatLogObserver = null;
+  function disconnectChatLogObserver2() {
+    if (chatLogObserver2) {
+      chatLogObserver2.disconnect();
+      chatLogObserver2 = null;
     }
   }
-  function syncChatLogObserver() {
-    disconnectChatLogObserver();
-    if (!btn || !btn.classList.contains("seidr-rm-visible")) return;
-    if (sessionBtnPos) return;
+  function syncChatLogObserver2() {
+    disconnectChatLogObserver2();
+    if (!btn2 || !btn2.classList.contains("seidr-rm-visible")) return;
+    if (sessionBtnPos2) return;
     const pos = seidrGetSettings().launcherPosition || "chatTop";
     if (!isChatAnchorPos(pos)) return;
-    const el = chatLogEl();
+    const el = chatLogEl2();
     if (!el || typeof ResizeObserver === "undefined") return;
-    chatLogObserver = new ResizeObserver(function() {
-      if (sessionBtnPos) return;
-      placeBtnDefault();
+    chatLogObserver2 = new ResizeObserver(function() {
+      if (sessionBtnPos2) return;
+      placeBtnDefault2();
     });
-    chatLogObserver.observe(el);
+    chatLogObserver2.observe(el);
   }
   function rmEnterLiveRoomPlacement() {
     clearEnterPlaceTimers();
@@ -13571,7 +16485,7 @@
     const delays = [100, 300, 800];
     delays.forEach(function(ms, i) {
       enterPlaceTimers.push(setTimeout(function() {
-        if (sessionBtnPos) {
+        if (sessionBtnPos2) {
           clearEnterPlaceTimers();
           return;
         }
@@ -13589,20 +16503,20 @@
   }
   function rmEnsureShell() {
     rmInjectStyles();
-    if (root && document.body.contains(root)) return;
-    root = document.createElement("div");
-    root.id = "seidr-rm-root";
-    btn = document.createElement("button");
-    btn.type = "button";
-    btn.id = "seidr-rm-btn";
-    btn.title = "Room Manager";
-    btn.setAttribute("aria-label", "Room Manager");
+    if (root2 && document.body.contains(root2)) return;
+    root2 = document.createElement("div");
+    root2.id = "seidr-rm-root";
+    btn2 = document.createElement("button");
+    btn2.type = "button";
+    btn2.id = "seidr-rm-btn";
+    btn2.title = "Room Manager";
+    btn2.setAttribute("aria-label", "Room Manager");
     const logo = document.createElement("img");
     logo.src = Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
     logo.alt = "";
     logo.draggable = false;
-    btn.appendChild(logo);
-    applyBtnSize();
+    btn2.appendChild(logo);
+    applyBtnSize2();
     panel2 = document.createElement("div");
     panel2.id = "seidr-rm-panel";
     panel2.innerHTML = [
@@ -13621,20 +16535,20 @@
       '  <span class="seidr-rm-footer-usage" id="seidr-rm-footer-usage">Storage: \u2014</span>',
       "</div>"
     ].join("");
-    root.appendChild(btn);
-    root.appendChild(panel2);
-    document.body.appendChild(root);
+    root2.appendChild(btn2);
+    root2.appendChild(panel2);
+    document.body.appendChild(root2);
     ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
-      root.addEventListener(type, function(ev) {
+      root2.addEventListener(type, function(ev) {
         ev.stopPropagation();
       });
     });
-    makeDraggable(btn, function() {
-      if (!btn) return;
-      const x = parseFloat(btn.style.left) || btn.offsetLeft;
-      const y = parseFloat(btn.style.top) || btn.offsetTop;
+    makeDraggable2(btn2, function() {
+      if (!btn2) return;
+      const x = parseFloat(btn2.style.left) || btn2.offsetLeft;
+      const y = parseFloat(btn2.style.top) || btn2.offsetTop;
       storeSessionBtnPosFromPx(x, y);
-      disconnectChatLogObserver();
+      disconnectChatLogObserver2();
     });
     const header = panel2.querySelector(".seidr-rm-header");
     (function() {
@@ -13661,8 +16575,8 @@
         persistPanelGeometry(true);
       });
     })();
-    btn.addEventListener("pointerup", function() {
-      if (dragMoved) return;
+    btn2.addEventListener("pointerup", function() {
+      if (dragMoved2) return;
       rmTogglePanel();
     });
     panel2.querySelector('[data-rm="settings"]').addEventListener("click", function() {
@@ -13698,16 +16612,16 @@
     const enabled = s.roomManagerEnabled !== false;
     const quickmenu = s.showQuickmenuButton !== false;
     if (!Seidr.SHOW_ROOM_MANAGER || !enabled || !quickmenu) {
-      if (btn) btn.classList.remove("seidr-rm-visible");
-      disconnectChatLogObserver();
+      if (btn2) btn2.classList.remove("seidr-rm-visible");
+      disconnectChatLogObserver2();
       return;
     }
     rmEnsureShell();
     const show = rmOnChatRoomScreen() && rmIsAdmin() && rmNoCharacterDialog() && !fbmFloatChatActive();
-    if (btn) {
-      btn.classList.toggle("seidr-rm-visible", show);
+    if (btn2) {
+      btn2.classList.toggle("seidr-rm-visible", show);
       if (show) rmRelayoutLauncher();
-      else disconnectChatLogObserver();
+      else disconnectChatLogObserver2();
     }
   }
   function rmOpenPanel() {
@@ -13741,14 +16655,14 @@
   }
   function rmDestroyShell() {
     clearEnterPlaceTimers();
-    disconnectChatLogObserver();
+    disconnectChatLogObserver2();
     if (panelObserver) {
       panelObserver.disconnect();
       panelObserver = null;
     }
     rmClosePanel();
-    if (root && root.parentNode) root.parentNode.removeChild(root);
-    root = btn = panel2 = null;
+    if (root2 && root2.parentNode) root2.parentNode.removeChild(root2);
+    root2 = btn2 = panel2 = null;
     const st = document.getElementById("seidr-rm-styles");
     if (st && st.parentNode) st.parentNode.removeChild(st);
   }
@@ -13785,8 +16699,8 @@
     return Seidr.LOGO_URL || "https://freya-bc.github.io/Freyas-Seidr/assets/SEIDR-Logo-Transparent.png";
   }
   function findMenubar() {
-    const menu = wrap(MENU_ID);
-    if (menu) return menu;
+    const menu2 = wrap(MENU_ID);
+    if (menu2) return menu2;
     const exportBtn = wrap(EXPORT_ID);
     if (exportBtn && exportBtn.parentElement) return exportBtn.parentElement;
     const screen = wrap(SCREEN_ID);
@@ -13829,8 +16743,8 @@
       console.warn("[Seidr] ChatAdmin RM button create failed", e);
       return;
     }
-    const menu = wrap(MENU_ID);
-    if (menu) {
+    const menu2 = wrap(MENU_ID);
+    if (menu2) {
       ElementWrap(MENU_ID)?.append(button);
     } else {
       host.append(button);
@@ -13855,7 +16769,7 @@
   Seidr.rmChatAdminMountButtonSoon = rmChatAdminMountButtonSoon;
 
   // src/roomManager/index.ts
-  var installed4 = false;
+  var installed6 = false;
   var tick = null;
   var lastTickKey = "";
   function onWindowResize() {
@@ -13920,11 +16834,11 @@
   }
   function rmInstall() {
     if (!rmIsShown()) return;
-    if (installed4) {
+    if (installed6) {
       rmUpdateLauncherVisibility();
       return;
     }
-    installed4 = true;
+    installed6 = true;
     rmInvalidateStore();
     rmEnsureShell();
     rmUpdateLauncherVisibility();
@@ -14038,7 +16952,7 @@
     detachResizeListeners();
     lastTickKey = "";
     rmDestroyShell();
-    installed4 = false;
+    installed6 = false;
   }
   Seidr.installRoomManager = rmInstall;
   Seidr.uninstallRoomManager = rmUninstall;
@@ -14122,6 +17036,73 @@
     }
   }
 
+  // src/settings/clearUnreadOnFocus.ts
+  var CHAT_MESSAGE = "ChatMessage";
+  var DEBOUNCE_MS = 100;
+  var COMPOSE_IDS = { InputChat: true, "fbm-fc-input": true };
+  var installed7 = false;
+  var debounceTimer = null;
+  var onWindowFocus = null;
+  var onFocusIn = null;
+  function chatMessageEventType() {
+    try {
+      if (NotificationEventType && typeof NotificationEventType.CHATMESSAGE === "string") {
+        return NotificationEventType.CHATMESSAGE;
+      }
+    } catch (e) {
+    }
+    return CHAT_MESSAGE;
+  }
+  function clearChatMessageBadge() {
+    try {
+      const s = seidrGetSettings();
+      if (s.clearUnreadOnFocus === false) return;
+      if (typeof NotificationReset !== "function") return;
+      NotificationReset(chatMessageEventType());
+    } catch (e) {
+    }
+  }
+  function scheduleClear() {
+    if (debounceTimer != null) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(function() {
+      debounceTimer = null;
+      clearChatMessageBadge();
+    }, DEBOUNCE_MS);
+  }
+  function seidrUninstallClearUnreadOnFocus() {
+    if (debounceTimer != null) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    if (onWindowFocus) {
+      window.removeEventListener("focus", onWindowFocus);
+      onWindowFocus = null;
+    }
+    if (onFocusIn) {
+      document.removeEventListener("focusin", onFocusIn);
+      onFocusIn = null;
+    }
+    installed7 = false;
+  }
+  function seidrInstallClearUnreadOnFocus() {
+    if (installed7) return;
+    installed7 = true;
+    onWindowFocus = function() {
+      scheduleClear();
+    };
+    onFocusIn = function(ev) {
+      const t = ev.target;
+      if (!t || !(t instanceof Element)) return;
+      const id = t.id || "";
+      if (!COMPOSE_IDS[id]) return;
+      scheduleClear();
+    };
+    window.addEventListener("focus", onWindowFocus);
+    document.addEventListener("focusin", onFocusIn);
+  }
+  Seidr.installClearUnreadOnFocus = seidrInstallClearUnreadOnFocus;
+  Seidr.uninstallClearUnreadOnFocus = seidrUninstallClearUnreadOnFocus;
+
   // src/settings/drawOffsets.ts
   function seidrApplyDrawOffsets(raw) {
     const next = seidrNormalizeDrawOffsets(raw);
@@ -14196,7 +17177,7 @@
       "#seidr-settings-panel {",
       "  pointer-events: auto; position: fixed; z-index: 120;",
       "  display: none; flex-direction: column;",
-      "  width: min(92vw, 560px); height: min(88vh, 700px);",
+      "  width: min(92vw, 640px); height: min(88vh, 780px);",
       "  min-width: 300px; min-height: 240px;",
       "  max-width: calc(100vw - 16px); max-height: calc(100vh - 16px);",
       "  background: rgba(28, 22, 38, 0.96); color: #f0e6d4;",
@@ -14406,15 +17387,37 @@
       "}",
       '.seidr-settings-field-row input[type="text"],',
       '.seidr-settings-field-row input[type="number"],',
-      ".seidr-settings-field-row input.seidr-settings-num {",
+      ".seidr-settings-field-row input.seidr-settings-num,",
+      ".seidr-settings-field-row textarea {",
       "  flex: 1; min-width: 0;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
       "  font: inherit; box-sizing: border-box;",
       "}",
+      ".seidr-settings-field-row textarea { resize: vertical; min-height: 2.6em; }",
       '.seidr-settings-field-row input[type="number"]:focus,',
       ".seidr-settings-field-row input.seidr-settings-num:focus,",
-      '.seidr-settings-field-row input[type="text"]:focus {',
+      '.seidr-settings-field-row input[type="text"]:focus,',
+      ".seidr-settings-field-row textarea:focus,",
+      ".seidr-settings-field-row select:focus {",
+      "  outline: none; border-color: #d4a017;",
+      "}",
+      /* Reaction tab: Club defaults can bleach controls outside field-rows */
+      '#seidr-settings-pane-reaction input[type="text"],',
+      '#seidr-settings-pane-reaction input[type="number"],',
+      "#seidr-settings-pane-reaction select,",
+      "#seidr-settings-pane-reaction textarea {",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
+      "  font: inherit; box-sizing: border-box;",
+      "}",
+      "#seidr-settings-pane-reaction textarea {",
+      "  width: 100%; resize: vertical; min-height: 2.6em;",
+      "}",
+      '#seidr-settings-pane-reaction input[type="text"]:focus,',
+      '#seidr-settings-pane-reaction input[type="number"]:focus,',
+      "#seidr-settings-pane-reaction select:focus,",
+      "#seidr-settings-pane-reaction textarea:focus {",
       "  outline: none; border-color: #d4a017;",
       "}",
       ".seidr-settings-field-row .seidr-num-wrap {",
@@ -14487,13 +17490,15 @@
       "  cursor: pointer; font: inherit; font-size: 10px;",
       "}",
       ".seidr-act-ph:hover { border-color: #d4a017; color: #f0e6d4; }",
-      "#seidr-act-chat-other, #seidr-act-chat-self, #seidr-anim-chat {",
+      "#seidr-act-chat-other, #seidr-act-chat-self, #seidr-anim-chat,",
+      "#seidr-settings-pane-reaction textarea[data-rxn-step-say] {",
       "  width: 100%; box-sizing: border-box; margin-top: 4px;",
       "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
       "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px; padding: 6px 8px;",
       "  font: inherit; resize: vertical;",
       "}",
-      "#seidr-act-chat-other:focus, #seidr-act-chat-self:focus, #seidr-anim-chat:focus {",
+      "#seidr-act-chat-other:focus, #seidr-act-chat-self:focus, #seidr-anim-chat:focus,",
+      "#seidr-settings-pane-reaction textarea[data-rxn-step-say]:focus {",
       "  outline: none; border-color: #d4a017;",
       "}",
       ".seidr-act-btn {",
@@ -14908,8 +17913,8 @@
   }
 
   // src/actions/ui.ts
-  var editId = null;
-  var draft = null;
+  var editId2 = null;
+  var draft2 = null;
   var lastChatArea = null;
   var arousalPickerOpen = false;
   var itemsPickerOpen = false;
@@ -14920,17 +17925,27 @@
   function $2(id) {
     return document.getElementById(id);
   }
-  function escapeHtml5(s) {
+  function escapeHtml6(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml5(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml5(o.label) + "</option>";
+      return '<option value="' + escapeHtml6(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml6(o.label) + "</option>";
     }).join("");
   }
   function stringOpts(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml5(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml5(o) + "</option>";
+      return '<option value="' + escapeHtml6(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml6(o) + "</option>";
+    }).join("");
+  }
+  function animationEffectOpts(selectedId) {
+    const list = seidrListAnimations();
+    if (!list.length) {
+      return '<option value="0">No animations \u2014 add under Animations</option>';
+    }
+    return '<option value="0">\u2014 Animation \u2014</option>' + list.map(function(a) {
+      const tag = a.kind === "wiggle" ? " [wiggle]" : "";
+      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml6(a.name) + tag + "</option>";
     }).join("");
   }
   function arousalResultsHtml(selected, filter) {
@@ -14943,10 +17958,10 @@
         return a.label.toLowerCase().indexOf(q) >= 0 || a.id.toLowerCase().indexOf(q) >= 0;
       });
       if (!rows.length) return;
-      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml5(g.label) + "</div>");
+      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml6(g.label) + "</div>");
       rows.forEach(function(a) {
         parts.push(
-          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml5(a.id) + '">' + escapeHtml5(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml5(a.id) + "</span></button>"
+          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml6(a.id) + '">' + escapeHtml6(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml6(a.id) + "</span></button>"
         );
       });
     });
@@ -14960,10 +17975,10 @@
     const open = arousalPickerOpen;
     return [
       '<div class="seidr-act-arousal-picker' + (open ? " seidr-act-arousal-open" : "") + '">',
-      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml5(id) + '" />',
+      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml6(id) + '" />',
       '<button type="button" class="seidr-act-arousal-toggle" id="seidr-act-arousal-toggle" title="Choose Club arousal template">',
       '<span class="seidr-act-arousal-toggle-lab">Template</span>',
-      '<strong id="seidr-act-arousal-label">' + escapeHtml5(seidrArousalActivityLabel(id)) + "</strong>",
+      '<strong id="seidr-act-arousal-label">' + escapeHtml6(seidrArousalActivityLabel(id)) + "</strong>",
       '<span class="seidr-act-arousal-caret" aria-hidden="true">' + (open ? "\u25B4" : "\u25BE") + "</span>",
       "</button>",
       '<div class="seidr-act-arousal-dropdown" id="seidr-act-arousal-dropdown"' + (open ? "" : " hidden") + ">",
@@ -14985,10 +18000,10 @@
     return a.Name ? String(a.Name) : "";
   }
   function itemRefLabel(ref) {
-    const slotMeta = seidrRestraintSlots().filter(function(s) {
+    const slotMeta2 = seidrRestraintSlots().filter(function(s) {
       return s.id === ref.slot;
     })[0];
-    const slotLab = slotMeta ? slotMeta.label : ref.slot;
+    const slotLab = slotMeta2 ? slotMeta2.label : ref.slot;
     let nameLab = ref.name;
     try {
       if (typeof AssetGet === "function") {
@@ -15041,7 +18056,7 @@
       const on = selected.some(function(it) {
         return it.slot === slot && it.name === r.name;
       });
-      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml5(slot) + '" data-item-add-name="' + escapeHtml5(r.name) + '">' + escapeHtml5(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml5(r.name) + "</span></button>";
+      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml6(slot) + '" data-item-add-name="' + escapeHtml6(r.name) + '">' + escapeHtml6(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml6(r.name) + "</span></button>";
     }).join("");
   }
   function itemsBlockHtml(items, itemsOnTarget, itemsOnSource) {
@@ -15053,7 +18068,7 @@
       itemsPickerSlot = slots[0] ? slots[0].id : "ItemMouth";
     }
     const chips = list.length ? list.map(function(it, idx) {
-      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml5(itemRefLabel(it)) + " \xD7</button>";
+      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml6(itemRefLabel(it)) + " \xD7</button>";
     }).join("") : '<span class="seidr-settings-hint">None \u2014 action shows without a specific restraint.</span>';
     const open = itemsPickerOpen;
     const onTarget = itemsOnTarget !== false;
@@ -15072,7 +18087,7 @@
       '<div class="seidr-act-items-dropdown" id="seidr-act-items-dropdown"' + (open ? "" : " hidden") + ">",
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;">',
       '<select id="seidr-act-items-slot">' + opts2(slots, itemsPickerSlot) + "</select>",
-      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml5(itemsPickerFilter) + '" />',
+      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml6(itemsPickerFilter) + '" />',
       "</div>",
       '<div class="seidr-act-items-results" id="seidr-act-items-results">' + itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, list) + "</div>",
       "</div>",
@@ -15082,7 +18097,7 @@
   function slotChips(selected) {
     return SEIDR_ACTION_SLOTS.map(function(s) {
       const on = selected.indexOf(s.id) >= 0;
-      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml5(s.id) + '">' + escapeHtml5(s.label) + "</button>";
+      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml6(s.id) + '">' + escapeHtml6(s.label) + "</button>";
     }).join("");
   }
   function ruleRowHtml(rule, index) {
@@ -15109,7 +18124,7 @@
       '<option value="1"' + (rule.not ? " selected" : "") + ">is not</option>",
       "</select>",
       "<select data-rule-type>" + SEIDR_COND_TYPES.map(function(t) {
-        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml5(t.label) + "</option>";
+        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml6(t.label) + "</option>";
       }).join("") + "</select>",
       extraHtml,
       '<button type="button" class="seidr-act-btn seidr-act-btn-icon" data-rule-del="' + index + '" title="Remove rule">\xD7</button>',
@@ -15135,7 +18150,7 @@
   }
   function chatTokenChips() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml5(t.token) + '" title="' + escapeHtml5(t.hint) + '">' + escapeHtml5(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml6(t.token) + '" title="' + escapeHtml6(t.hint) + '">' + escapeHtml6(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken(ta, token) {
@@ -15149,23 +18164,23 @@
     ta.setSelectionRange(pos, pos);
     return true;
   }
-  function updateCapHint(root3) {
-    const el = root3.querySelector("#seidr-act-cap");
+  function updateCapHint(root4) {
+    const el = root4.querySelector("#seidr-act-cap");
     if (!el) return;
     const n = seidrListActions().length;
     el.textContent = n + "/" + SEIDR_ACTIONS_MAX + " Actions";
   }
-  function renderList(root3) {
+  function renderList2(root4) {
     const list = seidrListActions();
-    const box = root3.querySelector("#seidr-act-list");
+    const box = root4.querySelector("#seidr-act-list");
     if (!box) return;
-    updateCapHint(root3);
+    updateCapHint(root4);
     if (!list.length) {
       box.innerHTML = '<p class="seidr-settings-hint">No actions yet. Add one to appear in the Club Activity Menu.</p>';
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId === a.id ? " selected" : "") + ">" + escapeHtml5(a.name) + " (" + escapeHtml5(a.slots.join(", ")) + ")</option>";
+      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml6(a.name) + " (" + escapeHtml6(a.slots.join(", ")) + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -15174,17 +18189,18 @@
       "</div>"
     ].join("");
   }
-  function renderEditor(root3) {
-    const wrap2 = root3.querySelector("#seidr-act-editor");
+  function renderEditor2(root4) {
+    const wrap2 = root4.querySelector("#seidr-act-editor");
     if (!wrap2) return;
-    if (!draft) {
+    if (!draft2) {
       wrap2.innerHTML = '<p class="seidr-settings-hint">Select an action or add a new one.</p>';
       return;
     }
-    const a = draft;
+    const a = draft2;
     const arousal = a.effects.arousal || { enabled: false, activity: "Caress", reverse: false };
     const sound = a.effects.sound || { enabled: false, sound: SEIDR_ACTION_SOUNDS[0] };
     const pose = a.effects.pose || { enabled: false, pose: "Kneel" };
+    const animFx = a.effects.animation || { enabled: false, animationId: 0 };
     const chatOther2 = a.chatOther || seidrDefaultChatOther(a.name);
     const chatSelf2 = a.chatSelf || seidrDefaultChatSelf(a.name);
     if (!a.icon) a.icon = seidrDefaultActionIcon();
@@ -15196,16 +18212,16 @@
     wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml5(a.name) + '" />',
+      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml6(a.name) + '" />',
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Who</span>',
       '<select id="seidr-act-audience">' + opts2(SEIDR_ACTION_AUDIENCES, a.audience) + "</select>",
       "</div>",
       '<div class="seidr-act-icon-row" style="margin-top:10px;">',
-      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml5(iconUrl) + '" alt="" width="40" height="40" />',
+      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml6(iconUrl) + '" alt="" width="40" height="40" />',
       "<div>",
-      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml5(iconLab) + "</p>",
+      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml6(iconLab) + "</p>",
       '<button type="button" class="seidr-act-btn" id="seidr-act-icon-pick">Select icon</button>',
       "</div>",
       "</div>",
@@ -15221,10 +18237,10 @@
       '<div class="seidr-act-ph-row" id="seidr-act-ph">' + chatTokenChips() + "</div>",
       `<p class="seidr-settings-hint">Club style: SourceCharacter kisses TargetCharacter's lips. / SourceCharacter touches PronounPossessive arms.</p>`,
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Other</label>',
-      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatOther2) + "</textarea>",
+      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatOther2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-other-count">' + chatOther2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Self</label>',
-      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml5(chatSelf2) + "</textarea>",
+      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatSelf2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-self-count">' + chatSelf2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<p class="seidr-settings-hint" style="margin-top:10px;">Effects</p>',
       '<div class="seidr-settings-row">',
@@ -15243,6 +18259,11 @@
       '<label><input type="checkbox" id="seidr-act-pose-on"' + (pose.enabled ? " checked" : "") + " /> Set pose</label>",
       '<select id="seidr-act-pose">' + opts2(SEIDR_ACTION_POSES, pose.pose) + "</select>",
       "</div>",
+      '<div class="seidr-settings-row" style="margin-top:8px;">',
+      '<label><input type="checkbox" id="seidr-act-anim-on"' + (animFx.enabled ? " checked" : "") + " /> Play animation</label>",
+      '<select id="seidr-act-anim">' + animationEffectOpts(animFx.animationId || 0) + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Play a Settings \u2192 Animations clip or Wiggle on you when this action runs (self only).</p>',
       '<div class="seidr-settings-row seidr-settings-draw-actions" style="margin-top:12px;">',
       '<button type="button" class="seidr-act-btn" id="seidr-act-save">Save action</button>',
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-act-delete">Delete</button>',
@@ -15250,38 +18271,38 @@
       '<p class="seidr-settings-hint" id="seidr-act-msg"></p>'
     ].join("");
   }
-  function readDraftFromDom(root3) {
-    if (!draft) return null;
-    const nameEl = root3.querySelector("#seidr-act-name");
-    const audEl = root3.querySelector("#seidr-act-audience");
-    const chatOtherEl = root3.querySelector("#seidr-act-chat-other");
-    const chatSelfEl = root3.querySelector("#seidr-act-chat-self");
-    const name = nameEl && nameEl.value.trim() ? nameEl.value.trim() : draft.name;
-    const itemsOnTargetEl = root3.querySelector("#seidr-act-items-on-target");
-    const itemsOnSourceEl = root3.querySelector("#seidr-act-items-on-source");
+  function readDraftFromDom2(root4) {
+    if (!draft2) return null;
+    const nameEl = root4.querySelector("#seidr-act-name");
+    const audEl = root4.querySelector("#seidr-act-audience");
+    const chatOtherEl = root4.querySelector("#seidr-act-chat-other");
+    const chatSelfEl = root4.querySelector("#seidr-act-chat-self");
+    const name = nameEl && nameEl.value.trim() ? nameEl.value.trim() : draft2.name;
+    const itemsOnTargetEl = root4.querySelector("#seidr-act-items-on-target");
+    const itemsOnSourceEl = root4.querySelector("#seidr-act-items-on-source");
     const next = {
-      id: draft.id,
+      id: draft2.id,
       name,
-      slots: draft.slots.slice(),
-      audience: audEl && audEl.value ? audEl.value : draft.audience,
+      slots: draft2.slots.slice(),
+      audience: audEl && audEl.value ? audEl.value : draft2.audience,
       chatOther: chatOtherEl && chatOtherEl.value.trim() ? chatOtherEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatOther(name),
       chatSelf: chatSelfEl && chatSelfEl.value.trim() ? chatSelfEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : seidrDefaultChatSelf(name),
-      icon: seidrNormalizeActionIcon(draft.icon || seidrDefaultActionIcon()),
-      items: (draft.items || []).slice(),
-      itemsOnTarget: itemsOnTargetEl ? !!itemsOnTargetEl.checked : draft.itemsOnTarget !== false,
-      itemsOnSource: itemsOnSourceEl ? !!itemsOnSourceEl.checked : !!draft.itemsOnSource,
+      icon: seidrNormalizeActionIcon(draft2.icon || seidrDefaultActionIcon()),
+      items: (draft2.items || []).slice(),
+      itemsOnTarget: itemsOnTargetEl ? !!itemsOnTargetEl.checked : draft2.itemsOnTarget !== false,
+      itemsOnSource: itemsOnSourceEl ? !!itemsOnSourceEl.checked : !!draft2.itemsOnSource,
       conditions: { groups: [] },
       effects: {}
     };
-    const slotBtns = root3.querySelectorAll(".seidr-act-slot-on");
+    const slotBtns = root4.querySelectorAll(".seidr-act-slot-on");
     const slots = [];
-    slotBtns.forEach(function(btn2) {
-      const s = btn2.getAttribute("data-slot");
+    slotBtns.forEach(function(btn3) {
+      const s = btn3.getAttribute("data-slot");
       if (s && slots.indexOf(s) < 0) slots.push(s);
     });
     if (slots.length) next.slots = slots;
     const groups = [];
-    root3.querySelectorAll(".seidr-act-group").forEach(function(gEl) {
+    root4.querySelectorAll(".seidr-act-group").forEach(function(gEl) {
       const rules = [];
       gEl.querySelectorAll(".seidr-act-rule").forEach(function(rEl) {
         const who = (rEl.querySelector("[data-rule-who]") || { value: "target" }).value;
@@ -15303,32 +18324,39 @@
       if (rules.length) groups.push({ rules });
     });
     next.conditions = { groups };
-    const aOn = root3.querySelector("#seidr-act-arousal-on");
-    const aAct = root3.querySelector("#seidr-act-arousal-act");
-    const aRev = root3.querySelector("#seidr-act-arousal-reverse");
+    const aOn = root4.querySelector("#seidr-act-arousal-on");
+    const aAct = root4.querySelector("#seidr-act-arousal-act");
+    const aRev = root4.querySelector("#seidr-act-arousal-reverse");
     const actVal = aAct && aAct.value || "Caress";
     next.effects.arousal = {
       enabled: !!(aOn && aOn.checked),
       activity: SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(actVal) >= 0 ? actVal : "Caress",
       reverse: !!(aRev && aRev.checked)
     };
-    const sOn = root3.querySelector("#seidr-act-sound-on");
-    const sSel = root3.querySelector("#seidr-act-sound");
+    const sOn = root4.querySelector("#seidr-act-sound-on");
+    const sSel = root4.querySelector("#seidr-act-sound");
     next.effects.sound = {
       enabled: !!(sOn && sOn.checked),
       sound: sSel && sSel.value || SEIDR_ACTION_SOUNDS[0]
     };
-    const pOn = root3.querySelector("#seidr-act-pose-on");
-    const pSel = root3.querySelector("#seidr-act-pose");
+    const pOn = root4.querySelector("#seidr-act-pose-on");
+    const pSel = root4.querySelector("#seidr-act-pose");
     next.effects.pose = {
       enabled: !!(pOn && pOn.checked),
       pose: pSel && pSel.value || "Kneel"
     };
-    draft = next;
+    const anOn = root4.querySelector("#seidr-act-anim-on");
+    const anSel = root4.querySelector("#seidr-act-anim");
+    const anId = anSel ? parseInt(anSel.value, 10) : 0;
+    next.effects.animation = {
+      enabled: !!(anOn && anOn.checked),
+      animationId: Number.isFinite(anId) && anId > 0 ? anId : 0
+    };
+    draft2 = next;
     return next;
   }
-  function setMsg3(root3, text) {
-    const el = root3.querySelector("#seidr-act-msg");
+  function setMsg4(root4, text) {
+    const el = root4.querySelector("#seidr-act-msg");
     if (el) el.textContent = text || "";
   }
   function afterSave() {
@@ -15339,15 +18367,15 @@
       }
     }
   }
-  function bindArousalPicker(root3) {
-    const picker = root3.querySelector(".seidr-act-arousal-picker");
-    const toggle = root3.querySelector("#seidr-act-arousal-toggle");
-    const dropdown = root3.querySelector("#seidr-act-arousal-dropdown");
-    const filter = root3.querySelector("#seidr-act-arousal-filter");
-    const hidden = root3.querySelector("#seidr-act-arousal-act");
-    const results = root3.querySelector("#seidr-act-arousal-results");
-    const labelEl = root3.querySelector("#seidr-act-arousal-label");
-    const caret = root3.querySelector(".seidr-act-arousal-caret");
+  function bindArousalPicker(root4) {
+    const picker = root4.querySelector(".seidr-act-arousal-picker");
+    const toggle = root4.querySelector("#seidr-act-arousal-toggle");
+    const dropdown = root4.querySelector("#seidr-act-arousal-dropdown");
+    const filter = root4.querySelector("#seidr-act-arousal-filter");
+    const hidden = root4.querySelector("#seidr-act-arousal-act");
+    const results = root4.querySelector("#seidr-act-arousal-results");
+    const labelEl = root4.querySelector("#seidr-act-arousal-label");
+    const caret = root4.querySelector(".seidr-act-arousal-caret");
     if (!toggle || !dropdown || !hidden) return;
     function setOpen(open) {
       arousalPickerOpen = open;
@@ -15388,18 +18416,18 @@
     }
     if (results) {
       results.addEventListener("click", function(ev) {
-        const btn2 = ev.target.closest("[data-arousal-id]");
-        if (!btn2 || !hidden) return;
-        const id = btn2.getAttribute("data-arousal-id");
+        const btn3 = ev.target.closest("[data-arousal-id]");
+        if (!btn3 || !hidden) return;
+        const id = btn3.getAttribute("data-arousal-id");
         if (!id || SEIDR_AROUSAL_ACTIVITY_IDS.indexOf(id) < 0) return;
         hidden.value = id;
         if (labelEl) labelEl.textContent = seidrArousalActivityLabel(id);
-        if (draft) {
-          if (!draft.effects) draft.effects = {};
-          if (!draft.effects.arousal) {
-            draft.effects.arousal = { enabled: false, activity: id, reverse: false };
+        if (draft2) {
+          if (!draft2.effects) draft2.effects = {};
+          if (!draft2.effects.arousal) {
+            draft2.effects.arousal = { enabled: false, activity: id, reverse: false };
           } else {
-            draft.effects.arousal.activity = id;
+            draft2.effects.arousal.activity = id;
           }
         }
         setOpen(false);
@@ -15419,41 +18447,41 @@
       }
     });
   }
-  function addItemRef(root3, slot, name) {
-    if (!draft || !slot || !name) return;
-    readDraftFromDom(root3);
-    if (!draft.items) draft.items = [];
-    const dup = draft.items.some(function(it) {
+  function addItemRef(root4, slot, name) {
+    if (!draft2 || !slot || !name) return;
+    readDraftFromDom2(root4);
+    if (!draft2.items) draft2.items = [];
+    const dup = draft2.items.some(function(it) {
       return it.slot === slot && it.name === name;
     });
     if (dup) {
-      setMsg3(root3, "Already added");
+      setMsg4(root4, "Already added");
       return;
     }
-    if (draft.items.length >= SEIDR_ACTION_ITEMS_MAX) {
-      setMsg3(root3, "Item limit (" + SEIDR_ACTION_ITEMS_MAX + ")");
+    if (draft2.items.length >= SEIDR_ACTION_ITEMS_MAX) {
+      setMsg4(root4, "Item limit (" + SEIDR_ACTION_ITEMS_MAX + ")");
       return;
     }
-    draft.items.push({ slot, name });
+    draft2.items.push({ slot, name });
     itemsPickerOpen = false;
-    renderEditor(root3);
-    bindEditor(root3);
+    renderEditor2(root4);
+    bindEditor(root4);
   }
-  function bindItemsPicker(root3) {
-    const picker = root3.querySelector(".seidr-act-items-picker");
-    const toggle = root3.querySelector("#seidr-act-items-toggle");
-    const dropdown = root3.querySelector("#seidr-act-items-dropdown");
-    const slotSel = root3.querySelector("#seidr-act-items-slot");
-    const filterEl = root3.querySelector("#seidr-act-items-filter");
-    const results = root3.querySelector("#seidr-act-items-results");
+  function bindItemsPicker(root4) {
+    const picker = root4.querySelector(".seidr-act-items-picker");
+    const toggle = root4.querySelector("#seidr-act-items-toggle");
+    const dropdown = root4.querySelector("#seidr-act-items-dropdown");
+    const slotSel = root4.querySelector("#seidr-act-items-slot");
+    const filterEl = root4.querySelector("#seidr-act-items-filter");
+    const results = root4.querySelector("#seidr-act-items-results");
     function refreshResults() {
-      if (!results || !draft) return;
-      results.innerHTML = itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, draft.items || []);
-      results.querySelectorAll("[data-item-add-name]").forEach(function(btn2) {
-        btn2.addEventListener("click", function() {
-          const el = btn2;
+      if (!results || !draft2) return;
+      results.innerHTML = itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, draft2.items || []);
+      results.querySelectorAll("[data-item-add-name]").forEach(function(btn3) {
+        btn3.addEventListener("click", function() {
+          const el = btn3;
           addItemRef(
-            root3,
+            root4,
             el.getAttribute("data-item-add-slot") || "",
             el.getAttribute("data-item-add-name") || ""
           );
@@ -15482,23 +18510,23 @@
       refreshResults();
     });
     if (itemsPickerOpen) refreshResults();
-    root3.querySelectorAll("[data-item-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        if (!draft) return;
-        readDraftFromDom(root3);
-        const idx = parseInt(btn2.getAttribute("data-item-del") || "", 10);
-        if (!Number.isFinite(idx) || !draft.items) return;
-        draft.items.splice(idx, 1);
-        renderEditor(root3);
-        bindEditor(root3);
+    root4.querySelectorAll("[data-item-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        if (!draft2) return;
+        readDraftFromDom2(root4);
+        const idx = parseInt(btn3.getAttribute("data-item-del") || "", 10);
+        if (!Number.isFinite(idx) || !draft2.items) return;
+        draft2.items.splice(idx, 1);
+        renderEditor2(root4);
+        bindEditor(root4);
       });
     });
   }
-  function syncChatCount(root3, which) {
-    const ta = root3.querySelector(
+  function syncChatCount(root4, which) {
+    const ta = root4.querySelector(
       which === "other" ? "#seidr-act-chat-other" : "#seidr-act-chat-self"
     );
-    const count = root3.querySelector(
+    const count = root4.querySelector(
       which === "other" ? "#seidr-act-chat-other-count" : "#seidr-act-chat-self-count"
     );
     if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
@@ -15512,17 +18540,17 @@
     if (!grid) return;
     seidrListActions().forEach(function(action) {
       const name = seidrActionActivityName(action.id);
-      const btn2 = grid.querySelector('button[name="' + name + '"]');
-      if (!btn2) return;
+      const btn3 = grid.querySelector('button[name="' + name + '"]');
+      if (!btn3) return;
       const url = seidrResolveActionIconUrl(action);
       try {
         if (typeof ElementButton !== "undefined" && ElementButton && typeof ElementButton.SetImage === "function") {
-          ElementButton.SetImage(btn2, url);
+          ElementButton.SetImage(btn3, url);
           return;
         }
       } catch (e) {
       }
-      const img = btn2.querySelector(".button-image");
+      const img = btn3.querySelector(".button-image");
       if (img && img instanceof HTMLImageElement) img.src = url;
       else if (img) {
         const css = url.indexOf("data:image") === 0 || url.indexOf("http") === 0 ? 'url("' + url + '")' : 'url("./' + url + '")';
@@ -15531,10 +18559,10 @@
       }
     });
   }
-  function openIconModal(root3) {
-    if (!draft) return;
+  function openIconModal(root4) {
+    if (!draft2) return;
     closeIconModal();
-    readDraftFromDom(root3);
+    readDraftFromDom2(root4);
     const panel4 = document.getElementById("seidr-settings-panel") || document.body;
     const modal = document.createElement("div");
     modal.id = "seidr-act-icon-modal";
@@ -15556,19 +18584,19 @@
       ev.stopPropagation();
     }, { passive: true });
     function pickIcon(icon) {
-      if (!draft) return;
-      readDraftFromDom(root3);
-      draft.icon = seidrNormalizeActionIcon(icon);
-      const saved = seidrUpdateAction(draft);
+      if (!draft2) return;
+      readDraftFromDom2(root4);
+      draft2.icon = seidrNormalizeActionIcon(icon);
+      const saved = seidrUpdateAction(draft2);
       closeIconModal();
-      renderEditor(root3);
-      bindEditor(root3);
+      renderEditor2(root4);
+      bindEditor(root4);
       if (saved.ok) {
         afterSave();
         refreshOpenActivityMenuIcons();
-        setMsg3(root3, "Icon saved");
+        setMsg4(root4, "Icon saved");
       } else {
-        setMsg3(root3, saved.error || "Icon save failed \u2014 click Save action");
+        setMsg4(root4, saved.error || "Icon save failed \u2014 click Save action");
       }
     }
     function paintGrid(filter) {
@@ -15578,27 +18606,27 @@
       const parts = [];
       function pushSection(title, cells) {
         if (!cells) return;
-        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml5(title) + "</div>");
+        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml6(title) + "</div>");
         parts.push('<div class="seidr-act-icon-sec-grid">' + cells + "</div>");
       }
       const seidrCells = SEIDR_BUILTIN_ICONS.filter(function(b) {
         if (!q) return true;
         return b.label.toLowerCase().indexOf(q) >= 0 || b.id.toLowerCase().indexOf(q) >= 0;
       }).map(function(b) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml5(b.id) + '" title="' + escapeHtml5(b.label) + '"><img src="' + escapeHtml5(b.url) + '" alt="" /><span>' + escapeHtml5(b.label) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml6(b.id) + '" title="' + escapeHtml6(b.label) + '"><img src="' + escapeHtml6(b.url) + '" alt="" /><span>' + escapeHtml6(b.label) + "</span></button>";
       }).join("");
       pushSection("Seidr", seidrCells);
       const actCells = SEIDR_ACTIVITY_ICON_IDS.filter(function(id) {
         if (!q) return true;
         return id.toLowerCase().indexOf(q) >= 0;
       }).map(function(id) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml5(id) + '" title="' + escapeHtml5(id) + '"><img src="' + escapeHtml5(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml5(id) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml6(id) + '" title="' + escapeHtml6(id) + '"><img src="' + escapeHtml6(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml6(id) + "</span></button>";
       }).join("");
       pushSection("Club Activity", actCells);
       grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
-      grid.querySelectorAll("[data-icon-id]").forEach(function(btn2) {
-        btn2.addEventListener("click", function() {
-          const el = btn2;
+      grid.querySelectorAll("[data-icon-id]").forEach(function(btn3) {
+        btn3.addEventListener("click", function() {
+          const el = btn3;
           const source = el.getAttribute("data-icon-source");
           const id = el.getAttribute("data-icon-id") || "";
           if (!source || !id) return;
@@ -15615,156 +18643,156 @@
     });
     paintGrid("");
   }
-  function bindEditor(root3) {
-    bindArousalPicker(root3);
-    bindItemsPicker(root3);
-    root3.querySelector("#seidr-act-icon-pick")?.addEventListener("click", function() {
-      openIconModal(root3);
+  function bindEditor(root4) {
+    bindArousalPicker(root4);
+    bindItemsPicker(root4);
+    root4.querySelector("#seidr-act-icon-pick")?.addEventListener("click", function() {
+      openIconModal(root4);
     });
-    root3.querySelectorAll("#seidr-act-chat-other, #seidr-act-chat-self").forEach(function(el) {
+    root4.querySelectorAll("#seidr-act-chat-other, #seidr-act-chat-self").forEach(function(el) {
       el.addEventListener("focus", function() {
         lastChatArea = el;
       });
       el.addEventListener("input", function() {
         const id = el.id;
-        syncChatCount(root3, id === "seidr-act-chat-self" ? "self" : "other");
+        syncChatCount(root4, id === "seidr-act-chat-self" ? "self" : "other");
       });
     });
-    root3.querySelector("#seidr-act-ph")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-chat-token]");
-      if (!btn2) return;
-      const token = btn2.getAttribute("data-chat-token");
+    root4.querySelector("#seidr-act-ph")?.addEventListener("click", function(ev) {
+      const btn3 = ev.target.closest("[data-chat-token]");
+      if (!btn3) return;
+      const token = btn3.getAttribute("data-chat-token");
       if (!token) return;
-      const other = root3.querySelector("#seidr-act-chat-other");
-      const self = root3.querySelector("#seidr-act-chat-self");
+      const other = root4.querySelector("#seidr-act-chat-other");
+      const self = root4.querySelector("#seidr-act-chat-self");
       const ta = lastChatArea && (lastChatArea === other || lastChatArea === self) ? lastChatArea : other;
       if (!ta) return;
       if (!insertChatToken(ta, token)) {
-        setMsg3(root3, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
+        setMsg4(root4, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
       } else {
-        syncChatCount(root3, ta.id === "seidr-act-chat-self" ? "self" : "other");
+        syncChatCount(root4, ta.id === "seidr-act-chat-self" ? "self" : "other");
       }
     });
-    root3.querySelector("#seidr-act-slots")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-slot]");
-      if (!btn2 || !draft) return;
-      const slot = btn2.getAttribute("data-slot");
+    root4.querySelector("#seidr-act-slots")?.addEventListener("click", function(ev) {
+      const btn3 = ev.target.closest("[data-slot]");
+      if (!btn3 || !draft2) return;
+      const slot = btn3.getAttribute("data-slot");
       if (!slot) return;
-      const i = draft.slots.indexOf(slot);
+      const i = draft2.slots.indexOf(slot);
       if (i >= 0) {
-        if (draft.slots.length > 1) draft.slots.splice(i, 1);
+        if (draft2.slots.length > 1) draft2.slots.splice(i, 1);
       } else {
-        draft.slots.push(slot);
+        draft2.slots.push(slot);
       }
-      renderEditor(root3);
-      bindEditor(root3);
+      renderEditor2(root4);
+      bindEditor(root4);
     });
-    root3.querySelector("#seidr-act-add-group")?.addEventListener("click", function() {
-      if (!draft) return;
-      readDraftFromDom(root3);
-      draft.conditions.groups.push({
+    root4.querySelector("#seidr-act-add-group")?.addEventListener("click", function() {
+      if (!draft2) return;
+      readDraftFromDom2(root4);
+      draft2.conditions.groups.push({
         rules: [{ who: "target", type: "wearing", slot: "ItemArms", not: false }]
       });
-      renderEditor(root3);
-      bindEditor(root3);
+      renderEditor2(root4);
+      bindEditor(root4);
     });
-    root3.querySelectorAll("[data-group-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        if (!draft) return;
-        readDraftFromDom(root3);
-        const gi = parseInt(btn2.getAttribute("data-group-del") || "", 10);
+    root4.querySelectorAll("[data-group-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        if (!draft2) return;
+        readDraftFromDom2(root4);
+        const gi = parseInt(btn3.getAttribute("data-group-del") || "", 10);
         if (!Number.isFinite(gi)) return;
-        draft.conditions.groups.splice(gi, 1);
-        renderEditor(root3);
-        bindEditor(root3);
+        draft2.conditions.groups.splice(gi, 1);
+        renderEditor2(root4);
+        bindEditor(root4);
       });
     });
-    root3.querySelectorAll("[data-rule-add]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        if (!draft) return;
-        readDraftFromDom(root3);
-        const gi = parseInt(btn2.getAttribute("data-rule-add") || "", 10);
-        const g = draft.conditions.groups[gi];
+    root4.querySelectorAll("[data-rule-add]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        if (!draft2) return;
+        readDraftFromDom2(root4);
+        const gi = parseInt(btn3.getAttribute("data-rule-add") || "", 10);
+        const g = draft2.conditions.groups[gi];
         if (!g) return;
         g.rules.push({ who: "target", type: "isGagged", not: false });
-        renderEditor(root3);
-        bindEditor(root3);
+        renderEditor2(root4);
+        bindEditor(root4);
       });
     });
-    root3.querySelectorAll("[data-rule-del]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        if (!draft) return;
-        readDraftFromDom(root3);
-        const key = parseInt(btn2.getAttribute("data-rule-del") || "", 10);
+    root4.querySelectorAll("[data-rule-del]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        if (!draft2) return;
+        readDraftFromDom2(root4);
+        const key = parseInt(btn3.getAttribute("data-rule-del") || "", 10);
         const gi = Math.floor(key / 100);
         const ri = key % 100;
-        const g = draft.conditions.groups[gi];
+        const g = draft2.conditions.groups[gi];
         if (!g) return;
         g.rules.splice(ri, 1);
-        if (!g.rules.length) draft.conditions.groups.splice(gi, 1);
-        renderEditor(root3);
-        bindEditor(root3);
+        if (!g.rules.length) draft2.conditions.groups.splice(gi, 1);
+        renderEditor2(root4);
+        bindEditor(root4);
       });
     });
-    root3.querySelectorAll("[data-rule-type]").forEach(function(sel) {
+    root4.querySelectorAll("[data-rule-type]").forEach(function(sel) {
       sel.addEventListener("change", function() {
-        if (!draft) return;
-        readDraftFromDom(root3);
-        renderEditor(root3);
-        bindEditor(root3);
+        if (!draft2) return;
+        readDraftFromDom2(root4);
+        renderEditor2(root4);
+        bindEditor(root4);
       });
     });
-    root3.querySelector("#seidr-act-save")?.addEventListener("click", function() {
-      const next = readDraftFromDom(root3);
+    root4.querySelector("#seidr-act-save")?.addEventListener("click", function() {
+      const next = readDraftFromDom2(root4);
       if (!next) return;
       const saved = seidrUpdateAction(next);
       if (!saved.ok) {
-        setMsg3(root3, saved.error || "Save failed");
+        setMsg4(root4, saved.error || "Save failed");
         return;
       }
-      draft = next;
-      editId = next.id;
-      setMsg3(root3, "Saved");
-      renderList(root3);
+      draft2 = next;
+      editId2 = next.id;
+      setMsg4(root4, "Saved");
+      renderList2(root4);
       afterSave();
       refreshOpenActivityMenuIcons();
-      bindList(root3);
+      bindList(root4);
     });
-    root3.querySelector("#seidr-act-delete")?.addEventListener("click", function() {
-      if (!draft) return;
-      const id = draft.id;
+    root4.querySelector("#seidr-act-delete")?.addEventListener("click", function() {
+      if (!draft2) return;
+      const id = draft2.id;
       seidrDeleteAction(id);
-      editId = null;
-      draft = null;
-      renderList(root3);
-      renderEditor(root3);
+      editId2 = null;
+      draft2 = null;
+      renderList2(root4);
+      renderEditor2(root4);
       afterSave();
-      bindList(root3);
+      bindList(root4);
     });
   }
-  function selectActionById(root3, id) {
+  function selectActionById(root4, id) {
     const list = seidrListActions();
     const found = list.filter(function(a) {
       return a.id === id;
     })[0];
     if (!found) return;
-    editId = id;
-    draft = JSON.parse(JSON.stringify(found));
-    if (!draft.items) draft.items = [];
-    if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+    editId2 = id;
+    draft2 = JSON.parse(JSON.stringify(found));
+    if (!draft2.items) draft2.items = [];
+    if (!draft2.icon) draft2.icon = seidrDefaultActionIcon();
     arousalPickerOpen = false;
-    renderList(root3);
-    renderEditor(root3);
-    bindList(root3);
-    bindEditor(root3);
+    renderList2(root4);
+    renderEditor2(root4);
+    bindList(root4);
+    bindEditor(root4);
   }
-  function bindList(root3) {
-    const pick = root3.querySelector("#seidr-act-pick");
+  function bindList(root4) {
+    const pick = root4.querySelector("#seidr-act-pick");
     if (!pick) return;
     pick.addEventListener("change", function() {
       const id = parseInt(pick.value || "", 10);
       if (!Number.isFinite(id)) return;
-      selectActionById(root3, id);
+      selectActionById(root4, id);
     });
   }
   function setIoMsg(container, text) {
@@ -15781,7 +18809,7 @@
     }
     host.hidden = false;
     const rows = importCandidates.map(function(a, idx) {
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml5(a.name) + "</label>";
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml6(a.name) + "</label>";
     }).join("");
     host.innerHTML = [
       '<p class="seidr-settings-hint">Select actions to import (new ids; skips when at the ' + SEIDR_ACTIONS_MAX + " limit).</p>",
@@ -15822,10 +18850,10 @@
       const panel4 = container.querySelector("#seidr-act-import-panel");
       if (panel4) panel4.hidden = true;
       renderImportPicker(container);
-      editId = null;
-      draft = null;
-      renderList(container);
-      renderEditor(container);
+      editId2 = null;
+      draft2 = null;
+      renderList2(container);
+      renderEditor2(container);
       bindList(container);
       afterSave();
       let msg = "Imported " + result.imported;
@@ -15935,22 +18963,22 @@
       '<div id="seidr-act-list" class="seidr-act-list"></div>',
       '<div id="seidr-act-editor" class="seidr-act-editor"></div>'
     ].join("");
-    renderList(container);
-    renderEditor(container);
+    renderList2(container);
+    renderEditor2(container);
     bindList(container);
     bindEditor(container);
     bindIoPanel(container);
-    if (editId == null) {
+    if (editId2 == null) {
       const list = seidrListActions();
       if (list.length) {
-        editId = list[0].id;
-        draft = seidrDefaultAction(list[0].id);
-        Object.assign(draft, JSON.parse(JSON.stringify(list[0])));
-        if (!draft.items) draft.items = [];
-        if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+        editId2 = list[0].id;
+        draft2 = seidrDefaultAction(list[0].id);
+        Object.assign(draft2, JSON.parse(JSON.stringify(list[0])));
+        if (!draft2.items) draft2.items = [];
+        if (!draft2.icon) draft2.icon = seidrDefaultActionIcon();
         arousalPickerOpen = false;
-        renderList(container);
-        renderEditor(container);
+        renderList2(container);
+        renderEditor2(container);
         bindList(container);
         bindEditor(container);
       }
@@ -15961,14 +18989,14 @@
         setIoMsg(container, "Action limit reached (" + SEIDR_ACTIONS_MAX + ")");
         return;
       }
-      editId = created.id;
-      draft = seidrDefaultAction(created.id);
-      Object.assign(draft, created);
-      if (!draft.items) draft.items = [];
-      if (!draft.icon) draft.icon = seidrDefaultActionIcon();
+      editId2 = created.id;
+      draft2 = seidrDefaultAction(created.id);
+      Object.assign(draft2, created);
+      if (!draft2.items) draft2.items = [];
+      if (!draft2.icon) draft2.icon = seidrDefaultActionIcon();
       arousalPickerOpen = false;
-      renderList(container);
-      renderEditor(container);
+      renderList2(container);
+      renderEditor2(container);
       bindList(container);
       bindEditor(container);
       afterSave();
@@ -15977,36 +19005,42 @@
   function seidrRefreshActionsTab() {
     const pane = $2("seidr-settings-pane-actions");
     if (!pane) return;
-    editId = null;
-    draft = null;
+    editId2 = null;
+    draft2 = null;
     importCandidates = null;
     seidrBuildActionsTab(pane);
   }
   Seidr.refreshOpenActivityMenuIcons = refreshOpenActivityMenuIcons;
 
   // src/animations/ui.ts
-  var editId2 = null;
-  var draft2 = null;
-  function escapeHtml6(s) {
+  var editId3 = null;
+  var draft3 = null;
+  var wiggleEditId = null;
+  var wiggleDraft = null;
+  function escapeHtml7(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts3(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml6(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml6(o.label) + "</option>";
+      return '<option value="' + escapeHtml7(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml7(o.label) + "</option>";
     }).join("");
   }
   function stringOpts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml6(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml6(o || "(clear)") + "</option>";
+      return '<option value="' + escapeHtml7(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml7(o || "(clear)") + "</option>";
     }).join("");
   }
-  function setMsg4(root3, text) {
-    const el = root3.querySelector("#seidr-anim-msg");
+  function setMsg5(root4, text) {
+    const el = root4.querySelector("#seidr-anim-msg");
+    if (el) el.textContent = text || "";
+  }
+  function setWiggleMsg(root4, text) {
+    const el = root4.querySelector("#seidr-wiggle-msg");
     if (el) el.textContent = text || "";
   }
   function chatTokenChips2() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml6(t.token) + '" title="' + escapeHtml6(t.hint) + '">' + escapeHtml6(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml7(t.token) + '" title="' + escapeHtml7(t.hint) + '">' + escapeHtml7(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken2(ta, token) {
@@ -16020,27 +19054,33 @@
     ta.setSelectionRange(pos, pos);
     return true;
   }
-  function syncAnimChatCount(root3) {
-    const ta = root3.querySelector("#seidr-anim-chat");
-    const count = root3.querySelector("#seidr-anim-chat-count");
+  function syncAnimChatCount(root4) {
+    const ta = root4.querySelector("#seidr-anim-chat");
+    const count = root4.querySelector("#seidr-anim-chat-count");
     if (ta && count) count.textContent = ta.value.length + "/" + SEIDR_ACTION_CHAT_MAX;
   }
-  function updateCap(root3) {
-    const el = root3.querySelector("#seidr-anim-cap");
-    if (!el) return;
-    el.textContent = seidrListAnimations().length + "/" + SEIDR_ANIMATIONS_MAX + " Animations";
+  function updateCap2(root4) {
+    const bag = seidrGetAnimationsBag();
+    const clipEl = root4.querySelector("#seidr-anim-cap");
+    if (clipEl) {
+      clipEl.textContent = seidrCountClipAnimations(bag.list) + "/" + SEIDR_ANIMATIONS_MAX + " Animations";
+    }
+    const wigEl = root4.querySelector("#seidr-wiggle-cap");
+    if (wigEl) {
+      wigEl.textContent = seidrCountWiggleAnimations(bag.list) + "/" + SEIDR_WIGGLES_MAX + " Wiggles";
+    }
   }
-  function renderList2(root3) {
-    const list = seidrListAnimations();
-    const box = root3.querySelector("#seidr-anim-list");
+  function renderList3(root4) {
+    const list = seidrListClipAnimations();
+    const box = root4.querySelector("#seidr-anim-list");
     if (!box) return;
-    updateCap(root3);
+    updateCap2(root4);
     if (!list.length) {
-      box.innerHTML = '<p class="seidr-settings-hint">No animations yet. Add one, then play with /animation name.</p>';
+      box.innerHTML = '<p class="seidr-settings-hint">No pose/face animations yet. Add one, then play with /animation name.</p>';
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml6(a.name) + " (" + a.steps.length + ")</option>";
+      return '<option value="' + a.id + '"' + (editId3 === a.id ? " selected" : "") + ">" + escapeHtml7(a.name) + " (" + a.steps.length + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -16056,7 +19096,7 @@
   function waitStepperHtml(wait2) {
     return [
       '<div class="seidr-num-wrap">',
-      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml6(String(wait2)) + '" />',
+      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml7(String(wait2)) + '" />',
       '<div class="seidr-num-spin" aria-hidden="true">',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="1" tabindex="-1" title="Increase">\u25B2</button>',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="-1" tabindex="-1" title="Decrease">\u25BC</button>',
@@ -16064,16 +19104,45 @@
       "</div>"
     ].join("");
   }
-  function stepCardHtml(step, index) {
+  function slotChecksHtml(prefix, slots) {
+    const order = [
+      { id: "ear", label: "Ear" },
+      { id: "tail", label: "Tail" },
+      { id: "wing", label: "Wing" }
+    ];
+    return order.map(function(o) {
+      const checked = slots.indexOf(o.id) >= 0 ? " checked" : "";
+      return '<label class="seidr-settings-check"><input type="checkbox" data-' + prefix + '-slot value="' + o.id + '"' + checked + " /> " + o.label + "</label>";
+    }).join("");
+  }
+  function stepCardHtml2(step, index) {
     const waitInput = waitStepperHtml(step.wait);
     if (step.kind === "pose") {
       const poseName = seidrPoseLabel(step.pose);
       return [
         '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-        "<summary>Pose \xB7 " + escapeHtml6(poseName) + "</summary>",
+        "<summary>Pose \xB7 " + escapeHtml7(poseName) + "</summary>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Pose</span>',
         "<select data-anim-pose>" + opts3(SEIDR_ACTION_POSES, step.pose) + "</select>",
+        "</div>",
+        '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+        '<span class="seidr-settings-field-label">Wait (s)</span>',
+        waitInput,
+        "</div>",
+        '<div class="seidr-settings-row" style="margin-top:8px;">',
+        '<button type="button" class="seidr-act-btn seidr-act-btn-danger" data-anim-del-step="' + index + '">Remove</button>',
+        "</div>",
+        "</details>"
+      ].join("");
+    }
+    if (step.kind === "wiggle") {
+      return [
+        '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
+        "<summary>Wiggle \xB7 " + escapeHtml7(seidrWiggleSlotsLabel(step.slots)) + "</summary>",
+        '<p class="seidr-settings-hint" style="margin-top:8px;">Plays configured Wiggle sets for checked slots in parallel. Missing / not worn \u2192 skipped.</p>',
+        '<div class="seidr-settings-row" style="margin-top:8px;gap:12px;display:flex;flex-wrap:wrap;">',
+        slotChecksHtml("anim", step.slots),
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Wait (s)</span>',
@@ -16089,7 +19158,7 @@
     const exprs = [""].concat(SEIDR_ANIM_FACE_MAP[feature] || []);
     return [
       '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-      "<summary>Face \xB7 " + escapeHtml6(faceSummaryLabel(step)) + "</summary>",
+      "<summary>Face \xB7 " + escapeHtml7(faceSummaryLabel(step)) + "</summary>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Feature</span>',
       "<select data-anim-feature>" + stringOpts2(Object.keys(SEIDR_ANIM_FACE_MAP), feature) + "</select>",
@@ -16112,13 +19181,13 @@
       "</details>"
     ].join("");
   }
-  function readDraftFromDom2(root3) {
-    if (!draft2) return null;
-    const nameEl = root3.querySelector("#seidr-anim-name");
-    const name = (nameEl && nameEl.value || "").trim() || draft2.name;
-    const chatEl = root3.querySelector("#seidr-anim-chat");
+  function readDraftFromDom3(root4) {
+    if (!draft3 || seidrAnimIsWiggle(draft3)) return null;
+    const nameEl = root4.querySelector("#seidr-anim-name");
+    const name = (nameEl && nameEl.value || "").trim() || draft3.name;
+    const chatEl = root4.querySelector("#seidr-anim-chat");
     const chatText = chatEl && chatEl.value.trim() ? chatEl.value.trim().slice(0, SEIDR_ACTION_CHAT_MAX) : "";
-    const cards = root3.querySelectorAll("[data-anim-step]");
+    const cards = root4.querySelectorAll("[data-anim-step]");
     const steps = [];
     cards.forEach(function(card) {
       const waitEl = card.querySelector("[data-anim-wait]");
@@ -16126,6 +19195,17 @@
       const poseEl = card.querySelector("[data-anim-pose]");
       if (poseEl) {
         steps.push({ kind: "pose", pose: poseEl.value || "Kneel", wait: wait2 });
+        return;
+      }
+      const slotBoxes = card.querySelectorAll("[data-anim-slot]");
+      if (slotBoxes.length) {
+        const raw = [];
+        slotBoxes.forEach(function(el) {
+          const inp = el;
+          if (inp.checked) raw.push(inp.value);
+        });
+        const slots = seidrNormalizeWiggleSlots(raw.length ? raw : ["tail"]);
+        steps.push({ kind: "wiggle", slots: slots.length ? slots : ["tail"], wait: wait2 });
         return;
       }
       const featEl = card.querySelector("[data-anim-feature]");
@@ -16141,32 +19221,33 @@
         });
       }
     });
-    return { id: draft2.id, name, steps, chatText };
+    return { id: draft3.id, name, kind: "clip", steps, chatText };
   }
-  function renderEditor2(root3) {
-    const wrap2 = root3.querySelector("#seidr-anim-editor");
+  function renderEditor3(root4) {
+    const wrap2 = root4.querySelector("#seidr-anim-editor");
     if (!wrap2) return;
-    if (!draft2) {
+    if (!draft3 || seidrAnimIsWiggle(draft3)) {
       wrap2.innerHTML = '<p class="seidr-settings-hint">Select an animation or add a new one.</p>';
       return;
     }
-    const total = seidrAnimWaitTotal(draft2.steps);
-    const chatText = draft2.chatText || "";
+    const total = seidrAnimWaitTotal(draft3.steps);
+    const chatText = draft3.chatText || "";
     wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml6(draft2.name) + '" />',
+      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml7(draft3.name) + '" />',
       "</div>",
-      '<p class="seidr-settings-hint" style="margin-top:8px;">Steps ' + draft2.steps.length + "/" + SEIDR_ANIM_STEPS_MAX + " \xB7 Wait total " + total.toFixed(2) + "s / " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s</p>",
-      '<div id="seidr-anim-steps">' + draft2.steps.map(stepCardHtml).join("") + "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:8px;">Steps ' + draft3.steps.length + "/" + SEIDR_ANIM_STEPS_MAX + " \xB7 Wait total " + total.toFixed(2) + "s / " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s</p>",
+      '<div id="seidr-anim-steps">' + draft3.steps.map(stepCardHtml2).join("") + "</div>",
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-add-pose">+ Pose</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-add-face">+ Face</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-add-wiggle">+ Wiggle</button>',
       "</div>",
       '<p class="seidr-settings-hint" style="margin-top:10px;">Action text (optional, posted when play starts; Club tags, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
       '<div class="seidr-act-ph-row" id="seidr-anim-ph">' + chatTokenChips2() + "</div>",
       '<p class="seidr-settings-hint">Club style: SourceCharacter raises PronounPossessive hands.</p>',
-      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatText) + "</textarea>",
+      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml7(chatText) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-anim-chat-count">' + chatText.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
@@ -16174,10 +19255,10 @@
       "</div>",
       '<p class="seidr-cmd-msg" id="seidr-anim-msg"></p>'
     ].join("");
-    wireEditor(root3);
+    wireEditor2(root4);
   }
-  function openAnimation(root3, id) {
-    const list = seidrListAnimations();
+  function openAnimation(root4, id) {
+    const list = seidrListClipAnimations();
     let found = null;
     for (let i = 0; i < list.length; i++) {
       if (list[i].id === id) {
@@ -16185,77 +19266,88 @@
         break;
       }
     }
-    editId2 = found ? found.id : null;
-    draft2 = found;
-    renderList2(root3);
-    renderEditor2(root3);
-    wireList(root3);
+    editId3 = found ? found.id : null;
+    draft3 = found;
+    renderList3(root4);
+    renderEditor3(root4);
+    wireList2(root4);
   }
-  function ensureFirstOpen(root3) {
-    if (editId2 != null && draft2) return;
-    const list = seidrListAnimations();
+  function ensureFirstOpen2(root4) {
+    if (editId3 != null && draft3 && !seidrAnimIsWiggle(draft3)) return;
+    const list = seidrListClipAnimations();
     if (!list.length) {
-      editId2 = null;
-      draft2 = null;
-      renderList2(root3);
-      renderEditor2(root3);
-      wireList(root3);
+      editId3 = null;
+      draft3 = null;
+      renderList3(root4);
+      renderEditor3(root4);
+      wireList2(root4);
       return;
     }
-    openAnimation(root3, list[0].id);
+    openAnimation(root4, list[0].id);
   }
-  function wireEditor(root3) {
-    root3.querySelector("#seidr-anim-add-pose")?.addEventListener("click", function() {
-      const cur = readDraftFromDom2(root3) || draft2;
-      if (!cur) return;
+  function wireEditor2(root4) {
+    root4.querySelector("#seidr-anim-add-pose")?.addEventListener("click", function() {
+      const cur = readDraftFromDom3(root4) || draft3;
+      if (!cur || seidrAnimIsWiggle(cur)) return;
       if (cur.steps.length >= SEIDR_ANIM_STEPS_MAX) {
-        setMsg4(root3, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
+        setMsg5(root4, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
         return;
       }
       cur.steps.push(seidrDefaultAnimPoseStep());
-      draft2 = cur;
-      renderEditor2(root3);
+      draft3 = cur;
+      renderEditor3(root4);
     });
-    root3.querySelector("#seidr-anim-add-face")?.addEventListener("click", function() {
-      const cur = readDraftFromDom2(root3) || draft2;
-      if (!cur) return;
+    root4.querySelector("#seidr-anim-add-face")?.addEventListener("click", function() {
+      const cur = readDraftFromDom3(root4) || draft3;
+      if (!cur || seidrAnimIsWiggle(cur)) return;
       if (cur.steps.length >= SEIDR_ANIM_STEPS_MAX) {
-        setMsg4(root3, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
+        setMsg5(root4, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
         return;
       }
       cur.steps.push(seidrDefaultAnimFaceStep());
-      draft2 = cur;
-      renderEditor2(root3);
+      draft3 = cur;
+      renderEditor3(root4);
     });
-    root3.querySelectorAll("[data-anim-del-step]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const cur = readDraftFromDom2(root3) || draft2;
-        if (!cur) return;
-        const idx = parseInt(btn2.getAttribute("data-anim-del-step") || "-1", 10);
+    root4.querySelector("#seidr-anim-add-wiggle")?.addEventListener("click", function() {
+      const cur = readDraftFromDom3(root4) || draft3;
+      if (!cur || seidrAnimIsWiggle(cur)) return;
+      if (cur.steps.length >= SEIDR_ANIM_STEPS_MAX) {
+        setMsg5(root4, "Max " + SEIDR_ANIM_STEPS_MAX + " steps");
+        return;
+      }
+      cur.steps.push(seidrDefaultAnimWiggleStep(["ear", "tail"]));
+      draft3 = cur;
+      renderEditor3(root4);
+    });
+    root4.querySelectorAll("[data-anim-del-step]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const cur = readDraftFromDom3(root4) || draft3;
+        if (!cur || seidrAnimIsWiggle(cur)) return;
+        const idx = parseInt(btn3.getAttribute("data-anim-del-step") || "-1", 10);
         if (idx < 0) return;
         cur.steps.splice(idx, 1);
-        draft2 = cur;
-        renderEditor2(root3);
+        draft3 = cur;
+        renderEditor3(root4);
       });
     });
     function refreshFromDom() {
-      const cur = readDraftFromDom2(root3);
+      const cur = readDraftFromDom3(root4);
       if (cur) {
-        draft2 = cur;
-        renderEditor2(root3);
+        draft3 = cur;
+        renderEditor3(root4);
       }
     }
-    root3.querySelectorAll("[data-anim-feature], [data-anim-pose], [data-anim-expr]").forEach(function(sel) {
+    root4.querySelectorAll("[data-anim-feature], [data-anim-pose], [data-anim-expr]").forEach(function(sel) {
       sel.addEventListener("change", refreshFromDom);
     });
-    root3.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn2) {
-      btn2.addEventListener("click", function(ev) {
+    root4.querySelectorAll("[data-anim-wait-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap2 = btn2.closest(".seidr-num-wrap");
+        const wrap2 = btn3.closest(".seidr-num-wrap");
         const input = wrap2 ? wrap2.querySelector("[data-anim-wait]") : null;
         if (!input) return;
-        const dir = parseInt(btn2.getAttribute("data-anim-wait-dir") || "0", 10);
+        const dir = parseInt(btn3.getAttribute("data-anim-wait-dir") || "0", 10);
         if (!dir) return;
         let n = parseFloat(input.value);
         if (!Number.isFinite(n)) n = 0.5;
@@ -16266,88 +19358,452 @@
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
     });
-    root3.querySelector("#seidr-anim-chat")?.addEventListener("input", function() {
-      syncAnimChatCount(root3);
+    root4.querySelector("#seidr-anim-chat")?.addEventListener("input", function() {
+      syncAnimChatCount(root4);
     });
-    root3.querySelector("#seidr-anim-ph")?.addEventListener("click", function(ev) {
-      const btn2 = ev.target.closest("[data-anim-chat-token]");
-      if (!btn2) return;
-      const token = btn2.getAttribute("data-anim-chat-token");
+    root4.querySelector("#seidr-anim-ph")?.addEventListener("click", function(ev) {
+      const btn3 = ev.target.closest("[data-anim-chat-token]");
+      if (!btn3) return;
+      const token = btn3.getAttribute("data-anim-chat-token");
       if (!token) return;
-      const ta = root3.querySelector("#seidr-anim-chat");
+      const ta = root4.querySelector("#seidr-anim-chat");
       if (!ta) return;
       if (!insertChatToken2(ta, token)) {
-        setMsg4(root3, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
+        setMsg5(root4, "Text max " + SEIDR_ACTION_CHAT_MAX + " characters");
       } else {
-        syncAnimChatCount(root3);
+        syncAnimChatCount(root4);
       }
     });
-    root3.querySelector("#seidr-anim-save")?.addEventListener("click", function() {
-      const cur = readDraftFromDom2(root3);
+    root4.querySelector("#seidr-anim-save")?.addEventListener("click", function() {
+      const cur = readDraftFromDom3(root4);
       if (!cur) return;
       const total = seidrAnimWaitTotal(cur.steps);
       if (total > SEIDR_ANIM_WAIT_TOTAL_MAX) {
-        setMsg4(root3, "Total wait " + total.toFixed(2) + "s exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s");
+        setMsg5(root4, "Total wait " + total.toFixed(2) + "s exceeds " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s");
         return;
       }
       const r = seidrUpsertAnimation(cur);
       if (!r.ok) {
-        setMsg4(root3, r.error || "Save failed");
+        setMsg5(root4, r.error || "Save failed");
         return;
       }
-      editId2 = r.animation.id;
-      draft2 = JSON.parse(JSON.stringify(r.animation));
-      setMsg4(root3, "Saved");
-      renderList2(root3);
-      renderEditor2(root3);
-      wireList(root3);
+      editId3 = r.animation.id;
+      draft3 = JSON.parse(JSON.stringify(r.animation));
+      setMsg5(root4, "Saved");
+      renderList3(root4);
+      renderEditor3(root4);
+      wireList2(root4);
     });
-    root3.querySelector("#seidr-anim-del")?.addEventListener("click", function() {
-      if (!draft2) return;
-      const id = draft2.id;
+    root4.querySelector("#seidr-anim-del")?.addEventListener("click", function() {
+      if (!draft3) return;
+      const id = draft3.id;
       seidrDeleteAnimation(id);
-      editId2 = null;
-      draft2 = null;
-      ensureFirstOpen(root3);
-      setMsg4(root3, "Deleted");
+      editId3 = null;
+      draft3 = null;
+      ensureFirstOpen2(root4);
+      setMsg5(root4, "Deleted");
+      updateCap2(root4);
     });
   }
-  function wireList(root3) {
-    const pick = root3.querySelector("#seidr-anim-pick");
+  function wireList2(root4) {
+    const pick = root4.querySelector("#seidr-anim-pick");
     if (pick) {
       pick.addEventListener("change", function() {
         const id = parseInt(pick.value, 10);
-        if (Number.isFinite(id)) openAnimation(root3, id);
+        if (Number.isFinite(id)) openAnimation(root4, id);
       });
     }
   }
+  function slotLabel(slot) {
+    const m = SEIDR_WIGGLE_SLOTS.find(function(s) {
+      return s.id === slot;
+    });
+    return m ? m.label : slot;
+  }
+  function renderWiggleList(root4) {
+    const list = seidrListWiggleAnimations();
+    const box = root4.querySelector("#seidr-wiggle-list");
+    if (!box) return;
+    updateCap2(root4);
+    if (!list.length) {
+      box.innerHTML = '<p class="seidr-settings-hint">No wiggle sets yet. Wear an ear, tail, or wing, then Add.</p>';
+      return;
+    }
+    const optsHtml = list.map(function(a) {
+      const slot = a.slot ? slotLabel(a.slot) : "?";
+      const asset = a.primary ? seidrWiggleAssetLabel(a.primary.assetName) : "";
+      return '<option value="' + a.id + '"' + (wiggleEditId === a.id ? " selected" : "") + ">" + escapeHtml7(a.name) + " \xB7 " + escapeHtml7(slot) + (asset ? " (" + escapeHtml7(asset) + ")" : "") + "</option>";
+    }).join("");
+    box.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Wiggle</span>',
+      '<select id="seidr-wiggle-pick">' + optsHtml + "</select>",
+      "</div>"
+    ].join("");
+  }
+  function secondaryOptionsHtml(draftW) {
+    if (!draftW.slot || !draftW.group || !draftW.primary) return "";
+    const cands = seidrListWiggleSecondaryCandidates(draftW.slot, draftW.group, draftW.primary.assetName);
+    const selected = draftW.secondary ? draftW.secondary.assetName : "";
+    const typedSame = draftW.secondary && draftW.secondary.assetName === draftW.primary.assetName && draftW.secondary.typedState != null && String(draftW.secondary.typedState) !== String(draftW.primary.typedState || "");
+    const opts4 = [];
+    if (typedSame && selected) {
+      opts4.push(
+        '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(selected + " (typed " + String(draftW.secondary.typedState) + ")") + "</option>"
+      );
+    }
+    if (!cands.length && !opts4.length) {
+      return '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(selected || "(none found)") + "</option>";
+    }
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      const label = (c.automatch ? "\u2605 " : "") + (c.description || seidrWiggleAssetLabel(c.name));
+      const isSel = !typedSame && c.name === selected;
+      opts4.push(
+        '<option value="' + escapeHtml7(c.name) + '"' + (isSel ? " selected" : "") + ">" + escapeHtml7(label) + "</option>"
+      );
+    }
+    return opts4.join("");
+  }
+  function counterpartHintHtml(d) {
+    if (!d.primary || !d.secondary) return "";
+    let group = d.group || "";
+    if (!group && d.slot) {
+      const meta = SEIDR_WIGGLE_SLOTS.find(function(s) {
+        return s.id === d.slot;
+      });
+      if (meta) group = meta.baseGroup;
+    }
+    const sec = d.secondary.assetName;
+    if (!sec || !group) return "";
+    if (sec === d.primary.assetName) {
+      const pTyped = d.primary.typedState != null ? String(d.primary.typedState) : "";
+      const sTyped = d.secondary.typedState != null ? String(d.secondary.typedState) : "";
+      if (sTyped && sTyped !== pTyped) return "";
+      return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs a different typed state (e.g. Spread \u2194 Folded).</p>';
+    }
+    if (seidrWiggleAssetLoadable(group, sec)) return "";
+    return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' + escapeHtml7(seidrWiggleAssetLabel(sec)) + "</b> not loaded \u2014 install Echo (or the mod that adds it), then re-open.</p>";
+  }
+  function renderWiggleEditor(root4) {
+    const wrap2 = root4.querySelector("#seidr-wiggle-editor");
+    if (!wrap2) return;
+    if (!wiggleDraft || !seidrAnimIsWiggle(wiggleDraft)) {
+      wrap2.innerHTML = '<p class="seidr-settings-hint">Select a wiggle or add a new set.</p>';
+      return;
+    }
+    const d = wiggleDraft;
+    const slot = d.slot || "tail";
+    const defs = SEIDR_WIGGLE_DEFAULTS[slot];
+    const colorMode = d.colorMode || "snapshot";
+    wrap2.innerHTML = [
+      '<div class="seidr-settings-field-row">',
+      '<span class="seidr-settings-field-label">Name</span>',
+      '<input type="text" id="seidr-wiggle-name" maxlength="40" value="' + escapeHtml7(d.name) + '" />',
+      "</div>",
+      '<p class="seidr-settings-hint" style="margin-top:8px;">Slot: <b>' + escapeHtml7(slotLabel(slot)) + "</b> \xB7 Group: <code>" + escapeHtml7(d.group || "") + "</code></p>",
+      '<p class="seidr-settings-hint">Primary: <b>' + escapeHtml7(d.primary ? seidrWiggleAssetLabel(d.primary.assetName) : "") + "</b></p>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Secondary</span>',
+      '<select id="seidr-wiggle-secondary">' + secondaryOptionsHtml(d) + "</select>",
+      "</div>",
+      counterpartHintHtml(d),
+      '<div class="seidr-settings-row" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch mirror</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-custom">Custom (wear secondary)</button>',
+      "</div>",
+      '<p class="seidr-settings-hint">Custom: equip the secondary on the same slot (or same wing with another type, e.g. Folded), then capture. Wings usually have no Echo mirror \u2014 use typed Spread/Folded or two wing assets.</p>',
+      d.secondary && d.secondary.typedState != null && String(d.secondary.typedState) !== "" ? '<p class="seidr-settings-hint">Secondary typed: <code>' + escapeHtml7(String(d.secondary.typedState)) + "</code>" + (d.primary && d.primary.typedState != null ? " \xB7 Primary typed: <code>" + escapeHtml7(String(d.primary.typedState)) + "</code>" : "") + "</p>" : "",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Colors</span>',
+      '<select id="seidr-wiggle-colors">',
+      '<option value="snapshot"' + (colorMode === "snapshot" ? " selected" : "") + ">Snapshot (saved colors)</option>",
+      '<option value="autoupdate"' + (colorMode === "autoupdate" ? " selected" : "") + ">Autoupdate (current worn)</option>",
+      "</select>",
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Amount</span>',
+      '<input type="number" class="seidr-settings-num" id="seidr-wiggle-count" min="1" max="' + SEIDR_WIGGLE_COUNT_MAX + '" step="1" value="' + (d.count || defs.count) + '" />',
+      "</div>",
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Delay (ms)</span>',
+      '<input type="number" class="seidr-settings-num" id="seidr-wiggle-delay" min="' + SEIDR_WIGGLE_DELAY_MIN_MS + '" max="' + SEIDR_WIGGLE_DELAY_MAX_MS + '" step="25" value="' + (d.delayMs || defs.delayMs) + '" />',
+      "</div>",
+      '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-save">Save</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-test">Test</button>',
+      '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-wiggle-del">Delete</button>',
+      "</div>",
+      '<p class="seidr-cmd-msg" id="seidr-wiggle-msg"></p>'
+    ].join("");
+    wireWiggleEditor(root4);
+  }
+  function readWiggleDraftFromDom(root4) {
+    if (!wiggleDraft || !seidrAnimIsWiggle(wiggleDraft)) return null;
+    const nameEl = root4.querySelector("#seidr-wiggle-name");
+    const secEl = root4.querySelector("#seidr-wiggle-secondary");
+    const colorEl = root4.querySelector("#seidr-wiggle-colors");
+    const countEl = root4.querySelector("#seidr-wiggle-count");
+    const delayEl = root4.querySelector("#seidr-wiggle-delay");
+    const name = (nameEl && nameEl.value || "").trim() || wiggleDraft.name;
+    const secondaryName = secEl ? secEl.value : wiggleDraft.secondary && wiggleDraft.secondary.assetName || "";
+    const secondary = {
+      assetName: secondaryName,
+      color: wiggleDraft.secondary ? wiggleDraft.secondary.color : void 0,
+      property: wiggleDraft.secondary ? wiggleDraft.secondary.property : void 0,
+      typedState: wiggleDraft.secondary ? wiggleDraft.secondary.typedState : void 0
+    };
+    const colorMode = colorEl && colorEl.value === "autoupdate" ? "autoupdate" : "snapshot";
+    return {
+      ...wiggleDraft,
+      name,
+      secondary,
+      colorMode,
+      count: countEl ? parseInt(countEl.value, 10) : wiggleDraft.count,
+      delayMs: delayEl ? parseInt(delayEl.value, 10) : wiggleDraft.delayMs
+    };
+  }
+  function openWiggle(root4, id) {
+    const list = seidrListWiggleAnimations();
+    let found = null;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id === id) {
+        found = JSON.parse(JSON.stringify(list[i]));
+        break;
+      }
+    }
+    wiggleEditId = found ? found.id : null;
+    wiggleDraft = found;
+    renderWiggleList(root4);
+    renderWiggleEditor(root4);
+    wireWiggleList(root4);
+  }
+  function ensureFirstWiggle(root4) {
+    if (wiggleEditId != null && wiggleDraft && seidrAnimIsWiggle(wiggleDraft)) return;
+    const list = seidrListWiggleAnimations();
+    if (!list.length) {
+      wiggleEditId = null;
+      wiggleDraft = null;
+      renderWiggleList(root4);
+      renderWiggleEditor(root4);
+      wireWiggleList(root4);
+      return;
+    }
+    openWiggle(root4, list[0].id);
+  }
+  function applyPrimaryColorsToSecondary(primary, secondary) {
+    const out = {
+      assetName: secondary.assetName,
+      property: secondary.property,
+      typedState: secondary.typedState
+    };
+    if (primary.color !== void 0) out.color = primary.color;
+    else if (secondary.color !== void 0) out.color = secondary.color;
+    return out;
+  }
+  function wireWiggleEditor(root4) {
+    root4.querySelector("#seidr-wiggle-automatch")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur || !cur.slot || !cur.group || !cur.primary) return;
+      const match = seidrFindAutomatchSecondaryFrame(
+        cur.slot,
+        cur.group,
+        cur.primary.assetName,
+        cur.primary.typedState
+      );
+      if (!match) {
+        setWiggleMsg(root4, "No mirror/typed pair \u2014 use Custom (wear secondary / other wing type)");
+        return;
+      }
+      const secFrame = { assetName: match.assetName };
+      if (match.typedState != null) secFrame.typedState = match.typedState;
+      cur.secondary = applyPrimaryColorsToSecondary(cur.primary, secFrame);
+      wiggleDraft = cur;
+      renderWiggleEditor(root4);
+      setWiggleMsg(root4, match.typedState != null ? "Automatched typed " + match.assetName + " \u2192 " + match.typedState : "Automatched " + match.assetName);
+    });
+    root4.querySelector("#seidr-wiggle-custom")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur || !cur.slot || !cur.group || !cur.primary) return;
+      const onSlot = seidrScanWornWiggleItems().filter(function(w) {
+        return w.slot === cur.slot && w.group === cur.group;
+      });
+      let pick = onSlot.find(function(w) {
+        return w.assetName !== cur.primary.assetName;
+      }) || null;
+      if (!pick) {
+        const pTyped = cur.primary.typedState != null ? String(cur.primary.typedState) : "";
+        pick = onSlot.find(function(w) {
+          const t = w.typedState != null ? String(w.typedState) : "";
+          return w.assetName === cur.primary.assetName && t !== pTyped;
+        }) || null;
+      }
+      if (!pick) {
+        setWiggleMsg(root4, "Wear another item (or same wing with another type), then Custom again");
+        return;
+      }
+      cur.secondary = seidrWornToFrame(pick);
+      wiggleDraft = cur;
+      renderWiggleEditor(root4);
+      setWiggleMsg(root4, "Captured secondary " + pick.assetName + (pick.typedState != null ? " typed=" + pick.typedState : ""));
+    });
+    root4.querySelector("#seidr-wiggle-save")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4);
+      if (!cur || !cur.primary || !cur.secondary || !cur.secondary.assetName) {
+        setWiggleMsg(root4, "Secondary required");
+        return;
+      }
+      if (!seidrWiggleFramesDiffer(cur.primary, cur.secondary)) {
+        setWiggleMsg(root4, "Secondary must differ (other asset or typed state)");
+        return;
+      }
+      if (cur.colorMode !== "autoupdate" && cur.primary) {
+        cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
+      }
+      const r = seidrUpsertAnimation(cur);
+      if (!r.ok) {
+        setWiggleMsg(root4, r.error || "Save failed");
+        return;
+      }
+      wiggleEditId = r.animation.id;
+      wiggleDraft = JSON.parse(JSON.stringify(r.animation));
+      setWiggleMsg(root4, "Saved");
+      renderWiggleList(root4);
+      renderWiggleEditor(root4);
+      wireWiggleList(root4);
+      updateCap2(root4);
+    });
+    root4.querySelector("#seidr-wiggle-test")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur) return;
+      const saved = seidrUpsertAnimation(cur);
+      if (!saved.ok || !saved.animation) {
+        setWiggleMsg(root4, saved.error || "Save before test failed");
+        return;
+      }
+      wiggleDraft = JSON.parse(JSON.stringify(saved.animation));
+      setWiggleMsg(root4, "Testing\u2026");
+      seidrPlayWiggleTest(saved.animation).then(function(r) {
+        if (!r.ok) {
+          setWiggleMsg(root4, r.error || "Play failed");
+          return;
+        }
+        setWiggleMsg(root4, r.restored ? "Played (slot restored)" : "Played");
+      });
+    });
+    root4.querySelector("#seidr-wiggle-del")?.addEventListener("click", function() {
+      if (!wiggleDraft) return;
+      seidrDeleteAnimation(wiggleDraft.id);
+      wiggleEditId = null;
+      wiggleDraft = null;
+      ensureFirstWiggle(root4);
+      setWiggleMsg(root4, "Deleted");
+      updateCap2(root4);
+    });
+  }
+  function wireWiggleList(root4) {
+    const pick = root4.querySelector("#seidr-wiggle-pick");
+    if (pick) {
+      pick.addEventListener("change", function() {
+        const id = parseInt(pick.value, 10);
+        if (Number.isFinite(id)) openWiggle(root4, id);
+      });
+    }
+  }
+  function startAddWiggle(root4, slot) {
+    const worn = seidrScanWornWiggleItems().filter(function(w) {
+      return w.slot === slot;
+    });
+    if (!worn.length) {
+      setWiggleMsg(root4, "Wear a " + slotLabel(slot).toLowerCase() + " first (including Echo slots)");
+      return;
+    }
+    let pick = worn[0];
+    if (worn.length > 1) {
+      const labels = worn.map(function(w, i) {
+        return i + 1 + ": " + w.description + " [" + w.group + "]";
+      }).join("\n");
+      const ans = window.prompt("Multiple worn. Enter number:\n" + labels, "1");
+      const idx = parseInt(String(ans || "1"), 10) - 1;
+      if (idx >= 0 && idx < worn.length) pick = worn[idx];
+    }
+    const bag = seidrGetAnimationsBag();
+    if (seidrCountWiggleAnimations(bag.list) >= SEIDR_WIGGLES_MAX) {
+      setWiggleMsg(root4, "Wiggle limit reached (" + SEIDR_WIGGLES_MAX + ")");
+      return;
+    }
+    const primary = seidrWornToFrame(pick);
+    const match = seidrFindAutomatchSecondaryFrame(slot, pick.group, pick.assetName, primary.typedState);
+    const secondaryRaw = match ? { assetName: match.assetName, typedState: match.typedState } : { assetName: pick.assetName };
+    const secondary = applyPrimaryColorsToSecondary(primary, secondaryRaw);
+    const a = seidrDefaultWiggleAnimation(bag.nextId, slot, pick.group, primary, secondary);
+    a.name = slotLabel(slot) + " \xB7 " + (pick.description || pick.assetName).slice(0, 28);
+    const r = seidrUpsertAnimation(a);
+    if (!r.ok || !r.animation) {
+      setWiggleMsg(root4, r.error || "Could not add wiggle");
+      return;
+    }
+    openWiggle(root4, r.animation.id);
+    if (match && seidrWiggleFramesDiffer(primary, secondary)) {
+      setWiggleMsg(root4, match.typedState != null ? "Added with typed automatch (" + match.typedState + ")" : "Added with automatch");
+    } else {
+      setWiggleMsg(root4, "Added \u2014 Automatch or Custom a secondary (typed wing / other asset)");
+    }
+    updateCap2(root4);
+  }
   function seidrBuildAnimationsTab(container) {
-    editId2 = null;
-    draft2 = null;
+    editId3 = null;
+    draft3 = null;
+    wiggleEditId = null;
+    wiggleDraft = null;
     container.innerHTML = [
-      '<p class="seidr-settings-hint">Pose and face clips for yourself. Cap ' + SEIDR_ANIMATIONS_MAX + " animations, " + SEIDR_ANIM_STEPS_MAX + " steps, " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s total wait. Play with /animation or /ani.</p>",
+      '<details class="seidr-settings-sec" open>',
+      "<summary>Animations</summary>",
+      '<p class="seidr-settings-hint">Pose and face clips for yourself. Cap ' + SEIDR_ANIMATIONS_MAX + " clips (wiggles have their own cap), " + SEIDR_ANIM_STEPS_MAX + " steps, " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s total wait. Play with /animation or /ani.</p>",
       '<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-add">Add animation</button>',
       '<span class="seidr-settings-hint" id="seidr-anim-cap">0/' + SEIDR_ANIMATIONS_MAX + " Animations</span>",
       "</div>",
       '<div id="seidr-anim-list" style="margin-top:10px;"></div>',
-      '<div class="seidr-act-editor" id="seidr-anim-editor" style="margin-top:10px;"></div>'
+      '<div class="seidr-act-editor" id="seidr-anim-editor" style="margin-top:10px;"></div>',
+      "</details>",
+      '<details class="seidr-settings-sec" open style="margin-top:12px;">',
+      "<summary>Wiggle</summary>",
+      '<p class="seidr-settings-hint">Ear / Tail / Wing asset swaps (one set per base item). Cap ' + SEIDR_WIGGLES_MAX + " (separate from clips). Usable from Reactions and Fast Wiggle. Must wear the primary to play.</p>",
+      '<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-add-tail">Add Tail</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-add-ear">Add Ear</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-add-wing">Add Wing</button>',
+      '<span class="seidr-settings-hint" id="seidr-wiggle-cap">0/' + SEIDR_WIGGLES_MAX + " Wiggles</span>",
+      "</div>",
+      '<div id="seidr-wiggle-list" style="margin-top:10px;"></div>',
+      '<div class="seidr-act-editor" id="seidr-wiggle-editor" style="margin-top:10px;"></div>',
+      "</details>"
     ].join("");
-    const add = container.querySelector("#seidr-anim-add");
-    add?.addEventListener("click", function() {
+    container.querySelector("#seidr-anim-add")?.addEventListener("click", function() {
       const a = seidrAddAnimation();
       if (!a) {
-        setMsg4(container, "Animation limit reached");
+        setMsg5(container, "Animation limit reached");
         return;
       }
       openAnimation(container, a.id);
     });
-    ensureFirstOpen(container);
+    container.querySelector("#seidr-wiggle-add-tail")?.addEventListener("click", function() {
+      startAddWiggle(container, "tail");
+    });
+    container.querySelector("#seidr-wiggle-add-ear")?.addEventListener("click", function() {
+      startAddWiggle(container, "ear");
+    });
+    container.querySelector("#seidr-wiggle-add-wing")?.addEventListener("click", function() {
+      startAddWiggle(container, "wing");
+    });
+    ensureFirstOpen2(container);
+    ensureFirstWiggle(container);
   }
   function seidrRefreshAnimationsTab() {
-    const root3 = document.getElementById("seidr-settings-pane-animations");
-    if (!root3) return;
-    seidrBuildAnimationsTab(root3);
+    const root4 = document.getElementById("seidr-settings-pane-animations");
+    if (!root4) return;
+    seidrBuildAnimationsTab(root4);
   }
 
   // src/roomManager/mapsUi.ts
@@ -16355,11 +19811,11 @@
   var editVersionId = null;
   var importCandidates2 = null;
   var importFileName = "";
-  function escapeHtml7(s) {
+  function escapeHtml8(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
-  function setMsg5(root3, text) {
-    const el = root3.querySelector("#seidr-maps-msg");
+  function setMsg6(root4, text) {
+    const el = root4.querySelector("#seidr-maps-msg");
     if (el) el.textContent = text || "";
   }
   function inMapRoom() {
@@ -16368,8 +19824,8 @@
   function canLoad() {
     return rmCanApplyToRoom() && rmIsAdmin() && inMapRoom();
   }
-  function updateStorageHint(root3) {
-    const el = root3.querySelector("#seidr-maps-storage");
+  function updateStorageHint(root4) {
+    const el = root4.querySelector("#seidr-maps-storage");
     if (!el) return;
     const remoteBytes = rmMapsBytesEstimate();
     const budget = rmMapBudgetBytes();
@@ -16382,10 +19838,10 @@
       return m.id === editMapId;
     }) || null;
   }
-  function renderMapSection(root3) {
-    const host = root3.querySelector("#seidr-maps-map-body");
+  function renderMapSection(root4) {
+    const host = root4.querySelector("#seidr-maps-map-body");
     if (!host) return;
-    updateStorageHint(root3);
+    updateStorageHint(root4);
     const maps = rmListAllMaps();
     const mapActive = inMapRoom();
     const saveDisabled = mapActive ? "" : " disabled";
@@ -16406,7 +19862,7 @@
     const pickOpts = maps.length ? maps.map(function(m) {
       const loc = m.location === "local" ? "Local" : "Remote";
       const n = m.versions.length;
-      return '<option value="' + escapeHtml7(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml7(m.name) + " (" + loc + ", " + n + "v)</option>";
+      return '<option value="' + escapeHtml8(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml8(m.name) + " (" + loc + ", " + n + "v)</option>";
     }).join("") : '<option value="">No maps yet</option>';
     let editorHtml = "";
     if (!map) {
@@ -16430,7 +19886,7 @@
       const verOpts = vers.map(function(v) {
         const when = v.savedAt ? new Date(v.savedAt).toLocaleString() : "";
         const tag = rmIsDefaultVersionName(v.name) ? " \xB7 remote-capable" : " \xB7 local only";
-        return '<option value="' + escapeHtml7(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml7(v.name) + tag + (when ? " \xB7 " + escapeHtml7(when) : "") + "</option>";
+        return '<option value="' + escapeHtml8(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml8(v.name) + tag + (when ? " \xB7 " + escapeHtml8(when) : "") + "</option>";
       }).join("");
       const curVer = vers.find(function(v) {
         return v.id === editVersionId;
@@ -16444,7 +19900,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Name</span>',
-        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml7(map.name) + '" />',
+        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml8(map.name) + '" />',
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Location</span>',
@@ -16460,7 +19916,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Ver. name</span>',
-        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml7(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
+        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml8(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
         "</div>",
         '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
         '<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
@@ -16496,18 +19952,18 @@
     } else {
       host.innerHTML = editorHtml;
     }
-    wireMapSection(root3);
+    wireMapSection(root4);
   }
-  function refreshExport(root3) {
-    const ta = root3.querySelector("#seidr-maps-export");
+  function refreshExport(root4) {
+    const ta = root4.querySelector("#seidr-maps-export");
     if (ta) ta.value = rmExportMapsJson();
   }
-  function updateFileLabel(root3) {
-    const el = root3.querySelector("#seidr-maps-import-file-label");
+  function updateFileLabel(root4) {
+    const el = root4.querySelector("#seidr-maps-import-file-label");
     if (el) el.textContent = importFileName || "No file chosen";
   }
-  function renderImportPicker2(root3) {
-    const host = root3.querySelector("#seidr-maps-import-pick");
+  function renderImportPicker2(root4) {
+    const host = root4.querySelector("#seidr-maps-import-pick");
     if (!host) return;
     if (!importCandidates2 || !importCandidates2.length) {
       host.innerHTML = "";
@@ -16517,7 +19973,7 @@
     host.hidden = false;
     const rows = importCandidates2.map(function(m, idx) {
       const n = m.versions.length;
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml7(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml8(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
     }).join("");
     host.innerHTML = [
       '<p class="seidr-settings-hint">Select maps to import (always Local only).</p>',
@@ -16529,10 +19985,10 @@
     ].join("");
     host.querySelector("#seidr-maps-import-cancel")?.addEventListener("click", function() {
       importCandidates2 = null;
-      const paste = root3.querySelector("#seidr-maps-import-paste");
+      const paste = root4.querySelector("#seidr-maps-import-paste");
       if (paste) paste.value = "";
-      renderImportPicker2(root3);
-      setMsg5(root3, "");
+      renderImportPicker2(root4);
+      setMsg6(root4, "");
     });
     host.querySelector("#seidr-maps-import-do")?.addEventListener("click", function() {
       if (!importCandidates2) return;
@@ -16544,58 +20000,58 @@
         if (Number.isFinite(idx) && importCandidates2[idx]) selected.push(importCandidates2[idx]);
       });
       if (!selected.length) {
-        setMsg5(root3, "Select at least one map");
+        setMsg6(root4, "Select at least one map");
         return;
       }
       const result = rmImportSelectedMaps(selected);
       if (!result.ok && !result.imported) {
-        setMsg5(root3, result.error || "Import failed");
+        setMsg6(root4, result.error || "Import failed");
         return;
       }
       importCandidates2 = null;
-      const paste = root3.querySelector("#seidr-maps-import-paste");
+      const paste = root4.querySelector("#seidr-maps-import-paste");
       if (paste) paste.value = "";
-      renderImportPicker2(root3);
-      refreshAll(root3);
-      setMsg5(root3, result.error || "Imported " + result.imported + " map(s) as Local only");
+      renderImportPicker2(root4);
+      refreshAll(root4);
+      setMsg6(root4, result.error || "Imported " + result.imported + " map(s) as Local only");
     });
   }
-  function wireMapSection(root3) {
-    root3.querySelector("#seidr-maps-pick")?.addEventListener("change", function() {
-      const pick = root3.querySelector("#seidr-maps-pick");
+  function wireMapSection(root4) {
+    root4.querySelector("#seidr-maps-pick")?.addEventListener("change", function() {
+      const pick = root4.querySelector("#seidr-maps-pick");
       editMapId = pick && pick.value ? pick.value : null;
       editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
-      renderMapSection(root3);
+      renderMapSection(root4);
     });
-    root3.querySelector("#seidr-maps-save-new")?.addEventListener("click", function() {
-      const nameEl = root3.querySelector("#seidr-maps-new-name");
+    root4.querySelector("#seidr-maps-save-new")?.addEventListener("click", function() {
+      const nameEl = root4.querySelector("#seidr-maps-new-name");
       const name = nameEl && nameEl.value || "";
       if (!String(name).trim()) {
-        setMsg5(root3, "Enter a map name");
+        setMsg6(root4, "Enter a map name");
         return;
       }
       const r = rmSaveNewMap(name);
       if (!r.ok) {
-        setMsg5(root3, r.error || "Save failed");
+        setMsg6(root4, r.error || "Save failed");
         return;
       }
       editMapId = r.map ? r.map.id : null;
       editVersionId = editMapId ? rmDefaultVersionId(editMapId) : null;
-      refreshAll(root3);
-      setMsg5(root3, r.fellBackLocal ? "Saved as Local only (remote full or over budget). Default version created." : "Map saved with Default (" + (r.map && r.map.location === "local" ? "Local" : "Remote") + ")");
+      refreshAll(root4);
+      setMsg6(root4, r.fellBackLocal ? "Saved as Local only (remote full or over budget). Default version created." : "Map saved with Default (" + (r.map && r.map.location === "local" ? "Local" : "Remote") + ")");
     });
-    root3.querySelector("#seidr-maps-ver-pick")?.addEventListener("change", function() {
-      const sel = root3.querySelector("#seidr-maps-ver-pick");
+    root4.querySelector("#seidr-maps-ver-pick")?.addEventListener("change", function() {
+      const sel = root4.querySelector("#seidr-maps-ver-pick");
       editVersionId = sel && sel.value ? sel.value : null;
-      renderMapSection(root3);
+      renderMapSection(root4);
     });
-    root3.querySelector("#seidr-maps-save-meta")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-save-meta")?.addEventListener("click", function() {
       if (!editMapId) return;
-      const nameEl = root3.querySelector("#seidr-maps-name");
-      const verNameEl = root3.querySelector("#seidr-maps-ver-name");
+      const nameEl = root4.querySelector("#seidr-maps-name");
+      const verNameEl = root4.querySelector("#seidr-maps-ver-name");
       const r1 = rmRenameMap(editMapId, nameEl && nameEl.value || "");
       if (!r1.ok) {
-        setMsg5(root3, r1.error || "Rename failed");
+        setMsg6(root4, r1.error || "Rename failed");
         return;
       }
       const map = selectedMap();
@@ -16605,28 +20061,28 @@
       if (editVersionId && verNameEl && ver && !rmIsDefaultVersionName(ver.name)) {
         const r2 = rmRenameVersion(editMapId, editVersionId, verNameEl.value);
         if (!r2.ok) {
-          setMsg5(root3, r2.error || "Version rename failed");
+          setMsg6(root4, r2.error || "Version rename failed");
           return;
         }
       }
-      refreshAll(root3);
-      setMsg5(root3, "Saved names");
+      refreshAll(root4);
+      setMsg6(root4, "Saved names");
     });
-    root3.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
+    root4.querySelectorAll("[data-seidr-map-loc]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
         if (!editMapId) return;
-        const loc = btn2.getAttribute("data-seidr-map-loc");
+        const loc = btn3.getAttribute("data-seidr-map-loc");
         if (loc !== "local" && loc !== "remote") return;
         const r = rmSetMapLocation(editMapId, loc);
         if (!r.ok) {
-          setMsg5(root3, r.error || "Move failed");
+          setMsg6(root4, r.error || "Move failed");
           return;
         }
-        refreshAll(root3);
-        setMsg5(root3, loc === "local" ? "Default moved to Local only" : "Default moved to Remote (extra versions stay local)");
+        refreshAll(root4);
+        setMsg6(root4, loc === "local" ? "Default moved to Local only" : "Default moved to Remote (extra versions stay local)");
       });
     });
-    root3.querySelector("#seidr-maps-load")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-load")?.addEventListener("click", function() {
       if (!editMapId || !editVersionId) return;
       const mapId = editMapId;
       const verId = editVersionId;
@@ -16640,10 +20096,10 @@
       }).then(function(ok) {
         if (!ok) return;
         const r = rmLoadMapVersion(mapId, verId);
-        setMsg5(root3, r.ok ? "Map version loaded" : r.error || "Load failed");
+        setMsg6(root4, r.ok ? "Map version loaded" : r.error || "Load failed");
       });
     });
-    root3.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function() {
       if (!editMapId) return;
       const mapId = editMapId;
       void rmConfirm("Overwrite Default with the current room map?", {
@@ -16653,19 +20109,19 @@
         if (!ok) return;
         const r = rmOverwriteDefault(mapId);
         if (!r.ok) {
-          setMsg5(root3, r.error || "Overwrite failed");
+          setMsg6(root4, r.error || "Overwrite failed");
           return;
         }
         editVersionId = r.version ? r.version.id : rmDefaultVersionId(mapId);
-        refreshAll(root3);
-        setMsg5(root3, "Default overwritten");
+        refreshAll(root4);
+        setMsg6(root4, "Default overwritten");
       });
     });
-    root3.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function() {
       if (!editMapId) return;
       const mapId = editMapId;
       void (async function() {
-        const verNameEl = root3.querySelector("#seidr-maps-ver-name");
+        const verNameEl = root4.querySelector("#seidr-maps-ver-name");
         let verName = verNameEl && verNameEl.value.trim() || "";
         if (!verName || verName === RM_MAP_DEFAULT_NAME) {
           const prompted = await rmPrompt("Save new version", {
@@ -16676,24 +20132,24 @@
           verName = prompted || "";
         }
         if (!verName.trim()) {
-          setMsg5(root3, "Enter a version name");
+          setMsg6(root4, "Enter a version name");
           return;
         }
         if (verName.trim() === RM_MAP_DEFAULT_NAME) {
-          setMsg5(root3, "Use Overwrite Default to update Default");
+          setMsg6(root4, "Use Overwrite Default to update Default");
           return;
         }
         const r = rmSaveNewVersion(mapId, verName);
         if (!r.ok) {
-          setMsg5(root3, r.error || "Save version failed");
+          setMsg6(root4, r.error || "Save version failed");
           return;
         }
         editVersionId = r.version ? r.version.id : null;
-        refreshAll(root3);
-        setMsg5(root3, "Local version saved");
+        refreshAll(root4);
+        setMsg6(root4, "Local version saved");
       })();
     });
-    root3.querySelector("#seidr-maps-del-ver")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-del-ver")?.addEventListener("click", function() {
       if (!editMapId || !editVersionId) return;
       const mapId = editMapId;
       const verId = editVersionId;
@@ -16704,7 +20160,7 @@
       const isDef = !!(ver && rmIsDefaultVersionName(ver.name));
       const only = !!(map && map.versions.length <= 1);
       if (isDef && !only) {
-        setMsg5(root3, "Cannot delete Default while other versions exist \u2014 use Delete map");
+        setMsg6(root4, "Cannot delete Default while other versions exist \u2014 use Delete map");
         return;
       }
       const msg = only || isDef ? "Delete the entire map?" : "Delete this local version?";
@@ -16716,7 +20172,7 @@
         if (!ok) return;
         const r = rmDeleteVersion(mapId, verId);
         if (!r.ok) {
-          setMsg5(root3, r.error || "Delete failed");
+          setMsg6(root4, r.error || "Delete failed");
           return;
         }
         if (only || isDef) {
@@ -16725,11 +20181,11 @@
         } else {
           editVersionId = rmDefaultVersionId(mapId);
         }
-        refreshAll(root3);
-        setMsg5(root3, only || isDef ? "Map deleted" : "Version deleted");
+        refreshAll(root4);
+        setMsg6(root4, only || isDef ? "Map deleted" : "Version deleted");
       });
     });
-    root3.querySelector("#seidr-maps-del-map")?.addEventListener("click", function() {
+    root4.querySelector("#seidr-maps-del-map")?.addEventListener("click", function() {
       if (!editMapId) return;
       const mapId = editMapId;
       const map = selectedMap();
@@ -16741,35 +20197,35 @@
         if (!ok) return;
         const r = rmDeleteMap(mapId);
         if (!r.ok) {
-          setMsg5(root3, r.error || "Delete failed");
+          setMsg6(root4, r.error || "Delete failed");
           return;
         }
         editMapId = null;
         editVersionId = null;
-        refreshAll(root3);
-        setMsg5(root3, "Map deleted");
+        refreshAll(root4);
+        setMsg6(root4, "Map deleted");
       });
     });
   }
-  function wireIo(root3) {
-    root3.querySelector("#seidr-maps-export-refresh")?.addEventListener("click", function() {
-      refreshExport(root3);
-      setMsg5(root3, "Export refreshed");
+  function wireIo(root4) {
+    root4.querySelector("#seidr-maps-export-refresh")?.addEventListener("click", function() {
+      refreshExport(root4);
+      setMsg6(root4, "Export refreshed");
     });
-    root3.querySelector("#seidr-maps-export-copy")?.addEventListener("click", function() {
-      refreshExport(root3);
-      const ta = root3.querySelector("#seidr-maps-export");
+    root4.querySelector("#seidr-maps-export-copy")?.addEventListener("click", function() {
+      refreshExport(root4);
+      const ta = root4.querySelector("#seidr-maps-export");
       if (!ta) return;
       try {
         ta.select();
         document.execCommand("copy");
-        setMsg5(root3, "Copied JSON");
+        setMsg6(root4, "Copied JSON");
       } catch (e) {
-        setMsg5(root3, "Copy failed \u2014 select and copy manually");
+        setMsg6(root4, "Copy failed \u2014 select and copy manually");
       }
     });
-    root3.querySelector("#seidr-maps-export-dl")?.addEventListener("click", function() {
-      refreshExport(root3);
+    root4.querySelector("#seidr-maps-export-dl")?.addEventListener("click", function() {
+      refreshExport(root4);
       const json = rmExportMapsJson();
       try {
         const blob = new Blob([json], { type: "application/json" });
@@ -16779,26 +20235,26 @@
         a.download = "seidr-maps-export.json";
         a.click();
         URL.revokeObjectURL(url);
-        setMsg5(root3, "Download started");
+        setMsg6(root4, "Download started");
       } catch (e) {
-        setMsg5(root3, "Download failed");
+        setMsg6(root4, "Download failed");
       }
     });
-    root3.querySelector("#seidr-maps-import-parse")?.addEventListener("click", function() {
-      const paste = root3.querySelector("#seidr-maps-import-paste");
+    root4.querySelector("#seidr-maps-import-parse")?.addEventListener("click", function() {
+      const paste = root4.querySelector("#seidr-maps-import-paste");
       const parsed = rmParseMapsImport(paste ? paste.value : "");
       if (parsed.ok === false) {
         importCandidates2 = null;
-        renderImportPicker2(root3);
-        setMsg5(root3, parsed.error);
+        renderImportPicker2(root4);
+        setMsg6(root4, parsed.error);
         return;
       }
       importCandidates2 = parsed.maps;
-      renderImportPicker2(root3);
-      setMsg5(root3, "Select maps to import");
+      renderImportPicker2(root4);
+      setMsg6(root4, "Select maps to import");
     });
-    const file = root3.querySelector("#seidr-maps-import-file");
-    root3.querySelector("#seidr-maps-import-choose")?.addEventListener("click", function() {
+    const file = root4.querySelector("#seidr-maps-import-file");
+    root4.querySelector("#seidr-maps-import-choose")?.addEventListener("click", function() {
       file?.click();
     });
     if (file) {
@@ -16806,45 +20262,45 @@
         const f = file.files && file.files[0];
         if (!f) {
           importFileName = "";
-          updateFileLabel(root3);
+          updateFileLabel(root4);
           return;
         }
         importFileName = f.name;
-        updateFileLabel(root3);
+        updateFileLabel(root4);
         const reader = new FileReader();
         reader.onload = function() {
           const text = typeof reader.result === "string" ? reader.result : "";
-          const paste = root3.querySelector("#seidr-maps-import-paste");
+          const paste = root4.querySelector("#seidr-maps-import-paste");
           if (paste) paste.value = text;
           const parsed = rmParseMapsImport(text);
           if (parsed.ok === false) {
             importCandidates2 = null;
-            renderImportPicker2(root3);
-            setMsg5(root3, parsed.error);
+            renderImportPicker2(root4);
+            setMsg6(root4, parsed.error);
             return;
           }
           importCandidates2 = parsed.maps;
-          renderImportPicker2(root3);
-          setMsg5(root3, "Select maps to import");
+          renderImportPicker2(root4);
+          setMsg6(root4, "Select maps to import");
         };
         reader.onerror = function() {
-          setMsg5(root3, "Could not read file");
+          setMsg6(root4, "Could not read file");
         };
         reader.readAsText(f);
         file.value = "";
       });
     }
   }
-  function refreshAll(root3) {
-    renderMapSection(root3);
-    refreshExport(root3);
-    updateStorageHint(root3);
-    updateFileLabel(root3);
+  function refreshAll(root4) {
+    renderMapSection(root4);
+    refreshExport(root4);
+    updateStorageHint(root4);
+    updateFileLabel(root4);
   }
   function seidrRefreshMapsTab(container) {
-    const root3 = container || document.getElementById("seidr-settings-pane-maps");
-    if (!root3) return;
-    refreshAll(root3);
+    const root4 = container || document.getElementById("seidr-settings-pane-maps");
+    if (!root4) return;
+    refreshAll(root4);
   }
   function seidrBuildMapsTab(container) {
     editMapId = null;
@@ -16909,6 +20365,11 @@
       docPath: "/docs/view.html#ANIMATIONS"
     },
     {
+      title: "Reaction",
+      blurb: "Local Autoreaction scripts: trigger when you perform an activity, someone acts on you, or you say a phrase \u2014 then run Say / Animation / Action steps.",
+      docPath: "/docs/view.html#REACTIONS"
+    },
+    {
       title: "Chat Commands",
       blurb: "People aliases and /a action bindings, plus /strip, /poses, /animation, /seidr, /roommanager, and /wardrobe. Tab autocomplete (including Club /beep and /whisper), beep Reply, and optional Fast Select (letter + Tab).",
       docPath: "/docs/view.html#COMMANDS"
@@ -16934,7 +20395,7 @@
       docPath: "/docs/view.html#SETTINGS"
     }
   ];
-  function escapeHtml8(s) {
+  function escapeHtml9(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function docsBase() {
@@ -16950,10 +20411,10 @@
     return [
       '<div class="seidr-settings-sec seidr-about-feature">',
       '<div class="seidr-about-feature-head">',
-      '<span class="seidr-about-feature-title">' + escapeHtml8(f.title) + "</span>",
-      '<a class="seidr-act-btn" href="' + escapeHtml8(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
+      '<span class="seidr-about-feature-title">' + escapeHtml9(f.title) + "</span>",
+      '<a class="seidr-act-btn" href="' + escapeHtml9(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
       "</div>",
-      '<p class="seidr-settings-hint">' + escapeHtml8(f.blurb) + "</p>",
+      '<p class="seidr-settings-hint">' + escapeHtml9(f.blurb) + "</p>",
       "</div>"
     ].join("");
   }
@@ -16965,12 +20426,12 @@
     const repo = typeof Seidr.REPO_URL === "string" && Seidr.REPO_URL ? Seidr.REPO_URL : "https://github.com/Freya-BC/Freyas-Seidr";
     container.innerHTML = [
       '<div class="seidr-settings-sec seidr-about-header">',
-      logo ? '<img class="seidr-about-logo" src="' + escapeHtml8(logo) + '" alt="" width="56" height="56" />' : "",
+      logo ? '<img class="seidr-about-logo" src="' + escapeHtml9(logo) + '" alt="" width="56" height="56" />' : "",
       '<div class="seidr-about-header-text">',
-      '<p class="seidr-about-name">' + escapeHtml8(name) + "</p>",
+      '<p class="seidr-about-name">' + escapeHtml9(name) + "</p>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Version</span>',
-      "<span>" + escapeHtml8(version) + "</span>",
+      "<span>" + escapeHtml9(version) + "</span>",
       "</div>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Developer</span>',
@@ -16978,8 +20439,8 @@
       "</div>",
       '<div class="seidr-about-links">',
       '<button type="button" class="seidr-act-btn" id="seidr-about-tutorial">Tutorial</button>',
-      '<a class="seidr-act-btn" href="' + escapeHtml8(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
-      '<a class="seidr-act-btn" href="' + escapeHtml8(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml9(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml9(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
       "</div>",
       "</div>",
       "</div>",
@@ -17135,6 +20596,18 @@
       '<p class="seidr-settings-hint">Default placement in a room. Chat positions sit left of the chat window. Drag still overrides for this session.</p>',
       "</details>",
       '<details class="seidr-settings-sec">',
+      "<summary>Fast Wiggle</summary>",
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-fast-wiggle" /> Show Fast Wiggle Button</label>',
+      "</div>",
+      '<p class="seidr-settings-hint">Floating button to play configured Ear / Tail / Wing wiggles. Hidden when no matching item is worn. Never overlaps the Room Manager button.</p>',
+      '<div class="seidr-settings-field-row" style="margin-top:8px;">',
+      '<span class="seidr-settings-field-label">Position</span>',
+      '<select id="seidr-set-fw-pos">' + opts4 + "</select>",
+      "</div>",
+      '<p class="seidr-settings-hint">Default placement (defaults to Chat Bottom). Drag saves on this device only.</p>',
+      "</details>",
+      '<details class="seidr-settings-sec">',
       "<summary>Drawing</summary>",
       '<p class="seidr-settings-hint">Echo pair spacing: Pull X is half-gap from center (hub shifts on one-side pull). Pull Y raises both sides. Cuddle moves the holder. Models only \u2014 hitboxes stay put. Save Drawing to keep.</p>',
       '<div id="seidr-set-draw-normal" class="seidr-settings-draw-block">',
@@ -17214,6 +20687,13 @@
       "</span>",
       "</div>",
       '<p class="seidr-settings-hint">Typeface and size for Club chat log and compose box. Empty font uses Preference \u2192 Graphics \u2192 Font (unavailable names fall back to that). Size uses Club base units \u2014 Small 28 / Medium 36 / Large 44; <code>0</code> or empty uses Preference \u2192 Chat \u2192 Font Size. Does not change canvas nicknames or menus.</p>',
+      "</details>",
+      '<details class="seidr-settings-sec">',
+      "<summary>Unread badge</summary>",
+      '<div class="seidr-settings-row">',
+      '<label><input type="checkbox" id="seidr-set-clear-unread" /> Clear unread badge when focusing chat</label>',
+      "</div>",
+      '<p class="seidr-settings-hint">Clears Club\u2019s Chat Message tab/favicon count when you return to this tab or focus the chat compose box \u2014 even if the log is scrolled up. Does not affect Friend List / beep unread.</p>',
       "</details>",
       '<details class="seidr-settings-sec" data-seidr-tour="commands-enable">',
       "<summary>Commands</summary>",
@@ -17296,6 +20776,7 @@
         storageRow("Actions", b.actions),
         storageRow("Commands", b.commands),
         storageRow("Animations", b.animations),
+        storageRow("Reactions", b.reactions),
         storageRow("Settings", b.settings),
         storageRow("UI", b.ui)
       ].join("");
@@ -17317,6 +20798,7 @@
     const showActions = Seidr.SHOW_ACTIONS !== false;
     const showCommands = Seidr.SHOW_COMMANDS !== false;
     const showAnimations = Seidr.SHOW_COMMANDS !== false;
+    const showReactions = Seidr.SHOW_REACTIONS !== false;
     const showMaps = rmIsShown();
     if (tabs) {
       tabs.innerHTML = [
@@ -17324,6 +20806,7 @@
         showActions ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="actions">Actions</button>' : "",
         showCommands ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="commands">Commands</button>' : "",
         showAnimations ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="animations">Animations</button>' : "",
+        showReactions ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="reaction">Reaction</button>' : "",
         showMaps ? '<button type="button" class="seidr-settings-tab" data-seidr-tab="maps">Maps</button>' : "",
         '<button type="button" class="seidr-settings-tab" data-seidr-tab="about">About</button>'
       ].join("");
@@ -17335,6 +20818,7 @@
       showActions ? '<div class="seidr-settings-pane" id="seidr-settings-pane-actions" data-seidr-pane="actions"></div>' : "",
       showCommands ? '<div class="seidr-settings-pane" id="seidr-settings-pane-commands" data-seidr-pane="commands"></div>' : "",
       showAnimations ? '<div class="seidr-settings-pane" id="seidr-settings-pane-animations" data-seidr-pane="animations"></div>' : "",
+      showReactions ? '<div class="seidr-settings-pane" id="seidr-settings-pane-reaction" data-seidr-pane="reaction"></div>' : "",
       showMaps ? '<div class="seidr-settings-pane" id="seidr-settings-pane-maps" data-seidr-pane="maps"></div>' : "",
       '<div class="seidr-settings-pane" id="seidr-settings-pane-about" data-seidr-pane="about"></div>'
     ].join("");
@@ -17350,6 +20834,10 @@
       const animPane = $3("seidr-settings-pane-animations");
       if (animPane) seidrBuildAnimationsTab(animPane);
     }
+    if (showReactions) {
+      const rxnPane = $3("seidr-settings-pane-reaction");
+      if (rxnPane) seidrBuildReactionsTab(rxnPane);
+    }
     if (showMaps) {
       const mapsPane = $3("seidr-settings-pane-maps");
       if (mapsPane) seidrBuildMapsTab(mapsPane);
@@ -17357,9 +20845,9 @@
     const aboutPane = $3("seidr-settings-pane-about");
     if (aboutPane) seidrBuildAboutTab(aboutPane);
     const tabRoot = tabs || body;
-    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const tab = btn2.getAttribute("data-seidr-tab");
+    tabRoot.querySelectorAll("[data-seidr-tab]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const tab = btn3.getAttribute("data-seidr-tab");
         if (tab) seidrSelectSettingsTab(tab);
       });
     });
@@ -17425,11 +20913,11 @@
     }
   }
   function updateDrawSyncButton() {
-    const btn2 = $3("seidr-set-draw-sync");
-    if (!btn2) return;
+    const btn3 = $3("seidr-set-draw-sync");
+    if (!btn3) return;
     const allow = !!drawAllowSyncDraft;
     const isHub = localPlayerIsHub();
-    btn2.disabled = !allow || !isHub;
+    btn3.disabled = !allow || !isHub;
     if (!allow) setDrawSyncHint("Turn on Allow Sync to receive hub layouts or broadcast as hub.");
     else if (!isHub) setDrawSyncHint("Sync is available when you are the hub of an active cuddle/pull.");
     else setDrawSyncHint("Press Sync to send your current Drawing layout to this cuddle.");
@@ -17569,6 +21057,8 @@
     const en = $3("seidr-set-rm-enabled");
     const qm = $3("seidr-set-quickmenu");
     const pos = $3("seidr-set-rm-pos");
+    const fw = $3("seidr-set-fast-wiggle");
+    const fwp = $3("seidr-set-fw-pos");
     const am = $3("seidr-set-arousal-mode");
     const as = $3("seidr-set-arousal-scope");
     const cn = $3("seidr-set-cluster-names");
@@ -17578,9 +21068,12 @@
     const fos = $3("seidr-set-fast-open-slot");
     const cf = $3("seidr-set-chat-font");
     const cfs = $3("seidr-set-chat-font-size");
+    const cu = $3("seidr-set-clear-unread");
     if (en) en.checked = !!s.roomManagerEnabled;
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
+    if (fw) fw.checked = !!s.showFastWiggleButton;
+    if (fwp) fwp.value = s.fastWigglePosition || "chatBottom";
     if (am) am.value = s.arousalBarMode;
     if (as) as.value = s.arousalBarScope;
     if (cn) cn.value = s.clusterNameMode || "hitbox";
@@ -17590,6 +21083,7 @@
     if (fos) fos.value = s.fastOpenActionsSlot || "ItemTorso";
     if (cf) cf.value = s.chatFont || "";
     if (cfs) cfs.value = s.chatFontSize > 0 ? String(s.chatFontSize) : "";
+    if (cu) cu.checked = s.clearUnreadOnFocus !== false;
     seidrBeginDrawDraft();
     seidrBeginMapDrawDraft();
     seidrRefreshStorageUi();
@@ -17623,11 +21117,14 @@
       seidrRefreshCommandsTab();
       seidrRefreshAnimationsTab();
     }
+    if (Seidr.SHOW_REACTIONS !== false) seidrRefreshReactionsTab();
   }
   function seidrBindSettingsUi(onChange) {
     const en = $3("seidr-set-rm-enabled");
     const qm = $3("seidr-set-quickmenu");
     const pos = $3("seidr-set-rm-pos");
+    const fw = $3("seidr-set-fast-wiggle");
+    const fwp = $3("seidr-set-fw-pos");
     const am = $3("seidr-set-arousal-mode");
     const ascope = $3("seidr-set-arousal-scope");
     const cn = $3("seidr-set-cluster-names");
@@ -17637,6 +21134,7 @@
     const fos = $3("seidr-set-fast-open-slot");
     const cf = $3("seidr-set-chat-font");
     const cfs = $3("seidr-set-chat-font-size");
+    const cu = $3("seidr-set-clear-unread");
     const openRm = $3("seidr-set-open-rm");
     const openMsg = $3("seidr-set-open-rm-msg");
     function persist() {
@@ -17644,6 +21142,8 @@
         roomManagerEnabled: !!(en && en.checked),
         showQuickmenuButton: !!(qm && qm.checked),
         launcherPosition: pos && pos.value ? pos.value : "chatTop",
+        showFastWiggleButton: !!(fw && fw.checked),
+        fastWigglePosition: fwp && fwp.value ? fwp.value : "chatBottom",
         arousalBarMode: am && am.value ? am.value : "off",
         arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster",
         clusterNameMode: cn && cn.value ? cn.value : "hitbox",
@@ -17652,7 +21152,8 @@
         fastOpenActionsModifier: fom && fom.value ? fom.value : "Shift",
         fastOpenActionsSlot: fos && fos.value ? fos.value : "ItemTorso",
         chatFont: cf ? cf.value : "",
-        chatFontSize: seidrNormalizeChatFontSize(cfs ? cfs.value : 0)
+        chatFontSize: seidrNormalizeChatFontSize(cfs ? cfs.value : 0),
+        clearUnreadOnFocus: !!(cu && cu.checked)
       };
       const saved = seidrSaveSettings(patch);
       if (saved.ok) {
@@ -17666,6 +21167,8 @@
     if (en) en.addEventListener("change", persist);
     if (qm) qm.addEventListener("change", persist);
     if (pos) pos.addEventListener("change", persist);
+    if (fw) fw.addEventListener("change", persist);
+    if (fwp) fwp.addEventListener("change", persist);
     if (am) am.addEventListener("change", persist);
     if (ascope) ascope.addEventListener("change", persist);
     if (cns) cns.addEventListener("change", persist);
@@ -17673,6 +21176,7 @@
     if (fo) fo.addEventListener("change", persist);
     if (fos) fos.addEventListener("change", persist);
     if (fom) fom.addEventListener("change", persist);
+    if (cu) cu.addEventListener("change", persist);
     if (cf) {
       cf.addEventListener("change", persist);
       cf.addEventListener("blur", persist);
@@ -17681,12 +21185,12 @@
       cfs.addEventListener("change", persist);
       cfs.addEventListener("blur", persist);
     }
-    document.querySelectorAll("[data-seidr-chat-font-size][data-seidr-num-dir]").forEach(function(btn2) {
-      btn2.addEventListener("click", function(ev) {
+    document.querySelectorAll("[data-seidr-chat-font-size][data-seidr-num-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
         if (!cfs) return;
-        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
+        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
         if (!dir) return;
         let n = parseFloat(cfs.value);
         if (!Number.isFinite(n) || n <= 0) n = 36;
@@ -17843,14 +21347,14 @@
         y.addEventListener("change", onAdvDrawCommit);
       }
     });
-    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn2) {
-      btn2.addEventListener("click", function(ev) {
+    document.querySelectorAll(".seidr-settings-draw-row [data-seidr-num-dir]").forEach(function(btn3) {
+      btn3.addEventListener("click", function(ev) {
         ev.preventDefault();
         ev.stopPropagation();
-        const wrap2 = btn2.closest(".seidr-num-wrap");
+        const wrap2 = btn3.closest(".seidr-num-wrap");
         const input = wrap2 ? wrap2.querySelector('input[type="number"]') : null;
         if (!input || input.disabled) return;
-        const dir = parseInt(btn2.getAttribute("data-seidr-num-dir") || "0", 10);
+        const dir = parseInt(btn3.getAttribute("data-seidr-num-dir") || "0", 10);
         if (!dir) return;
         const step = parseFloat(input.step) || 1;
         const min = input.min !== "" ? parseFloat(input.min) : -Infinity;
@@ -17865,9 +21369,9 @@
         input.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
-    document.querySelectorAll("[data-draw-reset]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const pose = btn2.getAttribute("data-draw-reset");
+    document.querySelectorAll("[data-draw-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-draw-reset");
         if (!pose || !drawDraft) return;
         const def = seidrDefaultDrawOffsets();
         drawDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -17877,9 +21381,9 @@
         setDrawMsg("Reset to default \u2014 Save Drawing to keep");
       });
     });
-    document.querySelectorAll("[data-draw-adv-reset]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const pose = btn2.getAttribute("data-draw-adv-reset");
+    document.querySelectorAll("[data-draw-adv-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-draw-adv-reset");
         if (!pose || !drawAdvDraft) return;
         const def = seidrDefaultDrawAdvancedOffsets();
         drawAdvDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -17987,9 +21491,9 @@
         y.addEventListener("change", onMapDrawCommit);
       }
     });
-    document.querySelectorAll("[data-map-draw-reset]").forEach(function(btn2) {
-      btn2.addEventListener("click", function() {
-        const pose = btn2.getAttribute("data-map-draw-reset");
+    document.querySelectorAll("[data-map-draw-reset]").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const pose = btn3.getAttribute("data-map-draw-reset");
         if (!pose || !mapDrawDraft) return;
         const def = seidrDefaultMapDrawOffsets();
         mapDrawDraft[pose] = { x: def[pose].x, y: def[pose].y };
@@ -18021,7 +21525,7 @@
   }
 
   // src/settings/shell.ts
-  var root2 = null;
+  var root3 = null;
   var panel3 = null;
   function clampPanel2() {
     if (!panel3) return;
@@ -18043,9 +21547,9 @@
   }
   function seidrEnsureSettingsShell() {
     seidrInjectSettingsStyles();
-    if (root2 && document.body.contains(root2)) return;
-    root2 = document.createElement("div");
-    root2.id = "seidr-settings-root";
+    if (root3 && document.body.contains(root3)) return;
+    root3 = document.createElement("div");
+    root3.id = "seidr-settings-root";
     panel3 = document.createElement("div");
     panel3.id = "seidr-settings-panel";
     panel3.innerHTML = [
@@ -18056,10 +21560,10 @@
       '<div class="seidr-settings-tabs" id="seidr-settings-tabs" role="tablist"></div>',
       '<div class="seidr-settings-body" id="seidr-settings-body"></div>'
     ].join("");
-    root2.appendChild(panel3);
-    document.body.appendChild(root2);
+    root3.appendChild(panel3);
+    document.body.appendChild(root3);
     ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"].forEach(function(type) {
-      root2.addEventListener(type, function(ev) {
+      root3.addEventListener(type, function(ev) {
         ev.stopPropagation();
       });
     });
@@ -18096,6 +21600,12 @@
       if (typeof Seidr.rmOnSettingsChanged === "function") {
         try {
           Seidr.rmOnSettingsChanged();
+        } catch (e) {
+        }
+      }
+      if (typeof Seidr.fwOnSettingsChanged === "function") {
+        try {
+          Seidr.fwOnSettingsChanged();
         } catch (e) {
         }
       }
@@ -18239,7 +21749,7 @@
     }
     tourPrefill = null;
   }
-  function escapeHtml9(s) {
+  function escapeHtml10(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function ensureTourDom() {
@@ -18584,7 +22094,7 @@
     if (title) title.textContent = step.title;
     if (body) {
       body.innerHTML = (step.blocks || []).map(function(b) {
-        return '<p class="seidr-tour-card-block">' + escapeHtml9(b) + "</p>";
+        return '<p class="seidr-tour-card-block">' + escapeHtml10(b) + "</p>";
       }).join("");
     }
     if (stepEl) stepEl.textContent = tourIndex + 1 + " / " + tourSteps.length;
@@ -18778,6 +22288,10 @@
       seidrInstallChatFont();
     } catch (e) {
     }
+    try {
+      seidrInstallClearUnreadOnFocus();
+    } catch (e) {
+    }
     seidrRegisterPreference();
     try {
       seidrInstallWelcome();
@@ -18794,6 +22308,7 @@
     playAnimation: seidrPlayAnimation,
     deleteAnimation: seidrDeleteAnimation,
     findAnimationByName: seidrFindAnimationByName,
+    upsertReaction: seidrUpsertReaction,
     poseIds: function() {
       return SEIDR_ACTION_POSES.map(function(p) {
         return p.id;
@@ -18890,11 +22405,11 @@
     }
     Seidr._booted = false;
     Seidr._hookState = {};
-    ["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function(id) {
+    ["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-fw-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function(id) {
       const node = document.getElementById(id);
       if (node && node.parentNode) node.parentNode.removeChild(node);
     });
-    ["seidr-rm-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function(id) {
+    ["seidr-rm-root", "seidr-fw-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function(id) {
       const node = document.getElementById(id);
       if (node && node.parentNode) node.parentNode.removeChild(node);
     });
@@ -18902,6 +22417,12 @@
       try {
         Seidr.poseDestroyUi();
       } catch (ePose) {
+      }
+    }
+    if (typeof Seidr.uninstallClearUnreadOnFocus === "function") {
+      try {
+        Seidr.uninstallClearUnreadOnFocus();
+      } catch (eUnread) {
       }
     }
     window.__SeidrPageLoaded = false;
@@ -18991,6 +22512,20 @@
         Seidr.installPoses();
       } catch (e) {
         console.warn("[Seidr] Poses", e);
+      }
+    }
+    if (typeof Seidr.installAnimations === "function") {
+      try {
+        Seidr.installAnimations();
+      } catch (e) {
+        console.warn("[Seidr] Animations", e);
+      }
+    }
+    if (typeof Seidr.installReactions === "function") {
+      try {
+        Seidr.installReactions();
+      } catch (e) {
+        console.warn("[Seidr] Reactions", e);
       }
     }
     Seidr.installNet();

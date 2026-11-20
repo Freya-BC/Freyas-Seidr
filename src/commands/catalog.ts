@@ -83,6 +83,23 @@ export function seidrCmdListSlots(): SeidrCmdSlotOpt[] {
 	return out;
 }
 
+/** All Club/mod activity names (for Reaction activity triggers). */
+export function seidrCmdListAllActivities(): SeidrCmdActivityOpt[] {
+	const out: SeidrCmdActivityOpt[] = [];
+	const seen: Record<string, boolean> = {};
+	try {
+		if (typeof ActivityFemale3DCG === "undefined" || !Array.isArray(ActivityFemale3DCG)) return out;
+		for (let i = 0; i < ActivityFemale3DCG.length; i++) {
+			const a = ActivityFemale3DCG[i] as any;
+			if (!a || !a.Name || seen[a.Name]) continue;
+			seen[a.Name] = true;
+			out.push({ id: a.Name, label: activityLabel(a.Name) });
+		}
+	} catch (e) { /* ignore */ }
+	out.sort(function (a, b) { return a.label.localeCompare(b.label); });
+	return out;
+}
+
 /** Activities that list `slot` in Target or TargetSelf (settings dropdown). */
 export function seidrCmdListActivitiesForSlot(slot: string): SeidrCmdActivityOpt[] {
 	const s = String(slot || "");

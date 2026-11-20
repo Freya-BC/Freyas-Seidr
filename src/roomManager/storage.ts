@@ -7,6 +7,7 @@
  *   SeidrActions      settings.actions
  *   SeidrCommands     settings.commands
  *   SeidrAnimations   settings.animations
+ *   SeidrReactions    settings.reactions
  *
  * rmGetStore() still returns ONE in-memory RmStore (callers unchanged). rmSaveStore():
  *   - packs only domains whose JSON changed (Base64 LZ, "SeidrRm2:"),
@@ -22,8 +23,8 @@ import { rmEmptyStore, rmNormalizeStore, type RmStore } from "./model";
 
 const SAVE_DEBOUNCE_MS = 1500;
 
-type DomainId = "rm" | "settings" | "actions" | "commands" | "animations";
-const DOMAINS: DomainId[] = ["rm", "settings", "actions", "commands", "animations"];
+type DomainId = "rm" | "settings" | "actions" | "commands" | "animations" | "reactions";
+const DOMAINS: DomainId[] = ["rm", "settings", "actions", "commands", "animations", "reactions"];
 
 let _store: RmStore | null = null;
 /** Sum of packed sizes (bytes of the stored strings) as of the last load/save. */
@@ -49,6 +50,8 @@ function keyOf(id: DomainId): string {
 		case "settings": return Seidr.RM_KEY_SETTINGS || "SeidrSettings";
 		case "actions": return Seidr.RM_KEY_ACTIONS || "SeidrActions";
 		case "commands": return Seidr.RM_KEY_COMMANDS || "SeidrCommands";
+		case "animations": return Seidr.RM_KEY_ANIMATIONS || "SeidrAnimations";
+		case "reactions": return Seidr.RM_KEY_REACTIONS || "SeidrReactions";
 		default: return Seidr.RM_KEY_ANIMATIONS || "SeidrAnimations";
 	}
 }
@@ -125,7 +128,7 @@ function splitStore(store: RmStore): Record<DomainId, unknown> {
 	const settings = (store.settings || {}) as Record<string, unknown>;
 	const rest: Record<string, unknown> = {};
 	Object.keys(settings).forEach(function (k) {
-		if (k === "actions" || k === "commands" || k === "animations") return;
+		if (k === "actions" || k === "commands" || k === "animations" || k === "reactions") return;
 		rest[k] = settings[k];
 	});
 	return {
@@ -141,11 +144,12 @@ function splitStore(store: RmStore): Record<DomainId, unknown> {
 		actions: settings.actions,
 		commands: settings.commands,
 		animations: settings.animations,
+		reactions: settings.reactions,
 	};
 }
 
 function isDefaultBag(id: DomainId, value: unknown): boolean {
-	if (id !== "actions" && id !== "commands" && id !== "animations") return false;
+	if (id !== "actions" && id !== "commands" && id !== "animations" && id !== "reactions") return false;
 	try {
 		const def = seidrDefaultSettings() as unknown as Record<string, unknown>;
 		return JSON.stringify(value) === JSON.stringify(def[id]);
@@ -171,7 +175,7 @@ function composeFromEs(rmObj: Record<string, unknown>, es: Record<string, unknow
 	const settings: Record<string, unknown> = {};
 	const rest = unpack(es[keyOf("settings")]);
 	if (rest && typeof rest === "object") Object.assign(settings, rest as Record<string, unknown>);
-	(["actions", "commands", "animations"] as DomainId[]).forEach(function (id) {
+	(["actions", "commands", "animations", "reactions"] as DomainId[]).forEach(function (id) {
 		const bag = unpack(es[keyOf(id)]);
 		if (bag != null) settings[id] = bag;
 	});
@@ -365,6 +369,7 @@ export type RmUsageBreakdown = {
 	actions: number;
 	commands: number;
 	animations: number;
+	reactions: number;
 	settings: number;
 	ui: number;
 	mapBudget: number;
@@ -377,10 +382,11 @@ export function rmUsageBreakdown(store?: RmStore): RmUsageBreakdown {
 	const actions = (settings as { actions?: unknown }).actions;
 	const commands = (settings as { commands?: unknown }).commands;
 	const animations = (settings as { animations?: unknown }).animations;
+	const reactions = (settings as { reactions?: unknown }).reactions;
 	const settingsRest: Record<string, unknown> = {};
 	try {
 		Object.keys(settings as object).forEach(function (k) {
-			if (k === "actions" || k === "commands" || k === "animations") return;
+			if (k === "actions" || k === "commands" || k === "animations" || k === "reactions") return;
 			settingsRest[k] = (settings as Record<string, unknown>)[k];
 		});
 	} catch (e) { /* ignore */ }
@@ -397,6 +403,9 @@ export function rmUsageBreakdown(store?: RmStore): RmUsageBreakdown {
 		}),
 		animations: rmSliceBytes({
 			animations: animations != null ? animations : { nextId: 1, list: [] },
+		}),
+		reactions: rmSliceBytes({
+			reactions: reactions != null ? reactions : { nextId: 1, list: [] },
 		}),
 		settings: rmSliceBytes({ settings: settingsRest }),
 		ui: 0,

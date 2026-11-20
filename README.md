@@ -2,7 +2,7 @@
 
 ![Seidr](assets/SEIDR-Logo-Transparent.png)
 
-**Seidr** is a Bondage Club plugin for holds, undress, custom Activity Menu actions, chat slash commands, pose/face animations, room admin tools (including map versions), and related quality-of-life settings. Hold poses sync between Seidr peers; activity chat lines stay readable for everyone in the room, including clients without the mod.
+**Seidr** is a Bondage Club plugin for holds, undress, custom Activity Menu actions, chat slash commands, pose/face/Wiggle animations, Autoreaction scripts, room admin tools (including map versions), and related quality-of-life settings. Hold poses sync between Seidr peers; activity chat lines stay readable for everyone in the room, including clients without the mod.
 
 | | |
 |---|---|
@@ -22,14 +22,15 @@
 5. [Undress](#undress)
 6. [Custom Actions](#custom-actions)
 7. [Animations](#animations)
-8. [Chat Commands](#chat-commands)
-9. [Fast Open](#fast-open)
-10. [Room Manager](#room-manager)
-11. [Settings](#settings)
-12. [Echo coexistence](#echo-coexistence)
-13. [Storage](#storage)
-14. [Build (maintainers)](#build-maintainers)
-15. [Detailed docs](#detailed-docs)
+8. [Reaction (Autoreaction)](#reaction-autoreaction)
+9. [Chat Commands](#chat-commands)
+10. [Fast Open](#fast-open)
+11. [Room Manager](#room-manager)
+12. [Settings](#settings)
+13. [Echo coexistence](#echo-coexistence)
+14. [Storage](#storage)
+15. [Build (maintainers)](#build-maintainers)
+16. [Detailed docs](#detailed-docs)
 
 ---
 
@@ -69,13 +70,15 @@ The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab co
 | **Holds** | Pull / Cuddle (you hub) or Go Left/Right / Cuddle Into (they hub); Remove, Leave on Item Torso — shared poses for Seidr peers (45s reconnect grace; map rooms use seat tiles + 60s walk-back) |
 | **Undress** | Clothing-zone activities; Echo layers / “undress all” when those groups exist |
 | **Custom Actions** | Up to 50 user activities in the Club Activity Menu (chat, conditions, icons, export/import) |
-| **Animations** | Pose/face clips on you; play with `/animation` / `/ani` |
+| **Animations** | Pose / face / Wiggle-slot clips + Ear/Tail/Wing Wiggle sets; `/animation` / `/ani`; optional Fast Wiggle button |
+| **Reaction** | Local Autoreaction scripts (Say / Animation / Wiggle / Commands Action) |
 | **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` + Tab AC / Fast Select; Club `/beep` / `/whisper` Tab assist + beep Reply |
 | **Fast Open** | Modifier-click a room or map character to open Activity View on a chosen Item\* slot |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, map series + versions |
 | **Maps (Settings)** | Library of map versions; Default can sync; other versions stay local |
 | **Drawing / Names / Map Cuddle** | Lineup pull/cuddle spacing (+ Advanced / Sync); nickname modes + Who; map-room Map Cuddle offsets (zoom-scaled) |
 | **Chat font** | Optional system font + size for Club chat log / compose only |
+| **Unread badge** | Clear Club Chat Message tab count on tab/compose focus |
 | **Arousal bars** | Hide / relocate Club (and BCTweaks) arousal meters |
 | **Storage** | Compressed synced data with usage breakdown |
 
@@ -135,7 +138,7 @@ They are **different** from **Settings → Commands → Actions**, which are sho
 
 - Up to **50** actions (`n/50` in the UI).
 - **Other** / **Self** chat lines (max 500 characters) with Club token chips (`SourceCharacter`, `TargetCharacter`, `ActivityAsset`, …).
-- Optional **items allowlist**, **conditions**, **arousal** template, **sound**, **pose**.
+- Optional **items allowlist**, **conditions**, **arousal** template, **sound**, **pose**, **Play animation** (clip or Wiggle on you).
 - **Icons**: Seidr SVG builtins or Club Activity icons.
 - **Export / Import** clipboard envelopes (`SeidrAct1:` + LZ).
 
@@ -145,15 +148,28 @@ More detail (slots, conditions, icon picker, import/export screenshots): [`docs/
 
 ## Animations
 
-Author under **Settings → Animations**. Clips play on **you** only.
+Author under **Settings → Animations**. Clips and Wiggles play on **you** only.
 
 ![Animations tab](assets/docs/settings-animations.png)
 
-- Up to **50** animations, **20** steps each, **60 s** total wait.
-- Steps: **Pose** or **Face** + wait; optional Action text when the clip starts.
-- Play: `/animation <name>` or `/ani <name>` (Tab autocomplete).
+- Up to **50** entries (clips + Wiggle sets), **20** steps per clip, **60 s** total wait.
+- Clip steps: **Pose**, **Face**, or **Wiggle** (Ear / Tail / Wing together) + wait; optional Action text when the clip starts.
+- **Wiggle** section: Ear / Tail / Wing asset swaps (mirrors or typed wing poses); usable from clips, Reactions, Actions, and Fast Wiggle.
+- Play: `/animation <name>` or `/ani <name>` (Tab autocomplete). Optional **Fast Wiggle** floating button (Settings → General).
 
 More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
+
+---
+
+## Reaction (Autoreaction)
+
+Author under **Settings → Reaction**. Scripts run on **your client only**.
+
+- Up to **50** reactions, **5** steps each (Say / Animation / **Wiggle** / Commands Action).
+- Triggers: activities you perform and/or performed on you (optional **Slot**), a Phrase **you** say, and/or **On climax**.
+- Broken steps toast locally; no Hidden sync of playback.
+
+More detail: [`docs/REACTIONS.md`](docs/REACTIONS.md).
 
 ---
 
@@ -240,7 +256,7 @@ More detail: [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md).
 
 **`/seidr`** or **Preference → Extensions → Seidr**
 
-Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **About**
+Tabs: **General** | **Actions** | **Commands** | **Animations** | **Reaction** | **Maps** | **About**
 
 ### General
 
@@ -256,6 +272,7 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Maps** | **A
 | **Commands** | Per-slash enable toggles; Fast Select; last-target; `/beep` / `/whisper` AC; Reply to Beep |
 | **Arousal bars** | Mode: Club default / Always hide / Show on change (1s) / Bottom bar. Scope: Self / Seidr holds / Everyone |
 | **Chat font** | Optional system font name + Club-base size for chat log / compose only |
+| **Unread badge** | Clear Chat Message tab/favicon count on window or compose focus (default on) |
 | **Storage** | Live KB usage vs ~180 KB cap; per-slice breakdown |
 
 ### About
@@ -281,7 +298,7 @@ Per-section screenshots and full option tables: [`docs/SETTINGS.md`](docs/SETTIN
 
 Seidr data is synced to your account in a few compressed keys (only the part you changed is uploaded, shortly after you change it):
 
-`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`
+`Player.ExtensionSettings.SeidrRoomManager` (rooms, access, backgrounds, maps), `SeidrSettings`, `SeidrActions`, `SeidrCommands`, `SeidrAnimations`, `SeidrReactions`
 
 | Soft limits | |
 |-------------|--|
@@ -316,7 +333,8 @@ Requires Node 18+. Source is TypeScript under `src/` with `bc-stubs`. Public Rel
 | [`docs/HOLDS.md`](docs/HOLDS.md) | Pull / cuddle / remove / leave, badges, reconnect grace |
 | [`docs/UNDRESS.md`](docs/UNDRESS.md) | Clothing undress + Echo layers |
 | [`docs/ACTIONS.md`](docs/ACTIONS.md) | Custom Activity Menu actions |
-| [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md) | Pose/face animation clips |
+| [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md) | Pose / face / Wiggle-slot clips, Wiggle sets, Fast Wiggle |
+| [`docs/REACTIONS.md`](docs/REACTIONS.md) | Autoreaction scripts (Say / Animation / Wiggle / Action) |
 | [`docs/COMMANDS.md`](docs/COMMANDS.md) | Slash commands, People, Tab autocomplete, Fast Select |
 | [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md) | Admin room / access / backgrounds / maps |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference, Tutorial |

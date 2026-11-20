@@ -110,6 +110,7 @@ Tip: start with Audience **both** and add conditions only when you need them; ov
 | **Reverse give/receive** | Optional. Flips Club’s Self (receiving) / Other (giving) columns for this action — e.g. riding a strap-on with Penetrate template |
 | **Sound** | Seidr peers play via a dictionary cue; SpankSkin also appends a `-Spank` style cue for vanilla |
 | **Pose** | Applies a Club pose and updates the character |
+| **Play animation** | Plays a Settings → Animations **clip** or a single **Wiggle** set on you when the action runs (self only). For Ear+Tail together, use a clip with a Wiggle step, or a Reaction Wiggle step |
 
 Seidr remaps the custom action to the template for partners. The acted character needs Hybrid/Automatic as usual for Club arousal. There is **no** separate Hidden peer arousal protocol — delivery uses Club Type Activity behaviour.
 
