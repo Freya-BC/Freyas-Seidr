@@ -44,8 +44,17 @@ import {
 	seidrImportSelectedActions,
 	seidrListActions,
 	seidrUpdateAction,
+	type SeidrActionImportRow,
 } from "./store";
 import { seidrGetSettings, seidrSaveSettings } from "../settings/storage";
+import {
+	seidrBindImportPickerToolbar,
+	seidrClassifyImportRows,
+	seidrCollectImportSelection,
+	seidrCopyExportText,
+	seidrImportPickerHtml,
+	type SeidrImportClassified,
+} from "../io/importCompare";
 
 // ===== SECTION: Editor state and small helpers =====
 
@@ -57,7 +66,8 @@ let itemsPickerOpen = false;
 let itemsPickerSlot = "ItemMouth";
 let itemsPickerFilter = "";
 /** Parsed import candidates awaiting checkbox selection. */
-let importCandidates: SeidrAction[] | null = null;
+let importCandidates: SeidrImportClassified<SeidrAction>[] | null = null;
+let importParseNotes: string[] = [];
 
 const SEIDR_ITEMS_RESULT_CAP = 80;
 
@@ -1083,26 +1093,21 @@ function renderImportPicker(container: HTMLElement) {
 		return;
 	}
 	host.hidden = false;
-	const rows = importCandidates.map(function (a, idx) {
-		return (
-			'<label class="seidr-act-import-row">' +
-			'<input type="checkbox" data-import-idx="' + idx + '" checked /> ' +
-			escapeHtml(a.name) +
-			"</label>"
-		);
-	}).join("");
-	host.innerHTML = [
-		'<p class="seidr-settings-hint">Select actions to import (new ids; skips when at the ' +
-		SEIDR_ACTIONS_MAX + " limit).</p>",
-		'<div class="seidr-act-import-list">' + rows + "</div>",
-		'<div class="seidr-settings-row" style="margin-top:8px; gap:6px;">',
-		'<button type="button" class="seidr-act-btn" id="seidr-act-import-do">Import selected</button>',
-		'<button type="button" class="seidr-act-btn" id="seidr-act-import-cancel">Cancel</button>',
-		"</div>",
-	].join("");
+	host.innerHTML = seidrImportPickerHtml({
+		idPrefix: "seidr-act",
+		hint: "New and Different are selected. Same is left unticked. Different rows can Overwrite or Add as new. Cap " +
+			SEIDR_ACTIONS_MAX + ".",
+		sections: [{
+			sectionKey: "actions",
+			indexOffset: 0,
+			rows: importCandidates as SeidrImportClassified<unknown>[],
+		}],
+	});
+	seidrBindImportPickerToolbar(host);
 
 	host.querySelector("#seidr-act-import-cancel")?.addEventListener("click", function () {
 		importCandidates = null;
+		importParseNotes = [];
 		const paste = container.querySelector("#seidr-act-import-paste") as HTMLTextAreaElement | null;
 		if (paste) paste.value = "";
 		renderImportPicker(container);
@@ -1111,15 +1116,25 @@ function renderImportPicker(container: HTMLElement) {
 
 	host.querySelector("#seidr-act-import-do")?.addEventListener("click", function () {
 		if (!importCandidates) return;
-		const selected: SeidrAction[] = [];
-		host.querySelectorAll("[data-import-idx]").forEach(function (el) {
-			const cb = el as HTMLInputElement;
-			if (!cb.checked) return;
-			const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
-			if (Number.isFinite(idx) && importCandidates![idx]) selected.push(importCandidates![idx]);
-		});
-		if (!selected.length) {
+		const picks = seidrCollectImportSelection(host);
+		if (!picks.length) {
 			setIoMsg(container, "Select at least one action");
+			return;
+		}
+		const selected: SeidrActionImportRow[] = [];
+		for (let i = 0; i < picks.length; i++) {
+			const row = importCandidates[picks[i].index];
+			if (!row) continue;
+			if (row.status === "same") continue;
+			const mode = row.status === "different" ? picks[i].mode : "add";
+			selected.push({
+				action: row.item,
+				mode: mode,
+				localId: mode === "overwrite" ? row.localId : null,
+			});
+		}
+		if (!selected.length) {
+			setIoMsg(container, "Nothing to import (Same items are skipped)");
 			return;
 		}
 		const result = seidrImportSelectedActions(selected);
@@ -1128,6 +1143,8 @@ function renderImportPicker(container: HTMLElement) {
 			return;
 		}
 		importCandidates = null;
+		const notes = importParseNotes.slice();
+		importParseNotes = [];
 		const paste = container.querySelector("#seidr-act-import-paste") as HTMLTextAreaElement | null;
 		if (paste) paste.value = "";
 		const panel = container.querySelector("#seidr-act-import-panel") as HTMLElement | null;
@@ -1139,8 +1156,12 @@ function renderImportPicker(container: HTMLElement) {
 		renderEditor(container);
 		bindList(container);
 		afterSave();
-		let msg = "Imported " + result.imported;
-		if (result.skipped) msg += " (skipped " + result.skipped + ")";
+		const bits: string[] = [];
+		if (result.imported) bits.push("added " + result.imported);
+		if (result.overwritten) bits.push("overwrote " + result.overwritten);
+		if (result.skipped) bits.push("skipped " + result.skipped);
+		let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+		if (notes.length) msg += " — " + notes[0] + (notes.length > 1 ? " (+" + (notes.length - 1) + " more)" : "");
 		setIoMsg(container, msg);
 	});
 }
@@ -1171,29 +1192,17 @@ function bindIoPanel(container: HTMLElement) {
 			setIoMsg(container, "Export first");
 			return;
 		}
-		const text = exportOut.value;
-		function ok() {
-			setIoMsg(container, "Copied to clipboard");
-		}
-		function fail() {
-			exportOut.focus();
-			exportOut.select();
-			setIoMsg(container, "Select and copy manually (Ctrl/Cmd+C)");
-		}
-		try {
-			if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-				navigator.clipboard.writeText(text).then(ok, fail);
-				return;
-			}
-		} catch (e) { /* fall through */ }
-		try {
-			exportOut.focus();
-			exportOut.select();
-			if (typeof document.execCommand === "function" && document.execCommand("copy")) ok();
-			else fail();
-		} catch (e2) {
-			fail();
-		}
+		seidrCopyExportText(
+			exportOut,
+			function () { setIoMsg(container, "Copied to clipboard"); },
+			function () {
+				if (exportOut) {
+					exportOut.focus();
+					exportOut.select();
+				}
+				setIoMsg(container, "Select and copy manually (Ctrl/Cmd+C)");
+			},
+		);
 	});
 
 	container.querySelector("#seidr-act-import")?.addEventListener("click", function () {
@@ -1202,6 +1211,7 @@ function bindIoPanel(container: HTMLElement) {
 		if (!importPanel.hidden && importPaste) importPaste.focus();
 		if (importPanel.hidden) {
 			importCandidates = null;
+			importParseNotes = [];
 			renderImportPicker(container);
 		}
 		setIoMsg(container, "");
@@ -1212,11 +1222,18 @@ function bindIoPanel(container: HTMLElement) {
 		const parsed = seidrParseActionsImport(raw);
 		if (parsed.ok === false) {
 			importCandidates = null;
+			importParseNotes = [];
 			renderImportPicker(container);
 			setIoMsg(container, parsed.error);
 			return;
 		}
-		importCandidates = parsed.actions;
+		importParseNotes = parsed.notes || [];
+		importCandidates = seidrClassifyImportRows(
+			parsed.actions,
+			seidrListActions(),
+			function (a) { return a.name; },
+			function (a) { return a.id; },
+		);
 		renderImportPicker(container);
 		setIoMsg(container, "Parsed " + parsed.actions.length + " action(s) — select which to import");
 	});

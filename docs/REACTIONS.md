@@ -64,6 +64,13 @@ While a reaction is running (and briefly after), further triggers are ignored so
 - Omitting **Slot** when you only want ear/tail pets — body caresses will fire the same reaction.  
 - Choosing **Animation** → a pose clip when you meant **Wiggle** slot checkboxes (or the reverse).
 
+## Export / Import
+
+On the Reaction tab:
+
+1. **Export** — `SeidrRxn1:` clipboard string of all reactions.
+2. **Import** — paste → **Parse** → pick reactions (New/Different checked, Same unticked). Different rows can **Overwrite** or **Add as new**. Animation steps remap by name to your local Animations; missing clips are cleared with a note.
+
 ## Storage
 
 Reactions use their own synced key `ExtensionSettings.SeidrReactions`. See [SETTINGS.md](SETTINGS.md).

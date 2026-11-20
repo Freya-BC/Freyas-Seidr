@@ -120,6 +120,13 @@ Fast Select (when enabled) can map letter `d` + Tab to `/animation `.
 - Adding a Wiggle **step** without a matching Wiggle **set** for that slot — the step quietly skips.  
 - Confusing this with the **pose** or **Play animation** effect on a Custom Action (Activity Menu) — related, but authored under Actions.
 
+## Export / Import
+
+On the Animations tab (clips and wiggles together):
+
+1. **Export** — `SeidrAni1:` clipboard string of all clips and wiggle sets.
+2. **Import** — paste → **Parse** → pick items (New/Different checked, Same unticked). Different rows can **Overwrite** or **Add as new**. Use **Select all** / **Deselect all**.
+
 ## Storage
 
 Animations live in their own synced key `ExtensionSettings.SeidrAnimations`. See [SETTINGS.md](SETTINGS.md).

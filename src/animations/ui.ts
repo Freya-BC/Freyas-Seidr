@@ -37,13 +37,27 @@ import {
 	type SeidrWiggleSlot,
 } from "./model";
 import {
+	seidrClassifyAnimationsImport,
+	seidrExportAnimationsString,
+	seidrParseAnimationsImport,
+} from "./io";
+import {
 	seidrAddAnimation,
 	seidrDeleteAnimation,
 	seidrGetAnimationsBag,
+	seidrImportSelectedAnimations,
 	seidrListClipAnimations,
 	seidrListWiggleAnimations,
 	seidrUpsertAnimation,
+	type SeidrAnimationImportRow,
 } from "./store";
+import {
+	seidrBindImportPickerToolbar,
+	seidrCollectImportSelection,
+	seidrCopyExportText,
+	seidrImportPickerHtml,
+	type SeidrImportClassified,
+} from "../io/importCompare";
 import {
 	seidrCancelWiggleFramePreview,
 	seidrPlayWiggleTest,
@@ -65,6 +79,158 @@ let editId: number | null = null;
 let draft: SeidrAnimation | null = null;
 let wiggleEditId: number | null = null;
 let wiggleDraft: SeidrAnimation | null = null;
+let importCandidates: SeidrImportClassified<SeidrAnimation>[] | null = null;
+
+function setIoMsg(root: HTMLElement, text: string) {
+	const el = root.querySelector("#seidr-anim-io-msg");
+	if (el) el.textContent = text || "";
+}
+
+function renderAnimImportPicker(root: HTMLElement) {
+	const host = root.querySelector("#seidr-anim-import-pick") as HTMLElement | null;
+	if (!host) return;
+	if (!importCandidates || !importCandidates.length) {
+		host.innerHTML = "";
+		host.hidden = true;
+		return;
+	}
+	host.hidden = false;
+	host.innerHTML = seidrImportPickerHtml({
+		idPrefix: "seidr-anim",
+		hint: "New and Different are selected. Same is unticked. Wiggles that share a slot item with a local set (e.g. stock) match as Different — Overwrite updates that set.",
+		sections: [{
+			sectionKey: "animations",
+			indexOffset: 0,
+			rows: importCandidates as SeidrImportClassified<unknown>[],
+		}],
+	});
+	seidrBindImportPickerToolbar(host);
+
+	host.querySelector("#seidr-anim-import-cancel")?.addEventListener("click", function () {
+		importCandidates = null;
+		const paste = root.querySelector("#seidr-anim-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		renderAnimImportPicker(root);
+		setIoMsg(root, "");
+	});
+
+	host.querySelector("#seidr-anim-import-do")?.addEventListener("click", function () {
+		if (!importCandidates) return;
+		const picks = seidrCollectImportSelection(host);
+		if (!picks.length) {
+			setIoMsg(root, "Select at least one item");
+			return;
+		}
+		const selected: SeidrAnimationImportRow[] = [];
+		for (let i = 0; i < picks.length; i++) {
+			const row = importCandidates[picks[i].index];
+			if (!row || row.status === "same") continue;
+			const mode = row.status === "different" ? picks[i].mode : "add";
+			selected.push({
+				animation: row.item,
+				mode: mode,
+				localId: mode === "overwrite" ? row.localId : null,
+			});
+		}
+		if (!selected.length) {
+			setIoMsg(root, "Nothing to import (Same items are skipped)");
+			return;
+		}
+		const result = seidrImportSelectedAnimations(selected);
+		if (!result.ok) {
+			setIoMsg(root, result.error || "Import failed");
+			return;
+		}
+		importCandidates = null;
+		const paste = root.querySelector("#seidr-anim-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		const panel = root.querySelector("#seidr-anim-import-panel") as HTMLElement | null;
+		if (panel) panel.hidden = true;
+		renderAnimImportPicker(root);
+		editId = null;
+		draft = null;
+		wiggleEditId = null;
+		wiggleDraft = null;
+		ensureFirstOpen(root);
+		ensureFirstWiggle(root);
+		updateCap(root);
+		const bits: string[] = [];
+		if (result.imported) bits.push("added " + result.imported);
+		if (result.overwritten) bits.push("overwrote " + result.overwritten);
+		if (result.skipped) bits.push("skipped " + result.skipped);
+		let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+		if (result.notes && result.notes.length) {
+			msg += " — " + result.notes[0] +
+				(result.notes.length > 1 ? " (+" + (result.notes.length - 1) + " more)" : "");
+		}
+		setIoMsg(root, msg);
+	});
+}
+
+function bindAnimIoPanel(root: HTMLElement) {
+	const exportOut = root.querySelector("#seidr-anim-export-out") as HTMLTextAreaElement | null;
+	const importPanel = root.querySelector("#seidr-anim-import-panel") as HTMLElement | null;
+	const importPaste = root.querySelector("#seidr-anim-import-paste") as HTMLTextAreaElement | null;
+
+	root.querySelector("#seidr-anim-export")?.addEventListener("click", function () {
+		try {
+			const packed = seidrExportAnimationsString();
+			const exportPanel = root.querySelector("#seidr-anim-export-panel") as HTMLElement | null;
+			if (exportPanel) exportPanel.hidden = false;
+			if (exportOut) {
+				exportOut.value = packed;
+				exportOut.focus();
+				exportOut.select();
+			}
+			setIoMsg(root, "Export ready — copy the string below");
+		} catch (e) {
+			setIoMsg(root, e instanceof Error ? e.message : "Export failed");
+		}
+	});
+
+	root.querySelector("#seidr-anim-export-copy")?.addEventListener("click", function () {
+		if (!exportOut || !exportOut.value) {
+			setIoMsg(root, "Export first");
+			return;
+		}
+		seidrCopyExportText(
+			exportOut,
+			function () { setIoMsg(root, "Copied to clipboard"); },
+			function () {
+				if (exportOut) {
+					exportOut.focus();
+					exportOut.select();
+				}
+				setIoMsg(root, "Select and copy manually (Ctrl/Cmd+C)");
+			},
+		);
+	});
+
+	root.querySelector("#seidr-anim-import")?.addEventListener("click", function () {
+		if (!importPanel) return;
+		importPanel.hidden = !importPanel.hidden;
+		if (!importPanel.hidden && importPaste) importPaste.focus();
+		if (importPanel.hidden) {
+			importCandidates = null;
+			renderAnimImportPicker(root);
+		}
+		setIoMsg(root, "");
+	});
+
+	root.querySelector("#seidr-anim-import-parse")?.addEventListener("click", function () {
+		const raw = importPaste ? importPaste.value : "";
+		const parsed = seidrParseAnimationsImport(raw);
+		if (parsed.ok === false) {
+			importCandidates = null;
+			renderAnimImportPicker(root);
+			setIoMsg(root, parsed.error);
+			return;
+		}
+		importCandidates = seidrClassifyAnimationsImport(parsed.animations);
+		renderAnimImportPicker(root);
+		setIoMsg(root, "Parsed " + parsed.animations.length + " item(s) — select which to import");
+	});
+}
 
 function escapeHtml(s: string): string {
 	return String(s)
@@ -983,7 +1149,27 @@ export function seidrBuildAnimationsTab(container: HTMLElement) {
 	draft = null;
 	wiggleEditId = null;
 	wiggleDraft = null;
+	importCandidates = null;
 	container.innerHTML = [
+		'<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-anim-export">Export</button>',
+		'<button type="button" class="seidr-act-btn" id="seidr-anim-import">Import</button>',
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-anim-io-msg"></p>',
+		'<div id="seidr-anim-export-panel" hidden>',
+		'<textarea id="seidr-anim-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-anim-export-copy" title="Copy export string">Copy</button>',
+		"</div>",
+		"</div>",
+		'<div id="seidr-anim-import-panel" class="seidr-act-import-panel" hidden>',
+		'<p class="seidr-settings-hint">Paste a SeidrAni1: export string, then Parse.</p>',
+		'<textarea id="seidr-anim-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrAni1:…"></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-anim-import-parse">Parse</button>',
+		"</div>",
+		'<div id="seidr-anim-import-pick" hidden></div>',
+		"</div>",
 		'<details class="seidr-settings-sec" open>',
 		"<summary>Animations</summary>",
 		'<p class="seidr-settings-hint">Pose and face clips for yourself. Cap ' + SEIDR_ANIMATIONS_MAX +
@@ -1027,6 +1213,7 @@ export function seidrBuildAnimationsTab(container: HTMLElement) {
 	container.querySelector("#seidr-wiggle-add-wing")?.addEventListener("click", function () {
 		startAddWiggle(container, "wing");
 	});
+	bindAnimIoPanel(container);
 	ensureFirstOpen(container);
 	ensureFirstWiggle(container);
 }

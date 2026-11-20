@@ -124,10 +124,13 @@ Chat text stays your action name; the template is for prefs / arousal only. You 
 
 On the Actions tab:
 
-1. **Export** — copies all actions as `SeidrAct1:` + LZ Base64 JSON.  
-2. **Import** — paste → **Parse** → tick names → **Import selected** (new ids; stops at the 50 cap).
+1. **Export** — copies all actions as `SeidrAct1:` + LZ Base64 JSON.
+2. **Import** — paste → **Parse** → pick what to import:
+   - **New** and **Different** are checked; **Same** is left unticked
+   - For **Different**, choose **Overwrite** or **Add as new**
+   - **Select all** / **Deselect all**, then **Import selected**
 
-Handy for moving a set of actions between characters or sharing with a friend.
+Handy for moving a set of actions between characters or sharing with a friend. Animations, Reactions, and Commands have the same Export/Import pattern on their tabs.
 
 ## Storage
 

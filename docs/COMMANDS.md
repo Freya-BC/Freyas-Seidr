@@ -255,6 +255,13 @@ Per-letter checkboxes can turn individual shortcuts off. Any other chat text kee
 
 ---
 
+## Export / Import
+
+On the Commands tab:
+
+1. **Export** — `SeidrCmd1:` clipboard string of People and slash Actions (enable toggles / Fast Select are not included).
+2. **Import** — paste → **Parse** → separate **People** and **Actions** sections. New/Different checked, Same unticked; Different can **Overwrite** or **Add as new**. Each section has its own **Select all** / **Deselect all**.
+
 ## Storage
 
 Saved in `ExtensionSettings.SeidrCommands` (same ~180 KB soft cap as Room Manager / Actions).

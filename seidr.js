@@ -1,4 +1,4 @@
-/* Seidr v2.0.70 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.74 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.70";
+  Seidr.VERSION = "2.0.74";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -68,6 +68,9 @@
   Seidr.RM_LZ_PREFIX = "SeidrRm1:";
   Seidr.RM_B64_PREFIX = "SeidrRm2:";
   Seidr.ACT_LZ_PREFIX = "SeidrAct1:";
+  Seidr.ANI_LZ_PREFIX = "SeidrAni1:";
+  Seidr.RXN_LZ_PREFIX = "SeidrRxn1:";
+  Seidr.CMD_LZ_PREFIX = "SeidrCmd1:";
 
   // src/state.ts
   var SLOTS = ["left", "right", "cuddle"];
@@ -6449,6 +6452,201 @@
     return true;
   }
 
+  // src/io/importCompare.ts
+  function seidrImportFingerprint(obj) {
+    let clone;
+    try {
+      clone = JSON.parse(JSON.stringify(obj == null ? null : obj));
+    } catch (e) {
+      return "";
+    }
+    if (clone && typeof clone === "object" && !Array.isArray(clone)) {
+      delete clone.id;
+    }
+    return stableStringify(clone);
+  }
+  function stableStringify(value) {
+    if (value === null || typeof value !== "object") {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return "[" + value.map(stableStringify).join(",") + "]";
+    }
+    const keys = Object.keys(value).sort();
+    const parts = [];
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      parts.push(JSON.stringify(k) + ":" + stableStringify(value[k]));
+    }
+    return "{" + parts.join(",") + "}";
+  }
+  function seidrClassifyImportRows(candidates, locals, getKey, getId, getLabel, getHint) {
+    const localByKey = /* @__PURE__ */ new Map();
+    for (let i = 0; i < locals.length; i++) {
+      const key = String(getKey(locals[i]) || "").trim().toLowerCase();
+      if (!key || localByKey.has(key)) continue;
+      localByKey.set(key, locals[i]);
+    }
+    const out = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const item = candidates[i];
+      const key = String(getKey(item) || "").trim().toLowerCase();
+      const label = getLabel ? getLabel(item) : String(getKey(item) || "");
+      const hint = getHint ? getHint(item) : void 0;
+      const local = key ? localByKey.get(key) : void 0;
+      if (!local) {
+        out.push({
+          item,
+          status: "new",
+          localId: null,
+          defaultChecked: true,
+          label,
+          hint
+        });
+        continue;
+      }
+      const localId = getId(local);
+      const same = seidrImportFingerprint(item) === seidrImportFingerprint(local);
+      out.push({
+        item,
+        status: same ? "same" : "different",
+        localId,
+        defaultChecked: !same,
+        label,
+        hint
+      });
+    }
+    return out;
+  }
+  function seidrUniqueImportName(base, taken, maxLen) {
+    const limit = maxLen && maxLen > 0 ? maxLen : 80;
+    let name = String(base || "").trim() || "Import";
+    if (name.length > limit) name = name.slice(0, limit);
+    const key0 = name.toLowerCase();
+    if (!taken.has(key0)) return name;
+    let n = 2;
+    while (n < 1e3) {
+      const suffix = " (" + n + ")";
+      const room = Math.max(1, limit - suffix.length);
+      const candidate = name.slice(0, room) + suffix;
+      if (!taken.has(candidate.toLowerCase())) return candidate;
+      n += 1;
+    }
+    return name.slice(0, Math.max(1, limit - 6)) + " (x)";
+  }
+  function escapeHtml2(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function statusBadge(status) {
+    const label = status === "new" ? "New" : status === "same" ? "Same" : "Different";
+    return '<span class="seidr-import-badge seidr-import-badge-' + status + '">' + label + "</span>";
+  }
+  function seidrImportPickerHtml(opts4) {
+    const prefix = opts4.idPrefix;
+    const parts = [
+      '<p class="seidr-settings-hint">' + escapeHtml2(opts4.hint) + "</p>"
+    ];
+    for (let s = 0; s < opts4.sections.length; s++) {
+      const sec = opts4.sections[s];
+      if (sec.title) {
+        parts.push('<p class="seidr-import-section-title">' + escapeHtml2(sec.title) + "</p>");
+      }
+      parts.push(
+        '<div class="seidr-settings-row" style="margin-top:4px; gap:6px;">',
+        '<button type="button" class="seidr-act-btn seidr-import-select-all" data-import-section="' + escapeHtml2(sec.sectionKey) + '">Select all</button>',
+        '<button type="button" class="seidr-act-btn seidr-import-deselect-all" data-import-section="' + escapeHtml2(sec.sectionKey) + '">Deselect all</button>',
+        "</div>",
+        '<div class="seidr-act-import-list" data-import-section="' + escapeHtml2(sec.sectionKey) + '">'
+      );
+      for (let i = 0; i < sec.rows.length; i++) {
+        const row = sec.rows[i];
+        const idx = sec.indexOffset + i;
+        const checked = row.defaultChecked ? " checked" : "";
+        const hintBit = row.hint ? ' <span class="seidr-settings-hint">(' + escapeHtml2(row.hint) + ")</span>" : "";
+        let modeHtml = "";
+        if (row.status === "different") {
+          modeHtml = '<select class="seidr-import-mode" data-import-idx="' + idx + '"><option value="overwrite" selected>Overwrite</option><option value="add">Add as new</option></select>';
+        }
+        parts.push(
+          '<label class="seidr-act-import-row" data-import-section="' + escapeHtml2(sec.sectionKey) + '">',
+          '<input type="checkbox" data-import-idx="' + idx + '" data-import-section="' + escapeHtml2(sec.sectionKey) + '"' + checked + " /> ",
+          '<span class="seidr-import-row-label">' + escapeHtml2(row.label) + hintBit + "</span> ",
+          statusBadge(row.status),
+          modeHtml,
+          "</label>"
+        );
+      }
+      parts.push("</div>");
+    }
+    parts.push(
+      '<div class="seidr-settings-row" style="margin-top:8px; gap:6px;">',
+      '<button type="button" class="seidr-act-btn" id="' + prefix + '-import-do">Import selected</button>',
+      '<button type="button" class="seidr-act-btn" id="' + prefix + '-import-cancel">Cancel</button>',
+      "</div>"
+    );
+    return parts.join("");
+  }
+  function seidrBindImportPickerToolbar(host) {
+    host.querySelectorAll(".seidr-import-select-all").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const section = btn3.getAttribute("data-import-section") || "";
+        host.querySelectorAll('input[type="checkbox"][data-import-idx]').forEach(function(el) {
+          const cb = el;
+          if ((cb.getAttribute("data-import-section") || "") === section) cb.checked = true;
+        });
+      });
+    });
+    host.querySelectorAll(".seidr-import-deselect-all").forEach(function(btn3) {
+      btn3.addEventListener("click", function() {
+        const section = btn3.getAttribute("data-import-section") || "";
+        host.querySelectorAll('input[type="checkbox"][data-import-idx]').forEach(function(el) {
+          const cb = el;
+          if ((cb.getAttribute("data-import-section") || "") === section) cb.checked = false;
+        });
+      });
+    });
+  }
+  function seidrCollectImportSelection(host) {
+    const selected = [];
+    host.querySelectorAll('input[type="checkbox"][data-import-idx]').forEach(function(el) {
+      const cb = el;
+      if (!cb.checked) return;
+      const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
+      if (!Number.isFinite(idx)) return;
+      let mode = "add";
+      const modeEl = host.querySelector('select.seidr-import-mode[data-import-idx="' + idx + '"]');
+      if (modeEl && modeEl.value === "overwrite") mode = "overwrite";
+      else if (modeEl && modeEl.value === "add") mode = "add";
+      else {
+        mode = "add";
+      }
+      selected.push({ index: idx, mode });
+    });
+    return selected;
+  }
+  function seidrCopyExportText(exportOut, onOk, onFail) {
+    if (!exportOut || !exportOut.value) {
+      onFail();
+      return;
+    }
+    const text = exportOut.value;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(text).then(onOk, onFail);
+        return;
+      }
+    } catch (e) {
+    }
+    try {
+      exportOut.focus();
+      exportOut.select();
+      if (typeof document.execCommand === "function" && document.execCommand("copy")) onOk();
+      else onFail();
+    } catch (e2) {
+      onFail();
+    }
+  }
+
   // src/animations/wiggleSlots.ts
   var ECHO_SUFFIXES = ["_\u7B28\u7B28\u86CBLuzi", "_\u7B28\u7B28\u7B28\u86CBLuzi2"];
   function slotMeta(slot) {
@@ -7314,6 +7512,140 @@
     if (!saved.ok) return null;
     return a;
   }
+  function seidrImportSelectedAnimations(rows) {
+    const bag = seidrGetAnimationsBag();
+    let imported = 0;
+    let skipped = 0;
+    let overwritten = 0;
+    const notes = [];
+    const list = Array.isArray(rows) ? rows : [];
+    const taken = /* @__PURE__ */ new Set();
+    for (let i = 0; i < bag.list.length; i++) {
+      taken.add(bag.list[i].name.toLowerCase());
+    }
+    function clipCount() {
+      return seidrCountClipAnimations(bag.list);
+    }
+    function wiggleCount() {
+      return seidrCountWiggleAnimations(bag.list);
+    }
+    function findByPrimary(slot, assetName, exceptId) {
+      for (let i = 0; i < bag.list.length; i++) {
+        const a = bag.list[i];
+        if (a.id === exceptId) continue;
+        if (a.kind === "wiggle" && a.slot === slot && a.primary && a.primary.assetName === assetName) {
+          return a;
+        }
+      }
+      return null;
+    }
+    function applyOverwrite(existing, incoming) {
+      const localId = existing.id;
+      const norm2 = seidrNormalizeAnimation(Object.assign({}, incoming, { id: localId }));
+      if (!norm2) {
+        skipped += 1;
+        notes.push('Skipped "' + (incoming.name || "?") + '" (invalid)');
+        return false;
+      }
+      taken.delete(existing.name.toLowerCase());
+      const nameKey = norm2.name.toLowerCase();
+      const clash = bag.list.some(function(a) {
+        return a.id !== localId && a.name.toLowerCase() === nameKey;
+      });
+      if (clash) {
+        norm2.name = seidrUniqueImportName(norm2.name, taken, SEIDR_ANIM_NAME_MAX);
+      }
+      if (seidrAnimIsWiggle(norm2) && norm2.slot && norm2.primary) {
+        if (wigglePrimaryTaken(bag, norm2.slot, norm2.primary.assetName, localId)) {
+          taken.add(existing.name.toLowerCase());
+          skipped += 1;
+          notes.push(
+            'Skipped "' + norm2.name + '" (wiggle primary already used by another set)'
+          );
+          return false;
+        }
+      }
+      taken.add(norm2.name.toLowerCase());
+      for (let j = 0; j < bag.list.length; j++) {
+        if (bag.list[j].id === localId) {
+          bag.list[j] = norm2;
+          break;
+        }
+      }
+      overwritten += 1;
+      return true;
+    }
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      const mode = row.mode === "overwrite" ? "overwrite" : "add";
+      const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+      const incoming = row.animation;
+      if (mode === "overwrite" && localId != null) {
+        const existing = bag.list.find(function(a) {
+          return a.id === localId;
+        });
+        if (!existing) {
+          skipped += 1;
+          notes.push('Skipped "' + (incoming.name || "?") + '" (local id missing)');
+          continue;
+        }
+        applyOverwrite(existing, incoming);
+        continue;
+      }
+      const isWiggle = seidrAnimIsWiggle(incoming);
+      if (isWiggle && incoming.slot && incoming.primary && incoming.primary.assetName) {
+        const clash = findByPrimary(incoming.slot, incoming.primary.assetName, -1);
+        if (clash) {
+          applyOverwrite(clash, incoming);
+          notes.push(
+            '"' + (incoming.name || clash.name) + '" overwrote "' + clash.name + '" (same ' + clash.slot + " item)"
+          );
+          continue;
+        }
+      }
+      if (isWiggle) {
+        if (wiggleCount() >= SEIDR_WIGGLES_MAX) {
+          skipped += 1;
+          notes.push('Skipped "' + (incoming.name || "?") + '" (wiggle limit)');
+          continue;
+        }
+      } else if (clipCount() >= SEIDR_ANIMATIONS_MAX) {
+        skipped += 1;
+        notes.push('Skipped "' + (incoming.name || "?") + '" (clip limit)');
+        continue;
+      }
+      let name = String(incoming.name || "").trim() || (isWiggle ? "Wiggle" : "Animation");
+      name = seidrUniqueImportName(name, taken, SEIDR_ANIM_NAME_MAX);
+      const id = bag.nextId;
+      const norm2 = seidrNormalizeAnimation(Object.assign({}, incoming, { id, name }));
+      if (!norm2) {
+        skipped += 1;
+        notes.push('Skipped "' + (incoming.name || "?") + '" (invalid)');
+        continue;
+      }
+      bag.list.push(norm2);
+      bag.nextId = id + 1;
+      taken.add(norm2.name.toLowerCase());
+      imported += 1;
+    }
+    const saved = seidrSaveAnimationsBag(bag);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        imported: 0,
+        skipped: list.length,
+        overwritten: 0,
+        error: saved.error || "Save failed"
+      };
+    }
+    return {
+      ok: true,
+      imported,
+      skipped,
+      overwritten,
+      notes
+    };
+  }
 
   // src/animations/wigglePlay.ts
   function emptyRun() {
@@ -8032,31 +8364,88 @@
     });
     return seidrSaveActionsBag(bag);
   }
-  function seidrImportSelectedActions(actions) {
+  function seidrImportSelectedActions(rows) {
     const bag = seidrGetActionsBag();
     let imported = 0;
     let skipped = 0;
-    const list = Array.isArray(actions) ? actions : [];
+    let overwritten = 0;
+    const normalizedRows = [];
+    const list = Array.isArray(rows) ? rows : [];
     for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (row && typeof row === "object" && "action" in row && row.action) {
+        normalizedRows.push(row);
+      } else {
+        normalizedRows.push({ action: row, mode: "add", localId: null });
+      }
+    }
+    const taken = /* @__PURE__ */ new Set();
+    for (let i = 0; i < bag.list.length; i++) {
+      taken.add(bag.list[i].name.toLowerCase());
+    }
+    for (let i = 0; i < normalizedRows.length; i++) {
+      const row = normalizedRows[i];
+      const mode = row.mode === "overwrite" ? "overwrite" : "add";
+      const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+      if (mode === "overwrite" && localId != null) {
+        const existing = bag.list.find(function(a) {
+          return a.id === localId;
+        });
+        if (!existing) {
+          skipped += 1;
+          continue;
+        }
+        const norm3 = seidrNormalizeAction(Object.assign({}, row.action, { id: localId }), localId);
+        if (!norm3) {
+          skipped += 1;
+          continue;
+        }
+        taken.delete(existing.name.toLowerCase());
+        const nameKey = norm3.name.toLowerCase();
+        const clash = bag.list.some(function(a) {
+          return a.id !== localId && a.name.toLowerCase() === nameKey;
+        });
+        if (clash) {
+          norm3.name = seidrUniqueImportName(norm3.name, taken);
+        }
+        taken.add(norm3.name.toLowerCase());
+        for (let j = 0; j < bag.list.length; j++) {
+          if (bag.list[j].id === localId) {
+            bag.list[j] = norm3;
+            break;
+          }
+        }
+        overwritten += 1;
+        continue;
+      }
       if (bag.list.length >= SEIDR_ACTIONS_MAX) {
-        skipped += list.length - i;
+        skipped += normalizedRows.length - i;
         break;
       }
+      let name = String(row.action.name || "").trim() || "Action";
+      name = seidrUniqueImportName(name, taken);
       const id = bag.nextId;
-      const norm2 = seidrNormalizeAction(Object.assign({}, list[i], { id }), id);
+      const norm2 = seidrNormalizeAction(Object.assign({}, row.action, { id, name }), id);
       if (!norm2) {
         skipped += 1;
         continue;
       }
       bag.list.push(norm2);
       bag.nextId = id + 1;
+      taken.add(norm2.name.toLowerCase());
       imported += 1;
     }
     const saved = seidrSaveActionsBag(bag);
     if (!saved.ok) {
-      return { ok: false, imported: 0, skipped: list.length, error: saved.error || "Save failed" };
+      return {
+        ok: false,
+        imported: 0,
+        skipped: normalizedRows.length,
+        overwritten: 0,
+        error: saved.error || "Save failed"
+      };
     }
-    return { ok: true, imported, skipped };
+    return { ok: true, imported, skipped, overwritten };
   }
 
   // src/actions/runtime.ts
@@ -9453,6 +9842,177 @@
     }
     return null;
   }
+  function seidrImportSelectedCmdPeople(rows) {
+    const bag = seidrGetCommandsBag();
+    let imported = 0;
+    let skipped = 0;
+    let overwritten = 0;
+    const list = Array.isArray(rows) ? rows : [];
+    const takenAlias = /* @__PURE__ */ new Set();
+    const takenMember = /* @__PURE__ */ new Set();
+    for (let i = 0; i < bag.people.length; i++) {
+      takenAlias.add(bag.people[i].alias.toLowerCase());
+      takenMember.add(bag.people[i].memberNumber);
+    }
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      const mode = row.mode === "overwrite" ? "overwrite" : "add";
+      const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+      if (mode === "overwrite" && localId != null) {
+        const existing = bag.people.find(function(p) {
+          return p.id === localId;
+        });
+        if (!existing) {
+          skipped += 1;
+          continue;
+        }
+        const norm3 = seidrNormalizeCmdPerson(Object.assign({}, row.person, { id: localId }));
+        if (!norm3 || !norm3.alias || norm3.memberNumber <= 0) {
+          skipped += 1;
+          continue;
+        }
+        takenAlias.delete(existing.alias.toLowerCase());
+        takenMember.delete(existing.memberNumber);
+        const aliasClash = bag.people.some(function(p) {
+          return p.id !== localId && p.alias.toLowerCase() === norm3.alias.toLowerCase();
+        });
+        if (aliasClash) {
+          norm3.alias = seidrUniqueImportName(norm3.alias, takenAlias, SEIDR_CMD_ALIAS_MAX);
+        }
+        const memberClash = bag.people.some(function(p) {
+          return p.id !== localId && p.memberNumber === norm3.memberNumber;
+        });
+        if (memberClash) {
+          takenAlias.add(existing.alias.toLowerCase());
+          takenMember.add(existing.memberNumber);
+          skipped += 1;
+          continue;
+        }
+        takenAlias.add(norm3.alias.toLowerCase());
+        takenMember.add(norm3.memberNumber);
+        for (let j = 0; j < bag.people.length; j++) {
+          if (bag.people[j].id === localId) {
+            bag.people[j] = norm3;
+            break;
+          }
+        }
+        overwritten += 1;
+        continue;
+      }
+      if (bag.people.length >= SEIDR_CMD_PEOPLE_MAX) {
+        skipped += list.length - i;
+        break;
+      }
+      const incoming = row.person || {};
+      const rawAlias = String(incoming.alias || "").trim();
+      const mn = typeof incoming.memberNumber === "number" ? Math.floor(incoming.memberNumber) : 0;
+      if (!rawAlias || mn <= 0) {
+        skipped += 1;
+        continue;
+      }
+      if (takenMember.has(mn)) {
+        skipped += 1;
+        continue;
+      }
+      const alias = seidrUniqueImportName(rawAlias, takenAlias, SEIDR_CMD_ALIAS_MAX);
+      const id = bag.nextPersonId;
+      const norm2 = seidrNormalizeCmdPerson({ id, alias, memberNumber: mn });
+      if (!norm2) {
+        skipped += 1;
+        continue;
+      }
+      bag.people.push(norm2);
+      bag.nextPersonId = id + 1;
+      takenAlias.add(norm2.alias.toLowerCase());
+      takenMember.add(norm2.memberNumber);
+      imported += 1;
+    }
+    const saved = seidrSaveCommandsBag(bag);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        imported: 0,
+        skipped: list.length,
+        overwritten: 0,
+        error: saved.error || "Save failed"
+      };
+    }
+    return { ok: true, imported, skipped, overwritten };
+  }
+  function seidrImportSelectedCmdActions(rows) {
+    const bag = seidrGetCommandsBag();
+    let imported = 0;
+    let skipped = 0;
+    let overwritten = 0;
+    const list = Array.isArray(rows) ? rows : [];
+    const taken = /* @__PURE__ */ new Set();
+    for (let i = 0; i < bag.actions.length; i++) {
+      taken.add(bag.actions[i].name.toLowerCase());
+    }
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      const mode = row.mode === "overwrite" ? "overwrite" : "add";
+      const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+      if (mode === "overwrite" && localId != null) {
+        const existing = bag.actions.find(function(a) {
+          return a.id === localId;
+        });
+        if (!existing) {
+          skipped += 1;
+          continue;
+        }
+        const norm3 = seidrNormalizeCmdAction(Object.assign({}, row.action, { id: localId }));
+        if (!norm3 || !norm3.name || !norm3.slot || !norm3.activity) {
+          skipped += 1;
+          continue;
+        }
+        taken.delete(existing.name.toLowerCase());
+        const nameKey = norm3.name.toLowerCase();
+        const clash = bag.actions.some(function(a) {
+          return a.id !== localId && a.name.toLowerCase() === nameKey;
+        });
+        if (clash) {
+          norm3.name = seidrUniqueImportName(norm3.name, taken, SEIDR_CMD_NAME_MAX);
+        }
+        taken.add(norm3.name.toLowerCase());
+        for (let j = 0; j < bag.actions.length; j++) {
+          if (bag.actions[j].id === localId) {
+            bag.actions[j] = norm3;
+            break;
+          }
+        }
+        overwritten += 1;
+        continue;
+      }
+      if (bag.actions.length >= SEIDR_CMD_ACTIONS_MAX) {
+        skipped += list.length - i;
+        break;
+      }
+      let name = String(row.action.name || "").trim() || "action";
+      name = seidrUniqueImportName(name, taken, SEIDR_CMD_NAME_MAX);
+      const id = bag.nextActionId;
+      const norm2 = seidrNormalizeCmdAction(Object.assign({}, row.action, { id, name }));
+      if (!norm2 || !norm2.name || !norm2.slot || !norm2.activity) {
+        skipped += 1;
+        continue;
+      }
+      bag.actions.push(norm2);
+      bag.nextActionId = id + 1;
+      taken.add(norm2.name.toLowerCase());
+      imported += 1;
+    }
+    const saved = seidrSaveCommandsBag(bag);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        imported: 0,
+        skipped: list.length,
+        overwritten: 0,
+        error: saved.error || "Save failed"
+      };
+    }
+    return { ok: true, imported, skipped, overwritten };
+  }
 
   // src/commands/fastSelect.ts
   var LETTER_MAP = {
@@ -10101,8 +10661,8 @@
     positionOverInput(root4, input);
     root4.innerHTML = state.items.map(function(it, i) {
       const on2 = i === state.index ? " seidr-cmd-ac-on" : "";
-      const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml2(it.hint) + "</span>" : "";
-      return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml2(it.label) + "</span>" + hint + "</button>";
+      const hint = it.hint ? '<span class="seidr-cmd-ac-hint">' + escapeHtml3(it.hint) + "</span>" : "";
+      return '<button type="button" class="seidr-cmd-ac-item' + on2 + '" data-i="' + i + '" role="option"><span class="seidr-cmd-ac-label">' + escapeHtml3(it.label) + "</span>" + hint + "</button>";
     }).join("");
     root4.querySelectorAll("[data-i]").forEach(function(btn3) {
       btn3.addEventListener("mousedown", function(ev) {
@@ -10118,7 +10678,7 @@
       on.scrollIntoView({ block: "nearest" });
     }
   }
-  function escapeHtml2(s) {
+  function escapeHtml3(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function buildMemberItems(prefix) {
@@ -11014,12 +11574,97 @@
   Seidr.cmdAcIsOpen = seidrCmdAcIsOpen;
   Seidr.cmdAcHandleKeyDown = seidrCmdAcHandleKeyDown;
 
+  // src/io/lz.ts
+  function lz2() {
+    try {
+      if (typeof LZString !== "undefined" && LZString) return LZString;
+    } catch (e) {
+    }
+    return null;
+  }
+  function seidrLzPack(prefix, payload) {
+    const json = JSON.stringify(payload);
+    const L = lz2();
+    if (!L || typeof L.compressToBase64 !== "function") {
+      throw new Error("LZString unavailable");
+    }
+    return String(prefix || "") + L.compressToBase64(json);
+  }
+  function seidrLzUnpack(raw, prefix) {
+    const text = String(raw || "").trim();
+    if (!text) return { ok: false, error: "Paste an export string first" };
+    const pfx = String(prefix || "");
+    if (!pfx || text.indexOf(pfx) !== 0) {
+      return { ok: false, error: "Not a Seidr export (missing " + pfx + ")" };
+    }
+    const L = lz2();
+    if (!L || typeof L.decompressFromBase64 !== "function") {
+      return { ok: false, error: "LZString unavailable" };
+    }
+    try {
+      const plain = L.decompressFromBase64(text.slice(pfx.length));
+      if (!plain) return { ok: false, error: "Could not decompress export" };
+      const data = JSON.parse(plain);
+      if (!data || typeof data !== "object") return { ok: false, error: "Invalid export data" };
+      return { ok: true, data };
+    } catch (e) {
+      return { ok: false, error: "Invalid export data" };
+    }
+  }
+
+  // src/commands/io.ts
+  function cmdPrefix() {
+    return Seidr.CMD_LZ_PREFIX || "SeidrCmd1:";
+  }
+  function seidrExportCommandsString() {
+    const payload = {
+      v: 1,
+      kind: "SeidrCommands",
+      people: seidrListCmdPeople(),
+      actions: seidrListCmdActions()
+    };
+    return seidrLzPack(cmdPrefix(), payload);
+  }
+  function seidrParseCommandsImport(raw) {
+    const unpacked = seidrLzUnpack(raw, cmdPrefix());
+    if (unpacked.ok === false) {
+      if (unpacked.error.indexOf("missing") >= 0) {
+        return { ok: false, error: "Not a Seidr Commands export (missing " + cmdPrefix() + ")" };
+      }
+      return { ok: false, error: unpacked.error };
+    }
+    const d = unpacked.data;
+    if (d.kind !== "SeidrCommands" || d.v !== 1) {
+      return { ok: false, error: "Unsupported export format" };
+    }
+    const people = [];
+    const actions = [];
+    if (Array.isArray(d.people)) {
+      for (let i = 0; i < d.people.length; i++) {
+        const p = seidrNormalizeCmdPerson(Object.assign({}, d.people[i], { id: i + 1 }));
+        if (p && p.alias && p.memberNumber > 0) people.push(p);
+      }
+    }
+    if (Array.isArray(d.actions)) {
+      for (let j = 0; j < d.actions.length; j++) {
+        const a = seidrNormalizeCmdAction(Object.assign({}, d.actions[j], { id: j + 1 }));
+        if (a && a.name && a.slot && a.activity) actions.push(a);
+      }
+    }
+    if (!people.length && !actions.length) {
+      return { ok: false, error: "No valid people or actions in export" };
+    }
+    return { ok: true, people, actions };
+  }
+
   // src/commands/ui.ts
   var editPersonId = null;
   var editActionId = null;
   var draftPerson = null;
   var draftAction = null;
-  function escapeHtml3(s) {
+  var importPeople = null;
+  var importActions = null;
+  function escapeHtml4(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function ensureCmdSettingsStyles() {
@@ -11031,7 +11676,7 @@
   }
   function opts(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml3(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml3(o.label) + "</option>";
+      return '<option value="' + escapeHtml4(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml4(o.label) + "</option>";
     }).join("");
   }
   function setMsg(root4, text) {
@@ -11060,7 +11705,7 @@
     pick.disabled = false;
     const sel = editPersonId != null ? String(editPersonId) : "";
     pick.innerHTML = list.map(function(p) {
-      return '<option value="' + p.id + '"' + (String(p.id) === sel ? " selected" : "") + ">" + escapeHtml3(personLabel(p)) + "</option>";
+      return '<option value="' + p.id + '"' + (String(p.id) === sel ? " selected" : "") + ">" + escapeHtml4(personLabel(p)) + "</option>";
     }).join("");
     if (editPersonId == null && list[0]) {
       editPersonId = list[0].id;
@@ -11090,7 +11735,7 @@
     host.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Alias</span>',
-      '<input type="text" id="seidr-cmd-person-alias" maxlength="48" placeholder="Short name for /a" value="' + escapeHtml3(p.alias) + '" />',
+      '<input type="text" id="seidr-cmd-person-alias" maxlength="48" placeholder="Short name for /a" value="' + escapeHtml4(p.alias) + '" />',
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Member ID</span>',
@@ -11116,7 +11761,7 @@
     pick.disabled = false;
     const sel = editActionId != null ? String(editActionId) : "";
     pick.innerHTML = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (String(a.id) === sel ? " selected" : "") + ">" + escapeHtml3(actionLabel(a)) + "</option>";
+      return '<option value="' + a.id + '"' + (String(a.id) === sel ? " selected" : "") + ">" + escapeHtml4(actionLabel(a)) + "</option>";
     }).join("");
     if (editActionId == null && list[0]) {
       editActionId = list[0].id;
@@ -11157,16 +11802,16 @@
     const slotKnown = slots.some(function(s) {
       return s.id === slot;
     });
-    const slotExtra = !slotKnown && slot ? '<option value="' + escapeHtml3(slot) + '">' + escapeHtml3(slot) + " (saved)</option>" : "";
+    const slotExtra = !slotKnown && slot ? '<option value="' + escapeHtml4(slot) + '">' + escapeHtml4(slot) + " (saved)</option>" : "";
     const acts = seidrCmdListActivitiesForSlot(slot);
     const hasAct = !!(a.activity && acts.some(function(x) {
       return x.id === a.activity;
     }));
-    const actExtra = a.activity && !hasAct ? '<option value="' + escapeHtml3(a.activity) + '">' + escapeHtml3(a.activity) + " (saved)</option>" : "";
+    const actExtra = a.activity && !hasAct ? '<option value="' + escapeHtml4(a.activity) + '">' + escapeHtml4(a.activity) + " (saved)</option>" : "";
     host.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Call name</span>',
-      '<input type="text" id="seidr-cmd-action-name" maxlength="48" placeholder="Used in /a \u2026 name" value="' + escapeHtml3(a.name) + '" />',
+      '<input type="text" id="seidr-cmd-action-name" maxlength="48" placeholder="Used in /a \u2026 name" value="' + escapeHtml4(a.name) + '" />',
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Slot</span>',
@@ -11339,14 +11984,248 @@
       }
     });
   }
+  function setIoMsg(root4, text) {
+    const el = root4.querySelector("#seidr-cmd-io-msg");
+    if (el) el.textContent = text || "";
+  }
+  function renderCmdImportPicker(root4) {
+    const host = root4.querySelector("#seidr-cmd-import-pick");
+    if (!host) return;
+    const people = importPeople || [];
+    const actions = importActions || [];
+    if (!people.length && !actions.length) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const sections = [];
+    if (people.length) {
+      sections.push({
+        title: "People",
+        sectionKey: "people",
+        indexOffset: 0,
+        rows: people
+      });
+    }
+    if (actions.length) {
+      sections.push({
+        title: "Actions",
+        sectionKey: "actions",
+        indexOffset: people.length,
+        rows: actions
+      });
+    }
+    host.innerHTML = seidrImportPickerHtml({
+      idPrefix: "seidr-cmd",
+      hint: "People and Actions are selected separately. New/Different checked; Same unticked. Different rows can Overwrite or Add as new.",
+      sections
+    });
+    seidrBindImportPickerToolbar(host);
+    host.querySelector("#seidr-cmd-import-cancel")?.addEventListener("click", function() {
+      importPeople = null;
+      importActions = null;
+      const paste = root4.querySelector("#seidr-cmd-import-paste");
+      if (paste) paste.value = "";
+      renderCmdImportPicker(root4);
+      setIoMsg(root4, "");
+    });
+    host.querySelector("#seidr-cmd-import-do")?.addEventListener("click", function() {
+      const picks = seidrCollectImportSelection(host);
+      if (!picks.length) {
+        setIoMsg(root4, "Select at least one item");
+        return;
+      }
+      const peopleRows = [];
+      const actionRows = [];
+      const peopleLen = people.length;
+      for (let i = 0; i < picks.length; i++) {
+        const idx = picks[i].index;
+        if (idx < peopleLen) {
+          const row = people[idx];
+          if (!row || row.status === "same") continue;
+          const mode = row.status === "different" ? picks[i].mode : "add";
+          peopleRows.push({
+            person: row.item,
+            mode,
+            localId: mode === "overwrite" ? row.localId : null
+          });
+        } else {
+          const row = actions[idx - peopleLen];
+          if (!row || row.status === "same") continue;
+          const mode = row.status === "different" ? picks[i].mode : "add";
+          actionRows.push({
+            action: row.item,
+            mode,
+            localId: mode === "overwrite" ? row.localId : null
+          });
+        }
+      }
+      if (!peopleRows.length && !actionRows.length) {
+        setIoMsg(root4, "Nothing to import (Same items are skipped)");
+        return;
+      }
+      let imported = 0;
+      let overwritten = 0;
+      let skipped = 0;
+      if (peopleRows.length) {
+        const r = seidrImportSelectedCmdPeople(peopleRows);
+        if (!r.ok) {
+          setIoMsg(root4, r.error || "People import failed");
+          return;
+        }
+        imported += r.imported;
+        overwritten += r.overwritten;
+        skipped += r.skipped;
+      }
+      if (actionRows.length) {
+        const r2 = seidrImportSelectedCmdActions(actionRows);
+        if (!r2.ok) {
+          setIoMsg(root4, r2.error || "Actions import failed");
+          return;
+        }
+        imported += r2.imported;
+        overwritten += r2.overwritten;
+        skipped += r2.skipped;
+      }
+      importPeople = null;
+      importActions = null;
+      const paste = root4.querySelector("#seidr-cmd-import-paste");
+      if (paste) paste.value = "";
+      const panel4 = root4.querySelector("#seidr-cmd-import-panel");
+      if (panel4) panel4.hidden = true;
+      renderCmdImportPicker(root4);
+      editPersonId = null;
+      editActionId = null;
+      draftPerson = null;
+      draftAction = null;
+      refreshPeopleSection(root4);
+      refreshActionsSection(root4);
+      const bits = [];
+      if (imported) bits.push("added " + imported);
+      if (overwritten) bits.push("overwrote " + overwritten);
+      if (skipped) bits.push("skipped " + skipped);
+      setIoMsg(root4, bits.length ? "Import: " + bits.join(", ") : "Import done");
+    });
+  }
+  function bindCmdIoPanel(root4) {
+    const exportOut = root4.querySelector("#seidr-cmd-export-out");
+    const importPanel = root4.querySelector("#seidr-cmd-import-panel");
+    const importPaste = root4.querySelector("#seidr-cmd-import-paste");
+    root4.querySelector("#seidr-cmd-export")?.addEventListener("click", function() {
+      try {
+        const packed = seidrExportCommandsString();
+        const exportPanel = root4.querySelector("#seidr-cmd-export-panel");
+        if (exportPanel) exportPanel.hidden = false;
+        if (exportOut) {
+          exportOut.value = packed;
+          exportOut.focus();
+          exportOut.select();
+        }
+        setIoMsg(root4, "Export ready \u2014 copy the string below");
+      } catch (e) {
+        setIoMsg(root4, e instanceof Error ? e.message : "Export failed");
+      }
+    });
+    root4.querySelector("#seidr-cmd-export-copy")?.addEventListener("click", function() {
+      if (!exportOut || !exportOut.value) {
+        setIoMsg(root4, "Export first");
+        return;
+      }
+      seidrCopyExportText(
+        exportOut,
+        function() {
+          setIoMsg(root4, "Copied to clipboard");
+        },
+        function() {
+          if (exportOut) {
+            exportOut.focus();
+            exportOut.select();
+          }
+          setIoMsg(root4, "Select and copy manually (Ctrl/Cmd+C)");
+        }
+      );
+    });
+    root4.querySelector("#seidr-cmd-import")?.addEventListener("click", function() {
+      if (!importPanel) return;
+      importPanel.hidden = !importPanel.hidden;
+      if (!importPanel.hidden && importPaste) importPaste.focus();
+      if (importPanel.hidden) {
+        importPeople = null;
+        importActions = null;
+        renderCmdImportPicker(root4);
+      }
+      setIoMsg(root4, "");
+    });
+    root4.querySelector("#seidr-cmd-import-parse")?.addEventListener("click", function() {
+      const raw = importPaste ? importPaste.value : "";
+      const parsed = seidrParseCommandsImport(raw);
+      if (parsed.ok === false) {
+        importPeople = null;
+        importActions = null;
+        renderCmdImportPicker(root4);
+        setIoMsg(root4, parsed.error);
+        return;
+      }
+      importPeople = seidrClassifyImportRows(
+        parsed.people,
+        seidrListCmdPeople(),
+        function(p) {
+          return p.alias;
+        },
+        function(p) {
+          return p.id;
+        },
+        function(p) {
+          return p.alias + " (" + p.memberNumber + ")";
+        }
+      );
+      importActions = seidrClassifyImportRows(
+        parsed.actions,
+        seidrListCmdActions(),
+        function(a) {
+          return a.name;
+        },
+        function(a) {
+          return a.id;
+        }
+      );
+      renderCmdImportPicker(root4);
+      setIoMsg(
+        root4,
+        "Parsed " + parsed.people.length + " people, " + parsed.actions.length + " action(s) \u2014 select which to import"
+      );
+    });
+  }
   function seidrBuildCommandsTab(container) {
     ensureCmdSettingsStyles();
     editPersonId = null;
     editActionId = null;
     draftPerson = null;
     draftAction = null;
+    importPeople = null;
+    importActions = null;
     container.innerHTML = [
-      '<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-people">',
+      '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-cmd-export">Export</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-cmd-import">Import</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-cmd-io-msg"></p>',
+      '<div id="seidr-cmd-export-panel" hidden>',
+      '<textarea id="seidr-cmd-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-cmd-export-copy" title="Copy export string">Copy</button>',
+      "</div>",
+      "</div>",
+      '<div id="seidr-cmd-import-panel" class="seidr-act-import-panel" hidden>',
+      '<p class="seidr-settings-hint">Paste a SeidrCmd1: export string, then Parse.</p>',
+      '<textarea id="seidr-cmd-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrCmd1:\u2026"></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-cmd-import-parse">Parse</button>',
+      "</div>",
+      '<div id="seidr-cmd-import-pick" hidden></div>',
+      "</div>",
+      '<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-section="cmd-people">',
       "<summary>People</summary>",
       '<p class="seidr-settings-hint">Alias \u2192 Member ID for /a targets and name collisions. Max ' + SEIDR_CMD_PEOPLE_MAX + ".</p>",
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
@@ -11359,7 +12238,7 @@
       "</div>",
       '<div class="seidr-act-editor" id="seidr-cmd-person-editor"></div>',
       "</details>",
-      '<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-actions">',
+      '<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-section="cmd-actions">',
       "<summary>Actions</summary>",
       '<p class="seidr-settings-hint">Call name \u2192 slot + Club/Seidr/mod activity. Usage: /a &lt;member&gt; &lt;name&gt;. Max ' + SEIDR_CMD_ACTIONS_MAX + ".</p>",
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
@@ -11397,6 +12276,7 @@
       setMsg(container, "Action added \u2014 set call name, slot, and activity, then Save");
       refreshActionsSection(container);
     });
+    bindCmdIoPanel(container);
     refreshPeopleSection(container);
     refreshActionsSection(container);
   }
@@ -12028,6 +12908,80 @@
     if (!saved.ok) return null;
     return r;
   }
+  function seidrImportSelectedReactions(rows) {
+    const bag = seidrGetReactionsBag();
+    let imported = 0;
+    let skipped = 0;
+    let overwritten = 0;
+    const list = Array.isArray(rows) ? rows : [];
+    const taken = /* @__PURE__ */ new Set();
+    for (let i = 0; i < bag.list.length; i++) {
+      taken.add(bag.list[i].name.toLowerCase());
+    }
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      const mode = row.mode === "overwrite" ? "overwrite" : "add";
+      const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+      if (mode === "overwrite" && localId != null) {
+        const existing = bag.list.find(function(r) {
+          return r.id === localId;
+        });
+        if (!existing) {
+          skipped += 1;
+          continue;
+        }
+        const norm3 = seidrNormalizeReaction(Object.assign({}, row.reaction, { id: localId }));
+        if (!norm3 || !seidrReactionHasTrigger(norm3)) {
+          skipped += 1;
+          continue;
+        }
+        taken.delete(existing.name.toLowerCase());
+        const nameKey = norm3.name.toLowerCase();
+        const clash = bag.list.some(function(r) {
+          return r.id !== localId && r.name.toLowerCase() === nameKey;
+        });
+        if (clash) {
+          norm3.name = seidrUniqueImportName(norm3.name, taken, SEIDR_REACTION_NAME_MAX);
+        }
+        taken.add(norm3.name.toLowerCase());
+        for (let j = 0; j < bag.list.length; j++) {
+          if (bag.list[j].id === localId) {
+            bag.list[j] = norm3;
+            break;
+          }
+        }
+        overwritten += 1;
+        continue;
+      }
+      if (bag.list.length >= SEIDR_REACTIONS_MAX) {
+        skipped += list.length - i;
+        break;
+      }
+      let name = String(row.reaction.name || "").trim() || "Reaction";
+      name = seidrUniqueImportName(name, taken, SEIDR_REACTION_NAME_MAX);
+      const id = bag.nextId;
+      const norm2 = seidrNormalizeReaction(Object.assign({}, row.reaction, { id, name }));
+      if (!norm2 || !seidrReactionHasTrigger(norm2)) {
+        skipped += 1;
+        continue;
+      }
+      bag.list.push(norm2);
+      bag.nextId = id + 1;
+      taken.add(norm2.name.toLowerCase());
+      imported += 1;
+    }
+    const saved = seidrSaveReactionsBag(bag);
+    if (!saved.ok) {
+      return {
+        ok: false,
+        imported: 0,
+        skipped: list.length,
+        overwritten: 0,
+        error: saved.error || "Save failed"
+      };
+    }
+    return { ok: true, imported, skipped, overwritten };
+  }
 
   // src/reactions/match.ts
   function myMember() {
@@ -12406,10 +13360,92 @@
     });
   };
 
+  // src/reactions/io.ts
+  function rxnPrefix() {
+    return Seidr.RXN_LZ_PREFIX || "SeidrRxn1:";
+  }
+  function enrichReactionForExport(reaction) {
+    const copy = JSON.parse(JSON.stringify(reaction));
+    const steps = Array.isArray(copy.steps) ? copy.steps : [];
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      if (step && step.kind === "animation" && step.animationId > 0) {
+        const found = seidrFindAnimationById(step.animationId);
+        if (found) step.animationName = found.name;
+      }
+    }
+    return copy;
+  }
+  function seidrRemapReactionAnimationRefs(reaction) {
+    const copy = JSON.parse(JSON.stringify(reaction));
+    const notes = [];
+    const steps = Array.isArray(copy.steps) ? copy.steps : [];
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      if (!step || step.kind !== "animation") continue;
+      const name = typeof step.animationName === "string" ? String(step.animationName).trim() : "";
+      delete step.animationName;
+      if (name) {
+        const local = seidrFindAnimationByName(name);
+        if (local) {
+          step.animationId = local.id;
+        } else {
+          step.animationId = 0;
+          notes.push('Reaction "' + reaction.name + '": animation "' + name + '" not found locally');
+        }
+        continue;
+      }
+      const id = step.animationId;
+      if (id > 0 && !seidrFindAnimationById(id)) {
+        step.animationId = 0;
+        notes.push('Reaction "' + reaction.name + '": animation id unresolved');
+      }
+    }
+    copy.steps = steps;
+    return { reaction: copy, notes };
+  }
+  function seidrExportReactionsString() {
+    const list = seidrListReactions().map(enrichReactionForExport);
+    const payload = {
+      v: 1,
+      kind: "SeidrReactions",
+      reactions: list
+    };
+    return seidrLzPack(rxnPrefix(), payload);
+  }
+  function seidrParseReactionsImport(raw) {
+    const unpacked = seidrLzUnpack(raw, rxnPrefix());
+    if (unpacked.ok === false) {
+      if (unpacked.error.indexOf("missing") >= 0) {
+        return { ok: false, error: "Not a Seidr Reactions export (missing " + rxnPrefix() + ")" };
+      }
+      return { ok: false, error: unpacked.error };
+    }
+    const d = unpacked.data;
+    if (d.kind !== "SeidrReactions" || d.v !== 1) {
+      return { ok: false, error: "Unsupported export format" };
+    }
+    if (!Array.isArray(d.reactions)) {
+      return { ok: false, error: "Export has no reactions list" };
+    }
+    const out = [];
+    const notes = [];
+    for (let i = 0; i < d.reactions.length; i++) {
+      const remapped = seidrRemapReactionAnimationRefs(d.reactions[i]);
+      for (let n = 0; n < remapped.notes.length; n++) notes.push(remapped.notes[n]);
+      const rxn = seidrNormalizeReaction(Object.assign({}, remapped.reaction, { id: i + 1 }));
+      if (rxn) out.push(rxn);
+    }
+    if (!out.length) return { ok: false, error: "No valid reactions in export" };
+    return { ok: true, reactions: out, notes };
+  }
+
   // src/reactions/ui.ts
   var editId = null;
   var draft = null;
-  function escapeHtml4(s) {
+  var importCandidates = null;
+  var importParseNotes = [];
+  function escapeHtml5(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function setMsg2(root4, text) {
@@ -12432,7 +13468,7 @@
     }
     const optsHtml = list.map(function(r) {
       const mark = r.enabled ? "" : " [off]";
-      return '<option value="' + r.id + '"' + (editId === r.id ? " selected" : "") + ">" + escapeHtml4(r.name) + " (" + r.steps.length + ")" + mark + "</option>";
+      return '<option value="' + r.id + '"' + (editId === r.id ? " selected" : "") + ">" + escapeHtml5(r.name) + " (" + r.steps.length + ")" + mark + "</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -12445,9 +13481,9 @@
     const list = filterSlot ? seidrCmdListActivitiesForSlot(filterSlot) : seidrCmdListAllActivities();
     const extra = selected && !list.some(function(o) {
       return o.id === selected;
-    }) ? '<option value="' + escapeHtml4(selected) + '">' + escapeHtml4(selected) + " (saved)</option>" : "";
+    }) ? '<option value="' + escapeHtml5(selected) + '">' + escapeHtml5(selected) + " (saved)</option>" : "";
     const opts4 = list.map(function(o) {
-      return '<option value="' + escapeHtml4(o.id) + '">' + escapeHtml4(o.label) + "</option>";
+      return '<option value="' + escapeHtml5(o.id) + '">' + escapeHtml5(o.label) + "</option>";
     }).join("");
     return '<option value="">\u2014 Activity \u2014</option>' + extra + opts4;
   }
@@ -12458,7 +13494,7 @@
     }
     return '<option value="0">\u2014 Animation \u2014</option>' + list.map(function(a) {
       const tag = a.kind === "wiggle" ? " [wiggle]" : "";
-      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml4(a.name) + tag + "</option>";
+      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml5(a.name) + tag + "</option>";
     }).join("");
   }
   function cmdActionOptionsHtml(selected) {
@@ -12468,9 +13504,9 @@
     }
     const extra = selected && !list.some(function(a) {
       return a.name === selected;
-    }) ? '<option value="' + escapeHtml4(selected) + '" selected>' + escapeHtml4(selected) + " (missing)</option>" : "";
+    }) ? '<option value="' + escapeHtml5(selected) + '" selected>' + escapeHtml5(selected) + " (missing)</option>" : "";
     return '<option value="">\u2014 Action \u2014</option>' + extra + list.map(function(a) {
-      return '<option value="' + escapeHtml4(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + escapeHtml4(a.name) + " (" + escapeHtml4(a.activity) + ")</option>";
+      return '<option value="' + escapeHtml5(a.name) + '"' + (a.name === selected ? " selected" : "") + ">" + escapeHtml5(a.name) + " (" + escapeHtml5(a.activity) + ")</option>";
     }).join("");
   }
   function slotOptionsHtml(selected, emptyLabel) {
@@ -12479,9 +13515,9 @@
     const known = slots.some(function(s) {
       return s.id === sel;
     });
-    const extra = sel && !known ? '<option value="' + escapeHtml4(sel) + '">' + escapeHtml4(sel) + " (saved)</option>" : "";
-    return '<option value="">' + escapeHtml4(emptyLabel) + "</option>" + extra + slots.map(function(s) {
-      return '<option value="' + escapeHtml4(s.id) + '">' + escapeHtml4(s.label) + " (" + escapeHtml4(s.id) + ")</option>";
+    const extra = sel && !known ? '<option value="' + escapeHtml5(sel) + '">' + escapeHtml5(sel) + " (saved)</option>" : "";
+    return '<option value="">' + escapeHtml5(emptyLabel) + "</option>" + extra + slots.map(function(s) {
+      return '<option value="' + escapeHtml5(s.id) + '">' + escapeHtml5(s.label) + " (" + escapeHtml5(s.id) + ")</option>";
     }).join("");
   }
   function resolveFilterSlot(t) {
@@ -12573,7 +13609,7 @@
     if (step.kind === "say") {
       body = [
         '<p class="seidr-settings-hint" style="margin-top:8px;">Message (chat, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
-        '<textarea data-rxn-step-say maxlength="' + SEIDR_ACTION_CHAT_MAX + '" rows="2">' + escapeHtml4(step.text || "") + "</textarea>"
+        '<textarea data-rxn-step-say maxlength="' + SEIDR_ACTION_CHAT_MAX + '" rows="2">' + escapeHtml5(step.text || "") + "</textarea>"
       ].join("");
     } else if (step.kind === "animation") {
       body = [
@@ -12603,7 +13639,7 @@
     }
     return [
       '<details class="seidr-settings-sec" data-rxn-step="' + index + '" open>',
-      "<summary>" + escapeHtml4(stepSummary(step)) + "</summary>",
+      "<summary>" + escapeHtml5(stepSummary(step)) + "</summary>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Kind</span>',
       kindSel,
@@ -12706,7 +13742,7 @@
     host.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-rxn-name" maxlength="' + SEIDR_REACTION_NAME_MAX + '" value="' + escapeHtml4(draft.name) + '" />',
+      '<input type="text" id="seidr-rxn-name" maxlength="' + SEIDR_REACTION_NAME_MAX + '" value="' + escapeHtml5(draft.name) + '" />',
       "</div>",
       '<div class="seidr-settings-row" style="margin-top:8px;">',
       '<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-enabled"' + (draft.enabled ? " checked" : "") + " /> Enabled</label>",
@@ -12718,7 +13754,7 @@
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:10px;">',
       '<span class="seidr-settings-field-label">Phrase</span>',
-      '<input type="text" id="seidr-rxn-phrase" maxlength="' + SEIDR_REACTION_PHRASE_MAX + '" placeholder="Only when you say this exact line" value="' + escapeHtml4(draft.phrase || "") + '" />',
+      '<input type="text" id="seidr-rxn-phrase" maxlength="' + SEIDR_REACTION_PHRASE_MAX + '" placeholder="Only when you say this exact line" value="' + escapeHtml5(draft.phrase || "") + '" />',
       "</div>",
       '<div class="seidr-settings-row" style="margin-top:8px;">',
       '<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-climax"' + (draft.onClimax ? " checked" : "") + ' /> On climax <span class="seidr-settings-hint">(your orgasm, ruin, or resist)</span></label>',
@@ -12917,14 +13953,185 @@
     }
     openReaction(root4, editId);
   }
+  function setIoMsg2(root4, text) {
+    const el = root4.querySelector("#seidr-rxn-io-msg");
+    if (el) el.textContent = text || "";
+  }
+  function renderRxnImportPicker(root4) {
+    const host = root4.querySelector("#seidr-rxn-import-pick");
+    if (!host) return;
+    if (!importCandidates || !importCandidates.length) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = seidrImportPickerHtml({
+      idPrefix: "seidr-rxn",
+      hint: "New and Different are selected. Same is left unticked. Different rows can Overwrite or Add as new.",
+      sections: [{
+        sectionKey: "reactions",
+        indexOffset: 0,
+        rows: importCandidates
+      }]
+    });
+    seidrBindImportPickerToolbar(host);
+    host.querySelector("#seidr-rxn-import-cancel")?.addEventListener("click", function() {
+      importCandidates = null;
+      importParseNotes = [];
+      const paste = root4.querySelector("#seidr-rxn-import-paste");
+      if (paste) paste.value = "";
+      renderRxnImportPicker(root4);
+      setIoMsg2(root4, "");
+    });
+    host.querySelector("#seidr-rxn-import-do")?.addEventListener("click", function() {
+      if (!importCandidates) return;
+      const picks = seidrCollectImportSelection(host);
+      if (!picks.length) {
+        setIoMsg2(root4, "Select at least one reaction");
+        return;
+      }
+      const selected = [];
+      for (let i = 0; i < picks.length; i++) {
+        const row = importCandidates[picks[i].index];
+        if (!row || row.status === "same") continue;
+        const mode = row.status === "different" ? picks[i].mode : "add";
+        selected.push({
+          reaction: row.item,
+          mode,
+          localId: mode === "overwrite" ? row.localId : null
+        });
+      }
+      if (!selected.length) {
+        setIoMsg2(root4, "Nothing to import (Same items are skipped)");
+        return;
+      }
+      const result = seidrImportSelectedReactions(selected);
+      if (!result.ok) {
+        setIoMsg2(root4, result.error || "Import failed");
+        return;
+      }
+      importCandidates = null;
+      const notes = importParseNotes.slice();
+      importParseNotes = [];
+      const paste = root4.querySelector("#seidr-rxn-import-paste");
+      if (paste) paste.value = "";
+      const panel4 = root4.querySelector("#seidr-rxn-import-panel");
+      if (panel4) panel4.hidden = true;
+      renderRxnImportPicker(root4);
+      editId = null;
+      draft = null;
+      ensureFirstOpen(root4);
+      const bits = [];
+      if (result.imported) bits.push("added " + result.imported);
+      if (result.overwritten) bits.push("overwrote " + result.overwritten);
+      if (result.skipped) bits.push("skipped " + result.skipped);
+      let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+      if (notes.length) msg += " \u2014 " + notes[0] + (notes.length > 1 ? " (+" + (notes.length - 1) + " more)" : "");
+      setIoMsg2(root4, msg);
+    });
+  }
+  function bindRxnIoPanel(root4) {
+    const exportOut = root4.querySelector("#seidr-rxn-export-out");
+    const importPanel = root4.querySelector("#seidr-rxn-import-panel");
+    const importPaste = root4.querySelector("#seidr-rxn-import-paste");
+    root4.querySelector("#seidr-rxn-export")?.addEventListener("click", function() {
+      try {
+        const packed = seidrExportReactionsString();
+        const exportPanel = root4.querySelector("#seidr-rxn-export-panel");
+        if (exportPanel) exportPanel.hidden = false;
+        if (exportOut) {
+          exportOut.value = packed;
+          exportOut.focus();
+          exportOut.select();
+        }
+        setIoMsg2(root4, "Export ready \u2014 copy the string below");
+      } catch (e) {
+        setIoMsg2(root4, e instanceof Error ? e.message : "Export failed");
+      }
+    });
+    root4.querySelector("#seidr-rxn-export-copy")?.addEventListener("click", function() {
+      if (!exportOut || !exportOut.value) {
+        setIoMsg2(root4, "Export first");
+        return;
+      }
+      seidrCopyExportText(
+        exportOut,
+        function() {
+          setIoMsg2(root4, "Copied to clipboard");
+        },
+        function() {
+          if (exportOut) {
+            exportOut.focus();
+            exportOut.select();
+          }
+          setIoMsg2(root4, "Select and copy manually (Ctrl/Cmd+C)");
+        }
+      );
+    });
+    root4.querySelector("#seidr-rxn-import")?.addEventListener("click", function() {
+      if (!importPanel) return;
+      importPanel.hidden = !importPanel.hidden;
+      if (!importPanel.hidden && importPaste) importPaste.focus();
+      if (importPanel.hidden) {
+        importCandidates = null;
+        importParseNotes = [];
+        renderRxnImportPicker(root4);
+      }
+      setIoMsg2(root4, "");
+    });
+    root4.querySelector("#seidr-rxn-import-parse")?.addEventListener("click", function() {
+      const raw = importPaste ? importPaste.value : "";
+      const parsed = seidrParseReactionsImport(raw);
+      if (parsed.ok === false) {
+        importCandidates = null;
+        importParseNotes = [];
+        renderRxnImportPicker(root4);
+        setIoMsg2(root4, parsed.error);
+        return;
+      }
+      importParseNotes = parsed.notes || [];
+      importCandidates = seidrClassifyImportRows(
+        parsed.reactions,
+        seidrListReactions(),
+        function(r) {
+          return r.name;
+        },
+        function(r) {
+          return r.id;
+        }
+      );
+      renderRxnImportPicker(root4);
+      setIoMsg2(root4, "Parsed " + parsed.reactions.length + " reaction(s) \u2014 select which to import");
+    });
+  }
   function seidrBuildReactionsTab(container) {
     editId = null;
     draft = null;
+    importCandidates = null;
+    importParseNotes = [];
     container.innerHTML = [
       '<p class="seidr-settings-hint">Auto-run a short local script when you perform an activity, someone acts on you, you say a phrase, or you climax. Cap ' + SEIDR_REACTIONS_MAX + " reactions, " + SEIDR_REACTION_STEPS_MAX + " steps. Action steps use Commands bindings.</p>",
       '<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-rxn-add">Add reaction</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-export">Export</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-import">Import</button>',
       '<span class="seidr-settings-hint" id="seidr-rxn-cap">0/' + SEIDR_REACTIONS_MAX + " Reactions</span>",
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-rxn-io-msg"></p>',
+      '<div id="seidr-rxn-export-panel" hidden>',
+      '<textarea id="seidr-rxn-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-export-copy" title="Copy export string">Copy</button>',
+      "</div>",
+      "</div>",
+      '<div id="seidr-rxn-import-panel" class="seidr-act-import-panel" hidden>',
+      '<p class="seidr-settings-hint">Paste a SeidrRxn1: export string, then Parse.</p>',
+      '<textarea id="seidr-rxn-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrRxn1:\u2026"></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-rxn-import-parse">Parse</button>',
+      "</div>",
+      '<div id="seidr-rxn-import-pick" hidden></div>',
       "</div>",
       '<div id="seidr-rxn-list" style="margin-top:10px;"></div>',
       '<div class="seidr-act-editor" id="seidr-rxn-editor" style="margin-top:10px;"></div>'
@@ -12937,6 +14144,7 @@
       }
       openReaction(container, r.id);
     });
+    bindRxnIoPanel(container);
     ensureFirstOpen(container);
   }
   function seidrRefreshReactionsTab() {
@@ -14823,7 +16031,7 @@
     const s = String(raw == null ? "" : raw).trim().slice(0, NAME_MAX);
     return s || fallback;
   }
-  function lz2() {
+  function lz3() {
     try {
       if (typeof LZString !== "undefined" && LZString) return LZString;
     } catch (e) {
@@ -14856,7 +16064,7 @@
       })
     };
     const json = JSON.stringify(payload);
-    const L = lz2();
+    const L = lz3();
     const prefix = Seidr.RM_MAPS_LOCAL_LZ_PREFIX || "SeidrMapsLocal1:";
     if (L && typeof L.compressToUTF16 === "function") {
       return prefix + L.compressToUTF16(json);
@@ -14868,7 +16076,7 @@
     let data = null;
     try {
       if (raw.startsWith(prefix)) {
-        const L = lz2();
+        const L = lz3();
         if (!L || typeof L.decompressFromUTF16 !== "function") return [];
         const plain = L.decompressFromUTF16(raw.slice(prefix.length));
         data = plain ? JSON.parse(plain) : null;
@@ -15732,7 +16940,7 @@
   }
 
   // src/roomManager/dialogs.ts
-  function escapeHtml5(s) {
+  function escapeHtml6(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function removeOverlay(overlay) {
@@ -15750,11 +16958,11 @@
       overlay.className = "seidr-rm-overlay";
       overlay.innerHTML = [
         '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
-        '<h4 id="seidr-rm-dlg-title">' + escapeHtml5(title) + "</h4>",
-        '<p class="seidr-rm-dialog-msg">' + escapeHtml5(message) + "</p>",
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml6(title) + "</h4>",
+        '<p class="seidr-rm-dialog-msg">' + escapeHtml6(message) + "</p>",
         '<div class="seidr-rm-dialog-actions">',
-        '<button type="button" data-act="cancel">' + escapeHtml5(cancelLabel) + "</button>",
-        '<button type="button" data-act="ok" class="' + okClass + '">' + escapeHtml5(okLabel) + "</button>",
+        '<button type="button" data-act="cancel">' + escapeHtml6(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="' + okClass + '">' + escapeHtml6(okLabel) + "</button>",
         "</div></div>"
       ].join("");
       document.body.appendChild(overlay);
@@ -15807,14 +17015,14 @@
       overlay.className = "seidr-rm-overlay";
       overlay.innerHTML = [
         '<div class="seidr-rm-dialog" role="dialog" aria-modal="true" aria-labelledby="seidr-rm-dlg-title">',
-        '<h4 id="seidr-rm-dlg-title">' + escapeHtml5(title) + "</h4>",
-        body ? '<p class="seidr-rm-dialog-msg">' + escapeHtml5(body) + "</p>" : "",
+        '<h4 id="seidr-rm-dlg-title">' + escapeHtml6(title) + "</h4>",
+        body ? '<p class="seidr-rm-dialog-msg">' + escapeHtml6(body) + "</p>" : "",
         '<div class="seidr-settings-field-row">',
-        '<input type="text" id="seidr-rm-prompt-input" maxlength="' + maxlength + '"' + (placeholder ? ' placeholder="' + escapeHtml5(placeholder) + '"' : "") + " />",
+        '<input type="text" id="seidr-rm-prompt-input" maxlength="' + maxlength + '"' + (placeholder ? ' placeholder="' + escapeHtml6(placeholder) + '"' : "") + " />",
         "</div>",
         '<div class="seidr-rm-dialog-actions">',
-        '<button type="button" data-act="cancel">' + escapeHtml5(cancelLabel) + "</button>",
-        '<button type="button" data-act="ok" class="seidr-rm-btn-primary">' + escapeHtml5(okLabel) + "</button>",
+        '<button type="button" data-act="cancel">' + escapeHtml6(cancelLabel) + "</button>",
+        '<button type="button" data-act="ok" class="seidr-rm-btn-primary">' + escapeHtml6(okLabel) + "</button>",
         "</div></div>"
       ].join("");
       document.body.appendChild(overlay);
@@ -17971,8 +19179,26 @@
       "  display: flex; flex-direction: column; gap: 4px;",
       "}",
       ".seidr-act-import-row {",
-      "  display: flex; align-items: center; gap: 8px;",
+      "  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;",
       "  color: #f0e6d4; font-size: 13px; cursor: pointer;",
+      "}",
+      ".seidr-import-row-label { flex: 1; min-width: 80px; }",
+      ".seidr-import-section-title {",
+      "  margin: 10px 0 2px; font-size: 11px; letter-spacing: 0.05em;",
+      "  text-transform: uppercase; color: #d4a017;",
+      "}",
+      ".seidr-import-badge {",
+      "  flex-shrink: 0; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;",
+      "  text-transform: uppercase; border-radius: 999px; padding: 1px 7px;",
+      "  border: 1px solid rgba(255,255,255,0.18);",
+      "}",
+      ".seidr-import-badge-new { color: #8fd48f; border-color: rgba(143,212,143,0.45); }",
+      ".seidr-import-badge-different { color: #e0b84a; border-color: rgba(224,184,74,0.45); }",
+      ".seidr-import-badge-same { color: #a898b0; border-color: rgba(168,152,176,0.35); }",
+      ".seidr-import-mode {",
+      "  background: rgba(20,16,28,0.9); color: #f0e6d4;",
+      "  border: 1px solid rgba(255,255,255,0.14); border-radius: 4px;",
+      "  padding: 2px 6px; font: inherit; font-size: 12px;",
       "}",
       ".seidr-act-icon-row { display: flex; align-items: center; gap: 12px; }",
       ".seidr-act-icon-preview {",
@@ -18231,51 +19457,60 @@
   }
 
   // src/actions/io.ts
-  function lz3() {
-    try {
-      if (typeof LZString !== "undefined" && LZString) return LZString;
-    } catch (e) {
-    }
-    return null;
-  }
   function actPrefix() {
     return Seidr.ACT_LZ_PREFIX || "SeidrAct1:";
   }
+  function enrichActionForExport(action) {
+    const copy = JSON.parse(JSON.stringify(action));
+    const anim = copy.effects && copy.effects.animation;
+    if (anim && anim.animationId > 0) {
+      const found = seidrFindAnimationById(anim.animationId);
+      if (found) anim.animationName = found.name;
+    }
+    return copy;
+  }
+  function seidrRemapActionAnimationRefs(action) {
+    const copy = JSON.parse(JSON.stringify(action));
+    const anim = copy.effects && copy.effects.animation;
+    if (!anim) return { action: copy };
+    const name = typeof anim.animationName === "string" ? String(anim.animationName).trim() : "";
+    delete anim.animationName;
+    if (!anim.enabled && !(anim.animationId > 0) && !name) return { action: copy };
+    if (name) {
+      const local = seidrFindAnimationByName(name);
+      if (local) {
+        anim.animationId = local.id;
+        return { action: copy };
+      }
+      anim.animationId = 0;
+      anim.enabled = false;
+      return { action: copy, note: 'Action "' + action.name + '": animation "' + name + '" not found locally' };
+    }
+    if (anim.animationId > 0 && !seidrFindAnimationById(anim.animationId)) {
+      anim.animationId = 0;
+      anim.enabled = false;
+      return { action: copy, note: 'Action "' + action.name + '": animation id unresolved' };
+    }
+    return { action: copy };
+  }
   function seidrExportActionsString() {
+    const list = seidrListActions().map(enrichActionForExport);
     const payload = {
       v: 1,
       kind: "SeidrActions",
-      actions: seidrListActions()
+      actions: list
     };
-    const json = JSON.stringify(payload);
-    const L = lz3();
-    const prefix = actPrefix();
-    if (!L || typeof L.compressToBase64 !== "function") {
-      throw new Error("LZString unavailable");
-    }
-    return prefix + L.compressToBase64(json);
+    return seidrLzPack(actPrefix(), payload);
   }
   function seidrParseActionsImport(raw) {
-    const text = String(raw || "").trim();
-    if (!text) return { ok: false, error: "Paste an export string first" };
-    const prefix = actPrefix();
-    if (text.indexOf(prefix) !== 0) {
-      return { ok: false, error: "Not a Seidr Actions export (missing " + prefix + ")" };
+    const unpacked = seidrLzUnpack(raw, actPrefix());
+    if (unpacked.ok === false) {
+      if (unpacked.error.indexOf("missing") >= 0) {
+        return { ok: false, error: "Not a Seidr Actions export (missing " + actPrefix() + ")" };
+      }
+      return { ok: false, error: unpacked.error };
     }
-    const L = lz3();
-    if (!L || typeof L.decompressFromBase64 !== "function") {
-      return { ok: false, error: "LZString unavailable" };
-    }
-    let data = null;
-    try {
-      const plain = L.decompressFromBase64(text.slice(prefix.length));
-      if (!plain) return { ok: false, error: "Could not decompress export" };
-      data = JSON.parse(plain);
-    } catch (e) {
-      return { ok: false, error: "Invalid export data" };
-    }
-    if (!data || typeof data !== "object") return { ok: false, error: "Invalid export data" };
-    const d = data;
+    const d = unpacked.data;
     if (d.kind !== "SeidrActions" || d.v !== 1) {
       return { ok: false, error: "Unsupported export format" };
     }
@@ -18283,13 +19518,16 @@
       return { ok: false, error: "Export has no actions list" };
     }
     const out = [];
+    const notes = [];
     for (let i = 0; i < d.actions.length; i++) {
       const tmpId = i + 1;
-      const act2 = seidrNormalizeAction(d.actions[i], tmpId);
+      const remapped = seidrRemapActionAnimationRefs(d.actions[i]);
+      if (remapped.note) notes.push(remapped.note);
+      const act2 = seidrNormalizeAction(remapped.action, tmpId);
       if (act2) out.push(act2);
     }
     if (!out.length) return { ok: false, error: "No valid actions in export" };
-    return { ok: true, actions: out };
+    return { ok: true, actions: out, notes };
   }
 
   // src/actions/ui.ts
@@ -18300,22 +19538,23 @@
   var itemsPickerOpen = false;
   var itemsPickerSlot = "ItemMouth";
   var itemsPickerFilter = "";
-  var importCandidates = null;
+  var importCandidates2 = null;
+  var importParseNotes2 = [];
   var SEIDR_ITEMS_RESULT_CAP = 80;
   function $2(id) {
     return document.getElementById(id);
   }
-  function escapeHtml6(s) {
+  function escapeHtml7(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml6(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml6(o.label) + "</option>";
+      return '<option value="' + escapeHtml7(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml7(o.label) + "</option>";
     }).join("");
   }
   function stringOpts(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml6(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml6(o) + "</option>";
+      return '<option value="' + escapeHtml7(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml7(o) + "</option>";
     }).join("");
   }
   function animationEffectOpts(selectedId) {
@@ -18325,7 +19564,7 @@
     }
     return '<option value="0">\u2014 Animation \u2014</option>' + list.map(function(a) {
       const tag = a.kind === "wiggle" ? " [wiggle]" : "";
-      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml6(a.name) + tag + "</option>";
+      return '<option value="' + a.id + '"' + (a.id === selectedId ? " selected" : "") + ">" + escapeHtml7(a.name) + tag + "</option>";
     }).join("");
   }
   function arousalResultsHtml(selected, filter) {
@@ -18338,10 +19577,10 @@
         return a.label.toLowerCase().indexOf(q) >= 0 || a.id.toLowerCase().indexOf(q) >= 0;
       });
       if (!rows.length) return;
-      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml6(g.label) + "</div>");
+      parts.push('<div class="seidr-act-arousal-group">' + escapeHtml7(g.label) + "</div>");
       rows.forEach(function(a) {
         parts.push(
-          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml6(a.id) + '">' + escapeHtml6(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml6(a.id) + "</span></button>"
+          '<button type="button" class="seidr-act-arousal-opt' + (a.id === selected ? " seidr-act-arousal-opt-on" : "") + '" data-arousal-id="' + escapeHtml7(a.id) + '">' + escapeHtml7(a.label) + ' <span class="seidr-settings-hint">' + escapeHtml7(a.id) + "</span></button>"
         );
       });
     });
@@ -18355,10 +19594,10 @@
     const open = arousalPickerOpen;
     return [
       '<div class="seidr-act-arousal-picker' + (open ? " seidr-act-arousal-open" : "") + '">',
-      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml6(id) + '" />',
+      '<input type="hidden" id="seidr-act-arousal-act" value="' + escapeHtml7(id) + '" />',
       '<button type="button" class="seidr-act-arousal-toggle" id="seidr-act-arousal-toggle" title="Choose Club arousal template">',
       '<span class="seidr-act-arousal-toggle-lab">Template</span>',
-      '<strong id="seidr-act-arousal-label">' + escapeHtml6(seidrArousalActivityLabel(id)) + "</strong>",
+      '<strong id="seidr-act-arousal-label">' + escapeHtml7(seidrArousalActivityLabel(id)) + "</strong>",
       '<span class="seidr-act-arousal-caret" aria-hidden="true">' + (open ? "\u25B4" : "\u25BE") + "</span>",
       "</button>",
       '<div class="seidr-act-arousal-dropdown" id="seidr-act-arousal-dropdown"' + (open ? "" : " hidden") + ">",
@@ -18436,7 +19675,7 @@
       const on = selected.some(function(it) {
         return it.slot === slot && it.name === r.name;
       });
-      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml6(slot) + '" data-item-add-name="' + escapeHtml6(r.name) + '">' + escapeHtml6(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml6(r.name) + "</span></button>";
+      return '<button type="button" class="seidr-act-item-opt' + (on ? " seidr-act-item-opt-on" : "") + '" data-item-add-slot="' + escapeHtml7(slot) + '" data-item-add-name="' + escapeHtml7(r.name) + '">' + escapeHtml7(r.label) + ' <span class="seidr-settings-hint">' + escapeHtml7(r.name) + "</span></button>";
     }).join("");
   }
   function itemsBlockHtml(items, itemsOnTarget, itemsOnSource) {
@@ -18448,7 +19687,7 @@
       itemsPickerSlot = slots[0] ? slots[0].id : "ItemMouth";
     }
     const chips = list.length ? list.map(function(it, idx) {
-      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml6(itemRefLabel(it)) + " \xD7</button>";
+      return '<button type="button" class="seidr-act-item-chip" data-item-del="' + idx + '" title="Remove">' + escapeHtml7(itemRefLabel(it)) + " \xD7</button>";
     }).join("") : '<span class="seidr-settings-hint">None \u2014 action shows without a specific restraint.</span>';
     const open = itemsPickerOpen;
     const onTarget = itemsOnTarget !== false;
@@ -18467,7 +19706,7 @@
       '<div class="seidr-act-items-dropdown" id="seidr-act-items-dropdown"' + (open ? "" : " hidden") + ">",
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; margin-bottom:6px;">',
       '<select id="seidr-act-items-slot">' + opts2(slots, itemsPickerSlot) + "</select>",
-      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml6(itemsPickerFilter) + '" />',
+      '<input type="search" id="seidr-act-items-filter" placeholder="Search gags, armbinders\u2026" autocomplete="off" value="' + escapeHtml7(itemsPickerFilter) + '" />',
       "</div>",
       '<div class="seidr-act-items-results" id="seidr-act-items-results">' + itemsResultsHtml(itemsPickerSlot, itemsPickerFilter, list) + "</div>",
       "</div>",
@@ -18477,7 +19716,7 @@
   function slotChips(selected) {
     return SEIDR_ACTION_SLOTS.map(function(s) {
       const on = selected.indexOf(s.id) >= 0;
-      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml6(s.id) + '">' + escapeHtml6(s.label) + "</button>";
+      return '<button type="button" class="seidr-act-slot' + (on ? " seidr-act-slot-on" : "") + '" data-slot="' + escapeHtml7(s.id) + '">' + escapeHtml7(s.label) + "</button>";
     }).join("");
   }
   function ruleRowHtml(rule, index) {
@@ -18504,7 +19743,7 @@
       '<option value="1"' + (rule.not ? " selected" : "") + ">is not</option>",
       "</select>",
       "<select data-rule-type>" + SEIDR_COND_TYPES.map(function(t) {
-        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml6(t.label) + "</option>";
+        return '<option value="' + t.id + '"' + (t.id === rule.type ? " selected" : "") + ">" + escapeHtml7(t.label) + "</option>";
       }).join("") + "</select>",
       extraHtml,
       '<button type="button" class="seidr-act-btn seidr-act-btn-icon" data-rule-del="' + index + '" title="Remove rule">\xD7</button>',
@@ -18530,7 +19769,7 @@
   }
   function chatTokenChips() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml6(t.token) + '" title="' + escapeHtml6(t.hint) + '">' + escapeHtml6(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-chat-token="' + escapeHtml7(t.token) + '" title="' + escapeHtml7(t.hint) + '">' + escapeHtml7(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken(ta, token) {
@@ -18560,7 +19799,7 @@
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml6(a.name) + " (" + escapeHtml6(a.slots.join(", ")) + ")</option>";
+      return '<option value="' + a.id + '"' + (editId2 === a.id ? " selected" : "") + ">" + escapeHtml7(a.name) + " (" + escapeHtml7(a.slots.join(", ")) + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -18592,16 +19831,16 @@
     wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml6(a.name) + '" />',
+      '<input type="text" id="seidr-act-name" maxlength="48" value="' + escapeHtml7(a.name) + '" />',
       "</div>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Who</span>',
       '<select id="seidr-act-audience">' + opts2(SEIDR_ACTION_AUDIENCES, a.audience) + "</select>",
       "</div>",
       '<div class="seidr-act-icon-row" style="margin-top:10px;">',
-      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml6(iconUrl) + '" alt="" width="40" height="40" />',
+      '<img class="seidr-act-icon-preview" id="seidr-act-icon-preview" src="' + escapeHtml7(iconUrl) + '" alt="" width="40" height="40" />',
       "<div>",
-      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml6(iconLab) + "</p>",
+      '<p class="seidr-settings-hint" id="seidr-act-icon-label">' + escapeHtml7(iconLab) + "</p>",
       '<button type="button" class="seidr-act-btn" id="seidr-act-icon-pick">Select icon</button>',
       "</div>",
       "</div>",
@@ -18617,10 +19856,10 @@
       '<div class="seidr-act-ph-row" id="seidr-act-ph">' + chatTokenChips() + "</div>",
       `<p class="seidr-settings-hint">Club style: SourceCharacter kisses TargetCharacter's lips. / SourceCharacter touches PronounPossessive arms.</p>`,
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Other</label>',
-      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatOther2) + "</textarea>",
+      '<textarea id="seidr-act-chat-other" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml7(chatOther2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-other-count">' + chatOther2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<label class="seidr-settings-field-label" style="display:block;margin-top:8px;">Self</label>',
-      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml6(chatSelf2) + "</textarea>",
+      '<textarea id="seidr-act-chat-self" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml7(chatSelf2) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-act-chat-self-count">' + chatSelf2.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<p class="seidr-settings-hint" style="margin-top:10px;">Effects</p>',
       '<div class="seidr-settings-row">',
@@ -18986,21 +20225,21 @@
       const parts = [];
       function pushSection(title, cells) {
         if (!cells) return;
-        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml6(title) + "</div>");
+        parts.push('<div class="seidr-act-icon-sec">' + escapeHtml7(title) + "</div>");
         parts.push('<div class="seidr-act-icon-sec-grid">' + cells + "</div>");
       }
       const seidrCells = SEIDR_BUILTIN_ICONS.filter(function(b) {
         if (!q) return true;
         return b.label.toLowerCase().indexOf(q) >= 0 || b.id.toLowerCase().indexOf(q) >= 0;
       }).map(function(b) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml6(b.id) + '" title="' + escapeHtml6(b.label) + '"><img src="' + escapeHtml6(b.url) + '" alt="" /><span>' + escapeHtml6(b.label) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="seidr" data-icon-id="' + escapeHtml7(b.id) + '" title="' + escapeHtml7(b.label) + '"><img src="' + escapeHtml7(b.url) + '" alt="" /><span>' + escapeHtml7(b.label) + "</span></button>";
       }).join("");
       pushSection("Seidr", seidrCells);
       const actCells = SEIDR_ACTIVITY_ICON_IDS.filter(function(id) {
         if (!q) return true;
         return id.toLowerCase().indexOf(q) >= 0;
       }).map(function(id) {
-        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml6(id) + '" title="' + escapeHtml6(id) + '"><img src="' + escapeHtml6(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml6(id) + "</span></button>";
+        return '<button type="button" class="seidr-act-icon-cell" data-icon-source="activity" data-icon-id="' + escapeHtml7(id) + '" title="' + escapeHtml7(id) + '"><img src="' + escapeHtml7(seidrActivityIconUrl(id)) + '" alt="" /><span>' + escapeHtml7(id) + "</span></button>";
       }).join("");
       pushSection("Club Activity", actCells);
       grid.innerHTML = parts.length ? parts.join("") : '<p class="seidr-settings-hint">No icons match.</p>';
@@ -19175,56 +20414,68 @@
       selectActionById(root4, id);
     });
   }
-  function setIoMsg(container, text) {
+  function setIoMsg3(container, text) {
     const el = container.querySelector("#seidr-act-io-msg");
     if (el) el.textContent = text || "";
   }
   function renderImportPicker(container) {
     const host = container.querySelector("#seidr-act-import-pick");
     if (!host) return;
-    if (!importCandidates || !importCandidates.length) {
+    if (!importCandidates2 || !importCandidates2.length) {
       host.innerHTML = "";
       host.hidden = true;
       return;
     }
     host.hidden = false;
-    const rows = importCandidates.map(function(a, idx) {
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml6(a.name) + "</label>";
-    }).join("");
-    host.innerHTML = [
-      '<p class="seidr-settings-hint">Select actions to import (new ids; skips when at the ' + SEIDR_ACTIONS_MAX + " limit).</p>",
-      '<div class="seidr-act-import-list">' + rows + "</div>",
-      '<div class="seidr-settings-row" style="margin-top:8px; gap:6px;">',
-      '<button type="button" class="seidr-act-btn" id="seidr-act-import-do">Import selected</button>',
-      '<button type="button" class="seidr-act-btn" id="seidr-act-import-cancel">Cancel</button>',
-      "</div>"
-    ].join("");
+    host.innerHTML = seidrImportPickerHtml({
+      idPrefix: "seidr-act",
+      hint: "New and Different are selected. Same is left unticked. Different rows can Overwrite or Add as new. Cap " + SEIDR_ACTIONS_MAX + ".",
+      sections: [{
+        sectionKey: "actions",
+        indexOffset: 0,
+        rows: importCandidates2
+      }]
+    });
+    seidrBindImportPickerToolbar(host);
     host.querySelector("#seidr-act-import-cancel")?.addEventListener("click", function() {
-      importCandidates = null;
+      importCandidates2 = null;
+      importParseNotes2 = [];
       const paste = container.querySelector("#seidr-act-import-paste");
       if (paste) paste.value = "";
       renderImportPicker(container);
-      setIoMsg(container, "");
+      setIoMsg3(container, "");
     });
     host.querySelector("#seidr-act-import-do")?.addEventListener("click", function() {
-      if (!importCandidates) return;
+      if (!importCandidates2) return;
+      const picks = seidrCollectImportSelection(host);
+      if (!picks.length) {
+        setIoMsg3(container, "Select at least one action");
+        return;
+      }
       const selected = [];
-      host.querySelectorAll("[data-import-idx]").forEach(function(el) {
-        const cb = el;
-        if (!cb.checked) return;
-        const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
-        if (Number.isFinite(idx) && importCandidates[idx]) selected.push(importCandidates[idx]);
-      });
+      for (let i = 0; i < picks.length; i++) {
+        const row = importCandidates2[picks[i].index];
+        if (!row) continue;
+        if (row.status === "same") continue;
+        const mode = row.status === "different" ? picks[i].mode : "add";
+        selected.push({
+          action: row.item,
+          mode,
+          localId: mode === "overwrite" ? row.localId : null
+        });
+      }
       if (!selected.length) {
-        setIoMsg(container, "Select at least one action");
+        setIoMsg3(container, "Nothing to import (Same items are skipped)");
         return;
       }
       const result = seidrImportSelectedActions(selected);
       if (!result.ok) {
-        setIoMsg(container, result.error || "Import failed");
+        setIoMsg3(container, result.error || "Import failed");
         return;
       }
-      importCandidates = null;
+      importCandidates2 = null;
+      const notes = importParseNotes2.slice();
+      importParseNotes2 = [];
       const paste = container.querySelector("#seidr-act-import-paste");
       if (paste) paste.value = "";
       const panel4 = container.querySelector("#seidr-act-import-panel");
@@ -19236,9 +20487,13 @@
       renderEditor2(container);
       bindList(container);
       afterSave();
-      let msg = "Imported " + result.imported;
-      if (result.skipped) msg += " (skipped " + result.skipped + ")";
-      setIoMsg(container, msg);
+      const bits = [];
+      if (result.imported) bits.push("added " + result.imported);
+      if (result.overwritten) bits.push("overwrote " + result.overwritten);
+      if (result.skipped) bits.push("skipped " + result.skipped);
+      let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+      if (notes.length) msg += " \u2014 " + notes[0] + (notes.length > 1 ? " (+" + (notes.length - 1) + " more)" : "");
+      setIoMsg3(container, msg);
     });
   }
   function bindIoPanel(container) {
@@ -19255,67 +20510,68 @@
           exportOut.focus();
           exportOut.select();
         }
-        setIoMsg(container, "Export ready \u2014 copy the string below");
+        setIoMsg3(container, "Export ready \u2014 copy the string below");
       } catch (e) {
-        setIoMsg(container, e instanceof Error ? e.message : "Export failed");
+        setIoMsg3(container, e instanceof Error ? e.message : "Export failed");
       }
     });
     container.querySelector("#seidr-act-export-copy")?.addEventListener("click", function() {
       if (!exportOut || !exportOut.value) {
-        setIoMsg(container, "Export first");
+        setIoMsg3(container, "Export first");
         return;
       }
-      const text = exportOut.value;
-      function ok() {
-        setIoMsg(container, "Copied to clipboard");
-      }
-      function fail() {
-        exportOut.focus();
-        exportOut.select();
-        setIoMsg(container, "Select and copy manually (Ctrl/Cmd+C)");
-      }
-      try {
-        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-          navigator.clipboard.writeText(text).then(ok, fail);
-          return;
+      seidrCopyExportText(
+        exportOut,
+        function() {
+          setIoMsg3(container, "Copied to clipboard");
+        },
+        function() {
+          if (exportOut) {
+            exportOut.focus();
+            exportOut.select();
+          }
+          setIoMsg3(container, "Select and copy manually (Ctrl/Cmd+C)");
         }
-      } catch (e) {
-      }
-      try {
-        exportOut.focus();
-        exportOut.select();
-        if (typeof document.execCommand === "function" && document.execCommand("copy")) ok();
-        else fail();
-      } catch (e2) {
-        fail();
-      }
+      );
     });
     container.querySelector("#seidr-act-import")?.addEventListener("click", function() {
       if (!importPanel) return;
       importPanel.hidden = !importPanel.hidden;
       if (!importPanel.hidden && importPaste) importPaste.focus();
       if (importPanel.hidden) {
-        importCandidates = null;
+        importCandidates2 = null;
+        importParseNotes2 = [];
         renderImportPicker(container);
       }
-      setIoMsg(container, "");
+      setIoMsg3(container, "");
     });
     container.querySelector("#seidr-act-import-parse")?.addEventListener("click", function() {
       const raw = importPaste ? importPaste.value : "";
       const parsed = seidrParseActionsImport(raw);
       if (parsed.ok === false) {
-        importCandidates = null;
+        importCandidates2 = null;
+        importParseNotes2 = [];
         renderImportPicker(container);
-        setIoMsg(container, parsed.error);
+        setIoMsg3(container, parsed.error);
         return;
       }
-      importCandidates = parsed.actions;
+      importParseNotes2 = parsed.notes || [];
+      importCandidates2 = seidrClassifyImportRows(
+        parsed.actions,
+        seidrListActions(),
+        function(a) {
+          return a.name;
+        },
+        function(a) {
+          return a.id;
+        }
+      );
       renderImportPicker(container);
-      setIoMsg(container, "Parsed " + parsed.actions.length + " action(s) \u2014 select which to import");
+      setIoMsg3(container, "Parsed " + parsed.actions.length + " action(s) \u2014 select which to import");
     });
   }
   function seidrBuildActionsTab(container) {
-    importCandidates = null;
+    importCandidates2 = null;
     closeIconModal();
     container.innerHTML = [
       '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
@@ -19366,7 +20622,7 @@
     container.querySelector("#seidr-act-add")?.addEventListener("click", function() {
       const created = seidrAddAction();
       if (!created) {
-        setIoMsg(container, "Action limit reached (" + SEIDR_ACTIONS_MAX + ")");
+        setIoMsg3(container, "Action limit reached (" + SEIDR_ACTIONS_MAX + ")");
         return;
       }
       editId2 = created.id;
@@ -19387,27 +20643,262 @@
     if (!pane) return;
     editId2 = null;
     draft2 = null;
-    importCandidates = null;
+    importCandidates2 = null;
     seidrBuildActionsTab(pane);
   }
   Seidr.refreshOpenActivityMenuIcons = refreshOpenActivityMenuIcons;
+
+  // src/animations/io.ts
+  function aniPrefix() {
+    return Seidr.ANI_LZ_PREFIX || "SeidrAni1:";
+  }
+  function seidrExportAnimationsString() {
+    const payload = {
+      v: 1,
+      kind: "SeidrAnimations",
+      animations: seidrListAnimations()
+    };
+    return seidrLzPack(aniPrefix(), payload);
+  }
+  function seidrParseAnimationsImport(raw) {
+    const unpacked = seidrLzUnpack(raw, aniPrefix());
+    if (unpacked.ok === false) {
+      if (unpacked.error.indexOf("missing") >= 0) {
+        return { ok: false, error: "Not a Seidr Animations export (missing " + aniPrefix() + ")" };
+      }
+      return { ok: false, error: unpacked.error };
+    }
+    const d = unpacked.data;
+    if (d.kind !== "SeidrAnimations" || d.v !== 1) {
+      return { ok: false, error: "Unsupported export format" };
+    }
+    if (!Array.isArray(d.animations)) {
+      return { ok: false, error: "Export has no animations list" };
+    }
+    const out = [];
+    for (let i = 0; i < d.animations.length; i++) {
+      const anim = seidrNormalizeAnimation(Object.assign({}, d.animations[i], { id: i + 1 }));
+      if (anim) out.push(anim);
+    }
+    if (!out.length) return { ok: false, error: "No valid animations in export" };
+    return { ok: true, animations: out };
+  }
+  function wigglePrimaryKey(anim) {
+    if (!seidrAnimIsWiggle(anim) || !anim.slot || !anim.primary || !anim.primary.assetName) return null;
+    return anim.slot + "::" + String(anim.primary.assetName).toLowerCase();
+  }
+  function seidrClassifyAnimationsImport(candidates, locals) {
+    const localList = locals || seidrListAnimations();
+    const byName = /* @__PURE__ */ new Map();
+    const byPrimary = /* @__PURE__ */ new Map();
+    for (let i = 0; i < localList.length; i++) {
+      const loc = localList[i];
+      const nk = String(loc.name || "").trim().toLowerCase();
+      if (nk && !byName.has(nk)) byName.set(nk, loc);
+      const pk = wigglePrimaryKey(loc);
+      if (pk && !byPrimary.has(pk)) byPrimary.set(pk, loc);
+    }
+    const out = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const item = candidates[i];
+      const nameKey = String(item.name || "").trim().toLowerCase();
+      let local = nameKey ? byName.get(nameKey) : void 0;
+      let matchHint;
+      if (!local) {
+        const pk = wigglePrimaryKey(item);
+        if (pk) {
+          local = byPrimary.get(pk);
+          if (local && local.name.toLowerCase() !== nameKey) {
+            matchHint = "replaces " + local.name;
+          }
+        }
+      }
+      const kindHint = seidrAnimIsWiggle(item) ? "Wiggle" : "Clip";
+      const hint = matchHint ? kindHint + " \xB7 " + matchHint : kindHint;
+      if (!local) {
+        out.push({
+          item,
+          status: "new",
+          localId: null,
+          defaultChecked: true,
+          label: item.name,
+          hint
+        });
+        continue;
+      }
+      const same = seidrImportFingerprint(item) === seidrImportFingerprint(local);
+      out.push({
+        item,
+        status: same ? "same" : "different",
+        localId: local.id,
+        defaultChecked: !same,
+        label: item.name,
+        hint
+      });
+    }
+    return out;
+  }
 
   // src/animations/ui.ts
   var editId3 = null;
   var draft3 = null;
   var wiggleEditId = null;
   var wiggleDraft = null;
-  function escapeHtml7(s) {
+  var importCandidates3 = null;
+  function setIoMsg4(root4, text) {
+    const el = root4.querySelector("#seidr-anim-io-msg");
+    if (el) el.textContent = text || "";
+  }
+  function renderAnimImportPicker(root4) {
+    const host = root4.querySelector("#seidr-anim-import-pick");
+    if (!host) return;
+    if (!importCandidates3 || !importCandidates3.length) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    host.innerHTML = seidrImportPickerHtml({
+      idPrefix: "seidr-anim",
+      hint: "New and Different are selected. Same is unticked. Wiggles that share a slot item with a local set (e.g. stock) match as Different \u2014 Overwrite updates that set.",
+      sections: [{
+        sectionKey: "animations",
+        indexOffset: 0,
+        rows: importCandidates3
+      }]
+    });
+    seidrBindImportPickerToolbar(host);
+    host.querySelector("#seidr-anim-import-cancel")?.addEventListener("click", function() {
+      importCandidates3 = null;
+      const paste = root4.querySelector("#seidr-anim-import-paste");
+      if (paste) paste.value = "";
+      renderAnimImportPicker(root4);
+      setIoMsg4(root4, "");
+    });
+    host.querySelector("#seidr-anim-import-do")?.addEventListener("click", function() {
+      if (!importCandidates3) return;
+      const picks = seidrCollectImportSelection(host);
+      if (!picks.length) {
+        setIoMsg4(root4, "Select at least one item");
+        return;
+      }
+      const selected = [];
+      for (let i = 0; i < picks.length; i++) {
+        const row = importCandidates3[picks[i].index];
+        if (!row || row.status === "same") continue;
+        const mode = row.status === "different" ? picks[i].mode : "add";
+        selected.push({
+          animation: row.item,
+          mode,
+          localId: mode === "overwrite" ? row.localId : null
+        });
+      }
+      if (!selected.length) {
+        setIoMsg4(root4, "Nothing to import (Same items are skipped)");
+        return;
+      }
+      const result = seidrImportSelectedAnimations(selected);
+      if (!result.ok) {
+        setIoMsg4(root4, result.error || "Import failed");
+        return;
+      }
+      importCandidates3 = null;
+      const paste = root4.querySelector("#seidr-anim-import-paste");
+      if (paste) paste.value = "";
+      const panel4 = root4.querySelector("#seidr-anim-import-panel");
+      if (panel4) panel4.hidden = true;
+      renderAnimImportPicker(root4);
+      editId3 = null;
+      draft3 = null;
+      wiggleEditId = null;
+      wiggleDraft = null;
+      ensureFirstOpen2(root4);
+      ensureFirstWiggle(root4);
+      updateCap2(root4);
+      const bits = [];
+      if (result.imported) bits.push("added " + result.imported);
+      if (result.overwritten) bits.push("overwrote " + result.overwritten);
+      if (result.skipped) bits.push("skipped " + result.skipped);
+      let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+      if (result.notes && result.notes.length) {
+        msg += " \u2014 " + result.notes[0] + (result.notes.length > 1 ? " (+" + (result.notes.length - 1) + " more)" : "");
+      }
+      setIoMsg4(root4, msg);
+    });
+  }
+  function bindAnimIoPanel(root4) {
+    const exportOut = root4.querySelector("#seidr-anim-export-out");
+    const importPanel = root4.querySelector("#seidr-anim-import-panel");
+    const importPaste = root4.querySelector("#seidr-anim-import-paste");
+    root4.querySelector("#seidr-anim-export")?.addEventListener("click", function() {
+      try {
+        const packed = seidrExportAnimationsString();
+        const exportPanel = root4.querySelector("#seidr-anim-export-panel");
+        if (exportPanel) exportPanel.hidden = false;
+        if (exportOut) {
+          exportOut.value = packed;
+          exportOut.focus();
+          exportOut.select();
+        }
+        setIoMsg4(root4, "Export ready \u2014 copy the string below");
+      } catch (e) {
+        setIoMsg4(root4, e instanceof Error ? e.message : "Export failed");
+      }
+    });
+    root4.querySelector("#seidr-anim-export-copy")?.addEventListener("click", function() {
+      if (!exportOut || !exportOut.value) {
+        setIoMsg4(root4, "Export first");
+        return;
+      }
+      seidrCopyExportText(
+        exportOut,
+        function() {
+          setIoMsg4(root4, "Copied to clipboard");
+        },
+        function() {
+          if (exportOut) {
+            exportOut.focus();
+            exportOut.select();
+          }
+          setIoMsg4(root4, "Select and copy manually (Ctrl/Cmd+C)");
+        }
+      );
+    });
+    root4.querySelector("#seidr-anim-import")?.addEventListener("click", function() {
+      if (!importPanel) return;
+      importPanel.hidden = !importPanel.hidden;
+      if (!importPanel.hidden && importPaste) importPaste.focus();
+      if (importPanel.hidden) {
+        importCandidates3 = null;
+        renderAnimImportPicker(root4);
+      }
+      setIoMsg4(root4, "");
+    });
+    root4.querySelector("#seidr-anim-import-parse")?.addEventListener("click", function() {
+      const raw = importPaste ? importPaste.value : "";
+      const parsed = seidrParseAnimationsImport(raw);
+      if (parsed.ok === false) {
+        importCandidates3 = null;
+        renderAnimImportPicker(root4);
+        setIoMsg4(root4, parsed.error);
+        return;
+      }
+      importCandidates3 = seidrClassifyAnimationsImport(parsed.animations);
+      renderAnimImportPicker(root4);
+      setIoMsg4(root4, "Parsed " + parsed.animations.length + " item(s) \u2014 select which to import");
+    });
+  }
+  function escapeHtml8(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function opts3(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml7(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml7(o.label) + "</option>";
+      return '<option value="' + escapeHtml8(o.id) + '"' + (o.id === selected ? " selected" : "") + ">" + escapeHtml8(o.label) + "</option>";
     }).join("");
   }
   function stringOpts2(list, selected) {
     return list.map(function(o) {
-      return '<option value="' + escapeHtml7(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml7(o || "(clear)") + "</option>";
+      return '<option value="' + escapeHtml8(o) + '"' + (o === selected ? " selected" : "") + ">" + escapeHtml8(o || "(clear)") + "</option>";
     }).join("");
   }
   function setMsg5(root4, text) {
@@ -19420,7 +20911,7 @@
   }
   function chatTokenChips2() {
     return SEIDR_ACTION_CHAT_TOKENS.map(function(t) {
-      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml7(t.token) + '" title="' + escapeHtml7(t.hint) + '">' + escapeHtml7(t.token) + "</button>";
+      return '<button type="button" class="seidr-act-ph" data-anim-chat-token="' + escapeHtml8(t.token) + '" title="' + escapeHtml8(t.hint) + '">' + escapeHtml8(t.token) + "</button>";
     }).join("");
   }
   function insertChatToken2(ta, token) {
@@ -19460,7 +20951,7 @@
       return;
     }
     const optsHtml = list.map(function(a) {
-      return '<option value="' + a.id + '"' + (editId3 === a.id ? " selected" : "") + ">" + escapeHtml7(a.name) + " (" + a.steps.length + ")</option>";
+      return '<option value="' + a.id + '"' + (editId3 === a.id ? " selected" : "") + ">" + escapeHtml8(a.name) + " (" + a.steps.length + ")</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -19476,7 +20967,7 @@
   function waitStepperHtml(wait2) {
     return [
       '<div class="seidr-num-wrap">',
-      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml7(String(wait2)) + '" />',
+      '<input type="number" class="seidr-settings-num" min="0" max="' + SEIDR_ANIM_WAIT_TOTAL_MAX + '" step="0.1" data-anim-wait value="' + escapeHtml8(String(wait2)) + '" />',
       '<div class="seidr-num-spin" aria-hidden="true">',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="1" tabindex="-1" title="Increase">\u25B2</button>',
       '<button type="button" class="seidr-num-spin-btn" data-anim-wait-dir="-1" tabindex="-1" title="Decrease">\u25BC</button>',
@@ -19501,7 +20992,7 @@
       const poseName = seidrPoseLabel(step.pose);
       return [
         '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-        "<summary>Pose \xB7 " + escapeHtml7(poseName) + "</summary>",
+        "<summary>Pose \xB7 " + escapeHtml8(poseName) + "</summary>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Pose</span>',
         "<select data-anim-pose>" + opts3(SEIDR_ACTION_POSES, step.pose) + "</select>",
@@ -19519,7 +21010,7 @@
     if (step.kind === "wiggle") {
       return [
         '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-        "<summary>Wiggle \xB7 " + escapeHtml7(seidrWiggleSlotsLabel(step.slots)) + "</summary>",
+        "<summary>Wiggle \xB7 " + escapeHtml8(seidrWiggleSlotsLabel(step.slots)) + "</summary>",
         '<p class="seidr-settings-hint" style="margin-top:8px;">Plays configured Wiggle sets for checked slots in parallel. Missing / not worn \u2192 skipped.</p>',
         '<div class="seidr-settings-row" style="margin-top:8px;gap:12px;display:flex;flex-wrap:wrap;">',
         slotChecksHtml("anim", step.slots),
@@ -19538,7 +21029,7 @@
     const exprs = [""].concat(SEIDR_ANIM_FACE_MAP[feature] || []);
     return [
       '<details class="seidr-settings-sec" data-anim-step="' + index + '" open>',
-      "<summary>Face \xB7 " + escapeHtml7(faceSummaryLabel(step)) + "</summary>",
+      "<summary>Face \xB7 " + escapeHtml8(faceSummaryLabel(step)) + "</summary>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Feature</span>',
       "<select data-anim-feature>" + stringOpts2(Object.keys(SEIDR_ANIM_FACE_MAP), feature) + "</select>",
@@ -19615,7 +21106,7 @@
     wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml7(draft3.name) + '" />',
+      '<input type="text" id="seidr-anim-name" maxlength="40" value="' + escapeHtml8(draft3.name) + '" />',
       "</div>",
       '<p class="seidr-settings-hint" style="margin-top:8px;">Steps ' + draft3.steps.length + "/" + SEIDR_ANIM_STEPS_MAX + " \xB7 Wait total " + total.toFixed(2) + "s / " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s</p>",
       '<div id="seidr-anim-steps">' + draft3.steps.map(stepCardHtml2).join("") + "</div>",
@@ -19627,7 +21118,7 @@
       '<p class="seidr-settings-hint" style="margin-top:10px;">Action text (optional, posted when play starts; Club tags, max ' + SEIDR_ACTION_CHAT_MAX + ")</p>",
       '<div class="seidr-act-ph-row" id="seidr-anim-ph">' + chatTokenChips2() + "</div>",
       '<p class="seidr-settings-hint">Club style: SourceCharacter raises PronounPossessive hands.</p>',
-      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml7(chatText) + "</textarea>",
+      '<textarea id="seidr-anim-chat" rows="2" maxlength="' + SEIDR_ACTION_CHAT_MAX + '">' + escapeHtml8(chatText) + "</textarea>",
       '<p class="seidr-settings-hint" id="seidr-anim-chat-count">' + chatText.length + "/" + SEIDR_ACTION_CHAT_MAX + "</p>",
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-anim-save">Save</button>',
@@ -19812,7 +21303,7 @@
     const optsHtml = list.map(function(a) {
       const slot = a.slot ? slotLabel(a.slot) : "?";
       const asset = a.primary ? seidrWiggleAssetLabel(a.primary.assetName) : "";
-      return '<option value="' + a.id + '"' + (wiggleEditId === a.id ? " selected" : "") + ">" + escapeHtml7(a.name) + " \xB7 " + escapeHtml7(slot) + (asset ? " (" + escapeHtml7(asset) + ")" : "") + "</option>";
+      return '<option value="' + a.id + '"' + (wiggleEditId === a.id ? " selected" : "") + ">" + escapeHtml8(a.name) + " \xB7 " + escapeHtml8(slot) + (asset ? " (" + escapeHtml8(asset) + ")" : "") + "</option>";
     }).join("");
     box.innerHTML = [
       '<div class="seidr-settings-field-row">',
@@ -19835,18 +21326,18 @@
         bits.push("custom property");
       }
       opts4.push(
-        '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(bits.join(" \xB7 ")) + "</option>"
+        '<option value="' + escapeHtml8(selected) + '" selected>' + escapeHtml8(bits.join(" \xB7 ")) + "</option>"
       );
     }
     if (!cands.length && !opts4.length) {
-      return '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(selected || "(none found)") + "</option>";
+      return '<option value="' + escapeHtml8(selected) + '" selected>' + escapeHtml8(selected || "(none found)") + "</option>";
     }
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
       const label = (c.automatch ? "\u2605 " : "") + (c.description || seidrWiggleAssetLabel(c.name));
       const isSel = !sameAssetAlt && c.name === selected;
       opts4.push(
-        '<option value="' + escapeHtml7(c.name) + '"' + (isSel ? " selected" : "") + ">" + escapeHtml7(label) + "</option>"
+        '<option value="' + escapeHtml8(c.name) + '"' + (isSel ? " selected" : "") + ">" + escapeHtml8(label) + "</option>"
       );
     }
     return opts4.join("");
@@ -19867,7 +21358,7 @@
       return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left \u2194 Top Right), Property (rotation), or a different saved color.</p>';
     }
     if (seidrWiggleAssetLoadable(group, sec)) return "";
-    return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' + escapeHtml7(seidrWiggleAssetLabel(sec)) + "</b> not loaded \u2014 install Echo (or the mod that adds it), then re-open.</p>";
+    return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' + escapeHtml8(seidrWiggleAssetLabel(sec)) + "</b> not loaded \u2014 install Echo (or the mod that adds it), then re-open.</p>";
   }
   function colorModeWarningHtml(d) {
     if (!d.primary || !d.secondary) return "";
@@ -19889,11 +21380,11 @@
     wrap2.innerHTML = [
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Name</span>',
-      '<input type="text" id="seidr-wiggle-name" maxlength="40" value="' + escapeHtml7(d.name) + '" />',
+      '<input type="text" id="seidr-wiggle-name" maxlength="40" value="' + escapeHtml8(d.name) + '" />',
       "</div>",
-      '<p class="seidr-settings-hint" style="margin-top:8px;">Slot: <b>' + escapeHtml7(slotLabel(slot)) + "</b> \xB7 Group: <code>" + escapeHtml7(d.group || "") + "</code></p>",
-      '<p class="seidr-settings-hint">First: <b>' + escapeHtml7(d.primary ? seidrWiggleAssetLabel(d.primary.assetName) : "") + "</b>" + (framePoseHint(d.primary) ? " \xB7 <code>" + escapeHtml7(framePoseHint(d.primary)) + "</code>" : "") + "</p>",
-      '<p class="seidr-settings-hint">Second: <b>' + escapeHtml7(d.secondary ? seidrWiggleAssetLabel(d.secondary.assetName) : "") + "</b>" + (framePoseHint(d.secondary) ? " \xB7 <code>" + escapeHtml7(framePoseHint(d.secondary)) + "</code>" : "") + "</p>",
+      '<p class="seidr-settings-hint" style="margin-top:8px;">Slot: <b>' + escapeHtml8(slotLabel(slot)) + "</b> \xB7 Group: <code>" + escapeHtml8(d.group || "") + "</code></p>",
+      '<p class="seidr-settings-hint">First: <b>' + escapeHtml8(d.primary ? seidrWiggleAssetLabel(d.primary.assetName) : "") + "</b>" + (framePoseHint(d.primary) ? " \xB7 <code>" + escapeHtml8(framePoseHint(d.primary)) + "</code>" : "") + "</p>",
+      '<p class="seidr-settings-hint">Second: <b>' + escapeHtml8(d.secondary ? seidrWiggleAssetLabel(d.secondary.assetName) : "") + "</b>" + (framePoseHint(d.secondary) ? " \xB7 <code>" + escapeHtml8(framePoseHint(d.secondary)) + "</code>" : "") + "</p>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Secondary</span>',
       '<select id="seidr-wiggle-secondary">' + secondaryOptionsHtml(d) + "</select>",
@@ -19904,7 +21395,7 @@
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-capture-second">Capture second</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch</button>',
       "</div>",
-      '<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (pose and dye). Same item with another size/rotation/typed option, a different asset, or a different color is fine. Automatch: typed Top Left\u2194Top Right when available, else Echo mirror. <b>' + escapeHtml7(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Different colors per frame need <b>Snapshot</b>; Autoupdate dyes both from the worn item.</p>",
+      '<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (pose and dye). Same item with another size/rotation/typed option, a different asset, or a different color is fine. Automatch: typed Top Left\u2194Top Right when available, else Echo mirror. <b>' + escapeHtml8(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Different colors per frame need <b>Snapshot</b>; Autoupdate dyes both from the worn item.</p>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Colors</span>',
       '<select id="seidr-wiggle-colors">',
@@ -19924,8 +21415,8 @@
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-save">Save</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-test">Test</button>',
-      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail1">' + escapeHtml7(slotLabel(slot)) + " 1</button>",
-      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail2">' + escapeHtml7(slotLabel(slot)) + " 2</button>",
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail1">' + escapeHtml8(slotLabel(slot)) + " 1</button>",
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail2">' + escapeHtml8(slotLabel(slot)) + " 2</button>",
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-wiggle-del">Delete</button>',
       "</div>",
       '<p class="seidr-cmd-msg" id="seidr-wiggle-msg"></p>'
@@ -20223,7 +21714,27 @@
     draft3 = null;
     wiggleEditId = null;
     wiggleDraft = null;
+    importCandidates3 = null;
     container.innerHTML = [
+      '<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-export">Export</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-import">Import</button>',
+      "</div>",
+      '<p class="seidr-settings-hint" id="seidr-anim-io-msg"></p>',
+      '<div id="seidr-anim-export-panel" hidden>',
+      '<textarea id="seidr-anim-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-export-copy" title="Copy export string">Copy</button>',
+      "</div>",
+      "</div>",
+      '<div id="seidr-anim-import-panel" class="seidr-act-import-panel" hidden>',
+      '<p class="seidr-settings-hint">Paste a SeidrAni1: export string, then Parse.</p>',
+      '<textarea id="seidr-anim-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrAni1:\u2026"></textarea>',
+      '<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+      '<button type="button" class="seidr-act-btn" id="seidr-anim-import-parse">Parse</button>',
+      "</div>",
+      '<div id="seidr-anim-import-pick" hidden></div>',
+      "</div>",
       '<details class="seidr-settings-sec" open>',
       "<summary>Animations</summary>",
       '<p class="seidr-settings-hint">Pose and face clips for yourself. Cap ' + SEIDR_ANIMATIONS_MAX + " clips (wiggles have their own cap), " + SEIDR_ANIM_STEPS_MAX + " steps, " + SEIDR_ANIM_WAIT_TOTAL_MAX + "s total wait. Play with /animation or /ani.</p>",
@@ -20264,6 +21775,7 @@
     container.querySelector("#seidr-wiggle-add-wing")?.addEventListener("click", function() {
       startAddWiggle(container, "wing");
     });
+    bindAnimIoPanel(container);
     ensureFirstOpen2(container);
     ensureFirstWiggle(container);
   }
@@ -20276,9 +21788,9 @@
   // src/roomManager/mapsUi.ts
   var editMapId = null;
   var editVersionId = null;
-  var importCandidates2 = null;
+  var importCandidates4 = null;
   var importFileName = "";
-  function escapeHtml8(s) {
+  function escapeHtml9(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function setMsg6(root4, text) {
@@ -20329,7 +21841,7 @@
     const pickOpts = maps.length ? maps.map(function(m) {
       const loc = m.location === "local" ? "Local" : "Remote";
       const n = m.versions.length;
-      return '<option value="' + escapeHtml8(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml8(m.name) + " (" + loc + ", " + n + "v)</option>";
+      return '<option value="' + escapeHtml9(m.id) + '"' + (m.id === editMapId ? " selected" : "") + ">" + escapeHtml9(m.name) + " (" + loc + ", " + n + "v)</option>";
     }).join("") : '<option value="">No maps yet</option>';
     let editorHtml = "";
     if (!map) {
@@ -20353,7 +21865,7 @@
       const verOpts = vers.map(function(v) {
         const when = v.savedAt ? new Date(v.savedAt).toLocaleString() : "";
         const tag = rmIsDefaultVersionName(v.name) ? " \xB7 remote-capable" : " \xB7 local only";
-        return '<option value="' + escapeHtml8(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml8(v.name) + tag + (when ? " \xB7 " + escapeHtml8(when) : "") + "</option>";
+        return '<option value="' + escapeHtml9(v.id) + '"' + (v.id === editVersionId ? " selected" : "") + ">" + escapeHtml9(v.name) + tag + (when ? " \xB7 " + escapeHtml9(when) : "") + "</option>";
       }).join("");
       const curVer = vers.find(function(v) {
         return v.id === editVersionId;
@@ -20367,7 +21879,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Name</span>',
-        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml8(map.name) + '" />',
+        '<input type="text" id="seidr-maps-name" maxlength="48" value="' + escapeHtml9(map.name) + '" />',
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Location</span>',
@@ -20383,7 +21895,7 @@
         "</div>",
         '<div class="seidr-settings-field-row" style="margin-top:8px;">',
         '<span class="seidr-settings-field-label">Ver. name</span>',
-        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml8(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
+        '<input type="text" id="seidr-maps-ver-name" maxlength="48" value="' + escapeHtml9(curVer ? curVer.name : "") + '"' + (curIsDefault ? ' disabled title="Default cannot be renamed"' : "") + " />",
         "</div>",
         '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
         '<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
@@ -20432,15 +21944,15 @@
   function renderImportPicker2(root4) {
     const host = root4.querySelector("#seidr-maps-import-pick");
     if (!host) return;
-    if (!importCandidates2 || !importCandidates2.length) {
+    if (!importCandidates4 || !importCandidates4.length) {
       host.innerHTML = "";
       host.hidden = true;
       return;
     }
     host.hidden = false;
-    const rows = importCandidates2.map(function(m, idx) {
+    const rows = importCandidates4.map(function(m, idx) {
       const n = m.versions.length;
-      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml8(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
+      return '<label class="seidr-act-import-row"><input type="checkbox" data-import-idx="' + idx + '" checked /> ' + escapeHtml9(m.name) + " (" + n + " version" + (n === 1 ? "" : "s") + ")</label>";
     }).join("");
     host.innerHTML = [
       '<p class="seidr-settings-hint">Select maps to import (always Local only).</p>',
@@ -20451,20 +21963,20 @@
       "</div>"
     ].join("");
     host.querySelector("#seidr-maps-import-cancel")?.addEventListener("click", function() {
-      importCandidates2 = null;
+      importCandidates4 = null;
       const paste = root4.querySelector("#seidr-maps-import-paste");
       if (paste) paste.value = "";
       renderImportPicker2(root4);
       setMsg6(root4, "");
     });
     host.querySelector("#seidr-maps-import-do")?.addEventListener("click", function() {
-      if (!importCandidates2) return;
+      if (!importCandidates4) return;
       const selected = [];
       host.querySelectorAll("[data-import-idx]").forEach(function(el) {
         const cb = el;
         if (!cb.checked) return;
         const idx = parseInt(cb.getAttribute("data-import-idx") || "", 10);
-        if (Number.isFinite(idx) && importCandidates2[idx]) selected.push(importCandidates2[idx]);
+        if (Number.isFinite(idx) && importCandidates4[idx]) selected.push(importCandidates4[idx]);
       });
       if (!selected.length) {
         setMsg6(root4, "Select at least one map");
@@ -20475,7 +21987,7 @@
         setMsg6(root4, result.error || "Import failed");
         return;
       }
-      importCandidates2 = null;
+      importCandidates4 = null;
       const paste = root4.querySelector("#seidr-maps-import-paste");
       if (paste) paste.value = "";
       renderImportPicker2(root4);
@@ -20711,12 +22223,12 @@
       const paste = root4.querySelector("#seidr-maps-import-paste");
       const parsed = rmParseMapsImport(paste ? paste.value : "");
       if (parsed.ok === false) {
-        importCandidates2 = null;
+        importCandidates4 = null;
         renderImportPicker2(root4);
         setMsg6(root4, parsed.error);
         return;
       }
-      importCandidates2 = parsed.maps;
+      importCandidates4 = parsed.maps;
       renderImportPicker2(root4);
       setMsg6(root4, "Select maps to import");
     });
@@ -20741,12 +22253,12 @@
           if (paste) paste.value = text;
           const parsed = rmParseMapsImport(text);
           if (parsed.ok === false) {
-            importCandidates2 = null;
+            importCandidates4 = null;
             renderImportPicker2(root4);
             setMsg6(root4, parsed.error);
             return;
           }
-          importCandidates2 = parsed.maps;
+          importCandidates4 = parsed.maps;
           renderImportPicker2(root4);
           setMsg6(root4, "Select maps to import");
         };
@@ -20772,7 +22284,7 @@
   function seidrBuildMapsTab(container) {
     editMapId = null;
     editVersionId = null;
-    importCandidates2 = null;
+    importCandidates4 = null;
     importFileName = "";
     const mapActive = inMapRoom();
     container.innerHTML = [
@@ -20862,7 +22374,7 @@
       docPath: "/docs/view.html#SETTINGS"
     }
   ];
-  function escapeHtml9(s) {
+  function escapeHtml10(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function docsBase() {
@@ -20878,10 +22390,10 @@
     return [
       '<div class="seidr-settings-sec seidr-about-feature">',
       '<div class="seidr-about-feature-head">',
-      '<span class="seidr-about-feature-title">' + escapeHtml9(f.title) + "</span>",
-      '<a class="seidr-act-btn" href="' + escapeHtml9(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
+      '<span class="seidr-about-feature-title">' + escapeHtml10(f.title) + "</span>",
+      '<a class="seidr-act-btn" href="' + escapeHtml10(href) + '" target="_blank" rel="noopener noreferrer">More</a>',
       "</div>",
-      '<p class="seidr-settings-hint">' + escapeHtml9(f.blurb) + "</p>",
+      '<p class="seidr-settings-hint">' + escapeHtml10(f.blurb) + "</p>",
       "</div>"
     ].join("");
   }
@@ -20893,12 +22405,12 @@
     const repo = typeof Seidr.REPO_URL === "string" && Seidr.REPO_URL ? Seidr.REPO_URL : "https://github.com/Freya-BC/Freyas-Seidr";
     container.innerHTML = [
       '<div class="seidr-settings-sec seidr-about-header">',
-      logo ? '<img class="seidr-about-logo" src="' + escapeHtml9(logo) + '" alt="" width="56" height="56" />' : "",
+      logo ? '<img class="seidr-about-logo" src="' + escapeHtml10(logo) + '" alt="" width="56" height="56" />' : "",
       '<div class="seidr-about-header-text">',
-      '<p class="seidr-about-name">' + escapeHtml9(name) + "</p>",
+      '<p class="seidr-about-name">' + escapeHtml10(name) + "</p>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Version</span>',
-      "<span>" + escapeHtml9(version) + "</span>",
+      "<span>" + escapeHtml10(version) + "</span>",
       "</div>",
       '<div class="seidr-settings-field-row">',
       '<span class="seidr-settings-field-label">Developer</span>',
@@ -20906,8 +22418,8 @@
       "</div>",
       '<div class="seidr-about-links">',
       '<button type="button" class="seidr-act-btn" id="seidr-about-tutorial">Tutorial</button>',
-      '<a class="seidr-act-btn" href="' + escapeHtml9(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
-      '<a class="seidr-act-btn" href="' + escapeHtml9(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml10(home) + '" target="_blank" rel="noopener noreferrer">Documentation</a>',
+      '<a class="seidr-act-btn" href="' + escapeHtml10(repo) + '" target="_blank" rel="noopener noreferrer">GitHub</a>',
       "</div>",
       "</div>",
       "</div>",
@@ -22216,7 +23728,7 @@
     }
     tourPrefill = null;
   }
-  function escapeHtml10(s) {
+  function escapeHtml11(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function ensureTourDom() {
@@ -22561,7 +24073,7 @@
     if (title) title.textContent = step.title;
     if (body) {
       body.innerHTML = (step.blocks || []).map(function(b) {
-        return '<p class="seidr-tour-card-block">' + escapeHtml10(b) + "</p>";
+        return '<p class="seidr-tour-card-block">' + escapeHtml11(b) + "</p>";
       }).join("");
     }
     if (stepEl) stepEl.textContent = tourIndex + 1 + " / " + tourSteps.length;
@@ -22776,6 +24288,7 @@
     deleteAnimation: seidrDeleteAnimation,
     findAnimationByName: seidrFindAnimationByName,
     upsertReaction: seidrUpsertReaction,
+    deleteReaction: seidrDeleteReaction,
     poseIds: function() {
       return SEIDR_ACTION_POSES.map(function(p) {
         return p.id;
@@ -22785,7 +24298,29 @@
     rmSaveStore,
     rmInvalidateStore,
     rmFlushStore,
-    rmResetStorageCaches
+    rmResetStorageCaches,
+    importFingerprint: seidrImportFingerprint,
+    classifyImportRows: seidrClassifyImportRows,
+    uniqueImportName: seidrUniqueImportName,
+    exportActions: seidrExportActionsString,
+    parseActionsImport: seidrParseActionsImport,
+    importSelectedActions: seidrImportSelectedActions,
+    listActions: seidrListActions,
+    exportAnimations: seidrExportAnimationsString,
+    parseAnimationsImport: seidrParseAnimationsImport,
+    classifyAnimationsImport: seidrClassifyAnimationsImport,
+    importSelectedAnimations: seidrImportSelectedAnimations,
+    listAnimations: seidrListAnimations,
+    exportReactions: seidrExportReactionsString,
+    parseReactionsImport: seidrParseReactionsImport,
+    importSelectedReactions: seidrImportSelectedReactions,
+    listReactions: seidrListReactions,
+    exportCommands: seidrExportCommandsString,
+    parseCommandsImport: seidrParseCommandsImport,
+    importSelectedCmdPeople: seidrImportSelectedCmdPeople,
+    importSelectedCmdActions: seidrImportSelectedCmdActions,
+    listCmdPeople: seidrListCmdPeople,
+    listCmdActions: seidrListCmdActions
   });
 
   // src/netStats.ts

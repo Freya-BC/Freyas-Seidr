@@ -28,15 +28,28 @@ import {
 	type SeidrReactionActivityTrigger,
 	type SeidrReactionStep,
 } from "./model";
+import { seidrExportReactionsString, seidrParseReactionsImport } from "./io";
 import {
 	seidrAddReaction,
 	seidrDeleteReaction,
+	seidrImportSelectedReactions,
 	seidrListReactions,
 	seidrUpsertReaction,
+	type SeidrReactionImportRow,
 } from "./store";
+import {
+	seidrBindImportPickerToolbar,
+	seidrClassifyImportRows,
+	seidrCollectImportSelection,
+	seidrCopyExportText,
+	seidrImportPickerHtml,
+	type SeidrImportClassified,
+} from "../io/importCompare";
 
 let editId: number | null = null;
 let draft: SeidrReaction | null = null;
+let importCandidates: SeidrImportClassified<SeidrReaction>[] | null = null;
+let importParseNotes: string[] = [];
 
 function escapeHtml(s: string): string {
 	return String(s)
@@ -613,15 +626,189 @@ function ensureFirstOpen(root: HTMLElement) {
 	openReaction(root, editId);
 }
 
+function setIoMsg(root: HTMLElement, text: string) {
+	const el = root.querySelector("#seidr-rxn-io-msg");
+	if (el) el.textContent = text || "";
+}
+
+function renderRxnImportPicker(root: HTMLElement) {
+	const host = root.querySelector("#seidr-rxn-import-pick") as HTMLElement | null;
+	if (!host) return;
+	if (!importCandidates || !importCandidates.length) {
+		host.innerHTML = "";
+		host.hidden = true;
+		return;
+	}
+	host.hidden = false;
+	host.innerHTML = seidrImportPickerHtml({
+		idPrefix: "seidr-rxn",
+		hint: "New and Different are selected. Same is left unticked. Different rows can Overwrite or Add as new.",
+		sections: [{
+			sectionKey: "reactions",
+			indexOffset: 0,
+			rows: importCandidates as SeidrImportClassified<unknown>[],
+		}],
+	});
+	seidrBindImportPickerToolbar(host);
+
+	host.querySelector("#seidr-rxn-import-cancel")?.addEventListener("click", function () {
+		importCandidates = null;
+		importParseNotes = [];
+		const paste = root.querySelector("#seidr-rxn-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		renderRxnImportPicker(root);
+		setIoMsg(root, "");
+	});
+
+	host.querySelector("#seidr-rxn-import-do")?.addEventListener("click", function () {
+		if (!importCandidates) return;
+		const picks = seidrCollectImportSelection(host);
+		if (!picks.length) {
+			setIoMsg(root, "Select at least one reaction");
+			return;
+		}
+		const selected: SeidrReactionImportRow[] = [];
+		for (let i = 0; i < picks.length; i++) {
+			const row = importCandidates[picks[i].index];
+			if (!row || row.status === "same") continue;
+			const mode = row.status === "different" ? picks[i].mode : "add";
+			selected.push({
+				reaction: row.item,
+				mode: mode,
+				localId: mode === "overwrite" ? row.localId : null,
+			});
+		}
+		if (!selected.length) {
+			setIoMsg(root, "Nothing to import (Same items are skipped)");
+			return;
+		}
+		const result = seidrImportSelectedReactions(selected);
+		if (!result.ok) {
+			setIoMsg(root, result.error || "Import failed");
+			return;
+		}
+		importCandidates = null;
+		const notes = importParseNotes.slice();
+		importParseNotes = [];
+		const paste = root.querySelector("#seidr-rxn-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		const panel = root.querySelector("#seidr-rxn-import-panel") as HTMLElement | null;
+		if (panel) panel.hidden = true;
+		renderRxnImportPicker(root);
+		editId = null;
+		draft = null;
+		ensureFirstOpen(root);
+		const bits: string[] = [];
+		if (result.imported) bits.push("added " + result.imported);
+		if (result.overwritten) bits.push("overwrote " + result.overwritten);
+		if (result.skipped) bits.push("skipped " + result.skipped);
+		let msg = bits.length ? "Import: " + bits.join(", ") : "Import done";
+		if (notes.length) msg += " — " + notes[0] + (notes.length > 1 ? " (+" + (notes.length - 1) + " more)" : "");
+		setIoMsg(root, msg);
+	});
+}
+
+function bindRxnIoPanel(root: HTMLElement) {
+	const exportOut = root.querySelector("#seidr-rxn-export-out") as HTMLTextAreaElement | null;
+	const importPanel = root.querySelector("#seidr-rxn-import-panel") as HTMLElement | null;
+	const importPaste = root.querySelector("#seidr-rxn-import-paste") as HTMLTextAreaElement | null;
+
+	root.querySelector("#seidr-rxn-export")?.addEventListener("click", function () {
+		try {
+			const packed = seidrExportReactionsString();
+			const exportPanel = root.querySelector("#seidr-rxn-export-panel") as HTMLElement | null;
+			if (exportPanel) exportPanel.hidden = false;
+			if (exportOut) {
+				exportOut.value = packed;
+				exportOut.focus();
+				exportOut.select();
+			}
+			setIoMsg(root, "Export ready — copy the string below");
+		} catch (e) {
+			setIoMsg(root, e instanceof Error ? e.message : "Export failed");
+		}
+	});
+
+	root.querySelector("#seidr-rxn-export-copy")?.addEventListener("click", function () {
+		if (!exportOut || !exportOut.value) {
+			setIoMsg(root, "Export first");
+			return;
+		}
+		seidrCopyExportText(
+			exportOut,
+			function () { setIoMsg(root, "Copied to clipboard"); },
+			function () {
+				if (exportOut) {
+					exportOut.focus();
+					exportOut.select();
+				}
+				setIoMsg(root, "Select and copy manually (Ctrl/Cmd+C)");
+			},
+		);
+	});
+
+	root.querySelector("#seidr-rxn-import")?.addEventListener("click", function () {
+		if (!importPanel) return;
+		importPanel.hidden = !importPanel.hidden;
+		if (!importPanel.hidden && importPaste) importPaste.focus();
+		if (importPanel.hidden) {
+			importCandidates = null;
+			importParseNotes = [];
+			renderRxnImportPicker(root);
+		}
+		setIoMsg(root, "");
+	});
+
+	root.querySelector("#seidr-rxn-import-parse")?.addEventListener("click", function () {
+		const raw = importPaste ? importPaste.value : "";
+		const parsed = seidrParseReactionsImport(raw);
+		if (parsed.ok === false) {
+			importCandidates = null;
+			importParseNotes = [];
+			renderRxnImportPicker(root);
+			setIoMsg(root, parsed.error);
+			return;
+		}
+		importParseNotes = parsed.notes || [];
+		importCandidates = seidrClassifyImportRows(
+			parsed.reactions,
+			seidrListReactions(),
+			function (r) { return r.name; },
+			function (r) { return r.id; },
+		);
+		renderRxnImportPicker(root);
+		setIoMsg(root, "Parsed " + parsed.reactions.length + " reaction(s) — select which to import");
+	});
+}
+
 export function seidrBuildReactionsTab(container: HTMLElement) {
 	editId = null;
 	draft = null;
+	importCandidates = null;
+	importParseNotes = [];
 	container.innerHTML = [
 		'<p class="seidr-settings-hint">Auto-run a short local script when you perform an activity, someone acts on you, you say a phrase, or you climax. Cap ' +
 		SEIDR_REACTIONS_MAX + " reactions, " + SEIDR_REACTION_STEPS_MAX + " steps. Action steps use Commands bindings.</p>",
 		'<div class="seidr-settings-row" style="gap:8px;display:flex;align-items:center;flex-wrap:wrap;">',
 		'<button type="button" class="seidr-act-btn" id="seidr-rxn-add">Add reaction</button>',
+		'<button type="button" class="seidr-act-btn" id="seidr-rxn-export">Export</button>',
+		'<button type="button" class="seidr-act-btn" id="seidr-rxn-import">Import</button>',
 		'<span class="seidr-settings-hint" id="seidr-rxn-cap">0/' + SEIDR_REACTIONS_MAX + " Reactions</span>",
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-rxn-io-msg"></p>',
+		'<div id="seidr-rxn-export-panel" hidden>',
+		'<textarea id="seidr-rxn-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-rxn-export-copy" title="Copy export string">Copy</button>',
+		"</div>",
+		"</div>",
+		'<div id="seidr-rxn-import-panel" class="seidr-act-import-panel" hidden>',
+		'<p class="seidr-settings-hint">Paste a SeidrRxn1: export string, then Parse.</p>',
+		'<textarea id="seidr-rxn-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrRxn1:…"></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-rxn-import-parse">Parse</button>',
+		"</div>",
+		'<div id="seidr-rxn-import-pick" hidden></div>',
 		"</div>",
 		'<div id="seidr-rxn-list" style="margin-top:10px;"></div>',
 		'<div class="seidr-act-editor" id="seidr-rxn-editor" style="margin-top:10px;"></div>',
@@ -634,6 +821,7 @@ export function seidrBuildReactionsTab(container: HTMLElement) {
 		}
 		openReaction(container, r.id);
 	});
+	bindRxnIoPanel(container);
 	ensureFirstOpen(container);
 }
 

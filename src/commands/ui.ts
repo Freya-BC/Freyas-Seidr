@@ -7,22 +7,37 @@ import {
 	type SeidrCmdPerson,
 } from "./model";
 import { seidrCmdListActivitiesForSlot, seidrCmdListSlots } from "./catalog";
+import { seidrExportCommandsString, seidrParseCommandsImport } from "./io";
 import {
 	seidrAddCmdAction,
 	seidrAddCmdPerson,
 	seidrDeleteCmdAction,
 	seidrDeleteCmdPerson,
+	seidrImportSelectedCmdActions,
+	seidrImportSelectedCmdPeople,
 	seidrListCmdActions,
 	seidrListCmdPeople,
 	seidrUpsertCmdAction,
 	seidrUpsertCmdPerson,
+	type SeidrCmdActionImportRow,
+	type SeidrCmdPersonImportRow,
 } from "./store";
 import { seidrCmdCss } from "./styles";
+import {
+	seidrBindImportPickerToolbar,
+	seidrClassifyImportRows,
+	seidrCollectImportSelection,
+	seidrCopyExportText,
+	seidrImportPickerHtml,
+	type SeidrImportClassified,
+} from "../io/importCompare";
 
 let editPersonId: number | null = null;
 let editActionId: number | null = null;
 let draftPerson: SeidrCmdPerson | null = null;
 let draftAction: SeidrCmdAction | null = null;
+let importPeople: SeidrImportClassified<SeidrCmdPerson>[] | null = null;
+let importActions: SeidrImportClassified<SeidrCmdAction>[] | null = null;
 
 function escapeHtml(s: string): string {
 	return String(s)
@@ -381,14 +396,246 @@ function bindActionsEditorOnly(root: HTMLElement) {
 	});
 }
 
+function setIoMsg(root: HTMLElement, text: string) {
+	const el = root.querySelector("#seidr-cmd-io-msg");
+	if (el) el.textContent = text || "";
+}
+
+function renderCmdImportPicker(root: HTMLElement) {
+	const host = root.querySelector("#seidr-cmd-import-pick") as HTMLElement | null;
+	if (!host) return;
+	const people = importPeople || [];
+	const actions = importActions || [];
+	if (!people.length && !actions.length) {
+		host.innerHTML = "";
+		host.hidden = true;
+		return;
+	}
+	host.hidden = false;
+	const sections = [];
+	if (people.length) {
+		sections.push({
+			title: "People",
+			sectionKey: "people",
+			indexOffset: 0,
+			rows: people as SeidrImportClassified<unknown>[],
+		});
+	}
+	if (actions.length) {
+		sections.push({
+			title: "Actions",
+			sectionKey: "actions",
+			indexOffset: people.length,
+			rows: actions as SeidrImportClassified<unknown>[],
+		});
+	}
+	host.innerHTML = seidrImportPickerHtml({
+		idPrefix: "seidr-cmd",
+		hint: "People and Actions are selected separately. New/Different checked; Same unticked. Different rows can Overwrite or Add as new.",
+		sections: sections,
+	});
+	seidrBindImportPickerToolbar(host);
+
+	host.querySelector("#seidr-cmd-import-cancel")?.addEventListener("click", function () {
+		importPeople = null;
+		importActions = null;
+		const paste = root.querySelector("#seidr-cmd-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		renderCmdImportPicker(root);
+		setIoMsg(root, "");
+	});
+
+	host.querySelector("#seidr-cmd-import-do")?.addEventListener("click", function () {
+		const picks = seidrCollectImportSelection(host);
+		if (!picks.length) {
+			setIoMsg(root, "Select at least one item");
+			return;
+		}
+		const peopleRows: SeidrCmdPersonImportRow[] = [];
+		const actionRows: SeidrCmdActionImportRow[] = [];
+		const peopleLen = people.length;
+		for (let i = 0; i < picks.length; i++) {
+			const idx = picks[i].index;
+			if (idx < peopleLen) {
+				const row = people[idx];
+				if (!row || row.status === "same") continue;
+				const mode = row.status === "different" ? picks[i].mode : "add";
+				peopleRows.push({
+					person: row.item,
+					mode: mode,
+					localId: mode === "overwrite" ? row.localId : null,
+				});
+			} else {
+				const row = actions[idx - peopleLen];
+				if (!row || row.status === "same") continue;
+				const mode = row.status === "different" ? picks[i].mode : "add";
+				actionRows.push({
+					action: row.item,
+					mode: mode,
+					localId: mode === "overwrite" ? row.localId : null,
+				});
+			}
+		}
+		if (!peopleRows.length && !actionRows.length) {
+			setIoMsg(root, "Nothing to import (Same items are skipped)");
+			return;
+		}
+		let imported = 0;
+		let overwritten = 0;
+		let skipped = 0;
+		if (peopleRows.length) {
+			const r = seidrImportSelectedCmdPeople(peopleRows);
+			if (!r.ok) {
+				setIoMsg(root, r.error || "People import failed");
+				return;
+			}
+			imported += r.imported;
+			overwritten += r.overwritten;
+			skipped += r.skipped;
+		}
+		if (actionRows.length) {
+			const r2 = seidrImportSelectedCmdActions(actionRows);
+			if (!r2.ok) {
+				setIoMsg(root, r2.error || "Actions import failed");
+				return;
+			}
+			imported += r2.imported;
+			overwritten += r2.overwritten;
+			skipped += r2.skipped;
+		}
+		importPeople = null;
+		importActions = null;
+		const paste = root.querySelector("#seidr-cmd-import-paste") as HTMLTextAreaElement | null;
+		if (paste) paste.value = "";
+		const panel = root.querySelector("#seidr-cmd-import-panel") as HTMLElement | null;
+		if (panel) panel.hidden = true;
+		renderCmdImportPicker(root);
+		editPersonId = null;
+		editActionId = null;
+		draftPerson = null;
+		draftAction = null;
+		refreshPeopleSection(root);
+		refreshActionsSection(root);
+		const bits: string[] = [];
+		if (imported) bits.push("added " + imported);
+		if (overwritten) bits.push("overwrote " + overwritten);
+		if (skipped) bits.push("skipped " + skipped);
+		setIoMsg(root, bits.length ? "Import: " + bits.join(", ") : "Import done");
+	});
+}
+
+function bindCmdIoPanel(root: HTMLElement) {
+	const exportOut = root.querySelector("#seidr-cmd-export-out") as HTMLTextAreaElement | null;
+	const importPanel = root.querySelector("#seidr-cmd-import-panel") as HTMLElement | null;
+	const importPaste = root.querySelector("#seidr-cmd-import-paste") as HTMLTextAreaElement | null;
+
+	root.querySelector("#seidr-cmd-export")?.addEventListener("click", function () {
+		try {
+			const packed = seidrExportCommandsString();
+			const exportPanel = root.querySelector("#seidr-cmd-export-panel") as HTMLElement | null;
+			if (exportPanel) exportPanel.hidden = false;
+			if (exportOut) {
+				exportOut.value = packed;
+				exportOut.focus();
+				exportOut.select();
+			}
+			setIoMsg(root, "Export ready — copy the string below");
+		} catch (e) {
+			setIoMsg(root, e instanceof Error ? e.message : "Export failed");
+		}
+	});
+
+	root.querySelector("#seidr-cmd-export-copy")?.addEventListener("click", function () {
+		if (!exportOut || !exportOut.value) {
+			setIoMsg(root, "Export first");
+			return;
+		}
+		seidrCopyExportText(
+			exportOut,
+			function () { setIoMsg(root, "Copied to clipboard"); },
+			function () {
+				if (exportOut) {
+					exportOut.focus();
+					exportOut.select();
+				}
+				setIoMsg(root, "Select and copy manually (Ctrl/Cmd+C)");
+			},
+		);
+	});
+
+	root.querySelector("#seidr-cmd-import")?.addEventListener("click", function () {
+		if (!importPanel) return;
+		importPanel.hidden = !importPanel.hidden;
+		if (!importPanel.hidden && importPaste) importPaste.focus();
+		if (importPanel.hidden) {
+			importPeople = null;
+			importActions = null;
+			renderCmdImportPicker(root);
+		}
+		setIoMsg(root, "");
+	});
+
+	root.querySelector("#seidr-cmd-import-parse")?.addEventListener("click", function () {
+		const raw = importPaste ? importPaste.value : "";
+		const parsed = seidrParseCommandsImport(raw);
+		if (parsed.ok === false) {
+			importPeople = null;
+			importActions = null;
+			renderCmdImportPicker(root);
+			setIoMsg(root, parsed.error);
+			return;
+		}
+		importPeople = seidrClassifyImportRows(
+			parsed.people,
+			seidrListCmdPeople(),
+			function (p) { return p.alias; },
+			function (p) { return p.id; },
+			function (p) { return p.alias + " (" + p.memberNumber + ")"; },
+		);
+		importActions = seidrClassifyImportRows(
+			parsed.actions,
+			seidrListCmdActions(),
+			function (a) { return a.name; },
+			function (a) { return a.id; },
+		);
+		renderCmdImportPicker(root);
+		setIoMsg(
+			root,
+			"Parsed " + parsed.people.length + " people, " + parsed.actions.length +
+				" action(s) — select which to import",
+		);
+	});
+}
+
 export function seidrBuildCommandsTab(container: HTMLElement) {
 	ensureCmdSettingsStyles();
 	editPersonId = null;
 	editActionId = null;
 	draftPerson = null;
 	draftAction = null;
+	importPeople = null;
+	importActions = null;
 	container.innerHTML = [
-		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-people">',
+		'<div class="seidr-settings-row" style="gap:6px; flex-wrap:wrap; align-items:center;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-cmd-export">Export</button>',
+		'<button type="button" class="seidr-act-btn" id="seidr-cmd-import">Import</button>',
+		"</div>",
+		'<p class="seidr-settings-hint" id="seidr-cmd-io-msg"></p>',
+		'<div id="seidr-cmd-export-panel" hidden>',
+		'<textarea id="seidr-cmd-export-out" class="seidr-act-io-text" rows="3" readonly></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:4px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-cmd-export-copy" title="Copy export string">Copy</button>',
+		"</div>",
+		"</div>",
+		'<div id="seidr-cmd-import-panel" class="seidr-act-import-panel" hidden>',
+		'<p class="seidr-settings-hint">Paste a SeidrCmd1: export string, then Parse.</p>',
+		'<textarea id="seidr-cmd-import-paste" class="seidr-act-io-text" rows="3" placeholder="SeidrCmd1:…"></textarea>',
+		'<div class="seidr-settings-row" style="gap:6px; margin-top:6px;">',
+		'<button type="button" class="seidr-act-btn" id="seidr-cmd-import-parse">Parse</button>',
+		"</div>",
+		'<div id="seidr-cmd-import-pick" hidden></div>',
+		"</div>",
+		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-section="cmd-people">',
 		"<summary>People</summary>",
 		'<p class="seidr-settings-hint">Alias → Member ID for /a targets and name collisions. Max ' +
 			SEIDR_CMD_PEOPLE_MAX + ".</p>",
@@ -402,7 +649,7 @@ export function seidrBuildCommandsTab(container: HTMLElement) {
 		"</div>",
 		'<div class="seidr-act-editor" id="seidr-cmd-person-editor"></div>',
 		"</details>",
-		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-tour="cmd-actions">',
+		'<details class="seidr-settings-sec seidr-cmd-sec" open data-seidr-section="cmd-actions">',
 		"<summary>Actions</summary>",
 		'<p class="seidr-settings-hint">Call name → slot + Club/Seidr/mod activity. Usage: /a &lt;member&gt; &lt;name&gt;. Max ' +
 			SEIDR_CMD_ACTIONS_MAX + ".</p>",
@@ -441,6 +688,7 @@ export function seidrBuildCommandsTab(container: HTMLElement) {
 		setMsg(container, "Action added — set call name, slot, and activity, then Save");
 		refreshActionsSection(container);
 	});
+	bindCmdIoPanel(container);
 	refreshPeopleSection(container);
 	refreshActionsSection(container);
 }

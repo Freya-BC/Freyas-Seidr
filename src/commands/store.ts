@@ -1,7 +1,11 @@
 /** Persist Commands bag inside Seidr settings */
 import { seidrGetSettings, seidrSaveSettings } from "../settings/storage";
+import type { SeidrImportMode } from "../io/importCompare";
+import { seidrUniqueImportName } from "../io/importCompare";
 import {
 	SEIDR_CMD_ACTIONS_MAX,
+	SEIDR_CMD_ALIAS_MAX,
+	SEIDR_CMD_NAME_MAX,
 	SEIDR_CMD_PEOPLE_MAX,
 	seidrDefaultCmdAction,
 	seidrDefaultCmdPerson,
@@ -186,4 +190,201 @@ export function seidrFindCmdPersonByMember(mn: number): SeidrCmdPerson | null {
 		if (list[i].memberNumber === mn) return list[i];
 	}
 	return null;
+}
+
+export type SeidrCmdPersonImportRow = {
+	person: SeidrCmdPerson;
+	mode: SeidrImportMode;
+	localId?: number | null;
+};
+
+export type SeidrCmdActionImportRow = {
+	action: SeidrCmdAction;
+	mode: SeidrImportMode;
+	localId?: number | null;
+};
+
+/** Import command people with per-row add / overwrite. Member collisions on add → skip. */
+export function seidrImportSelectedCmdPeople(
+	rows: SeidrCmdPersonImportRow[],
+): { ok: boolean; imported: number; skipped: number; overwritten: number; error?: string } {
+	const bag = seidrGetCommandsBag();
+	let imported = 0;
+	let skipped = 0;
+	let overwritten = 0;
+	const list = Array.isArray(rows) ? rows : [];
+
+	const takenAlias = new Set<string>();
+	const takenMember = new Set<number>();
+	for (let i = 0; i < bag.people.length; i++) {
+		takenAlias.add(bag.people[i].alias.toLowerCase());
+		takenMember.add(bag.people[i].memberNumber);
+	}
+
+	for (let i = 0; i < list.length; i++) {
+		const row = list[i];
+		const mode = row.mode === "overwrite" ? "overwrite" : "add";
+		const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+
+		if (mode === "overwrite" && localId != null) {
+			const existing = bag.people.find(function (p) { return p.id === localId; });
+			if (!existing) {
+				skipped += 1;
+				continue;
+			}
+			const norm = seidrNormalizeCmdPerson(Object.assign({}, row.person, { id: localId }));
+			if (!norm || !norm.alias || norm.memberNumber <= 0) {
+				skipped += 1;
+				continue;
+			}
+			takenAlias.delete(existing.alias.toLowerCase());
+			takenMember.delete(existing.memberNumber);
+			const aliasClash = bag.people.some(function (p) {
+				return p.id !== localId && p.alias.toLowerCase() === norm.alias.toLowerCase();
+			});
+			if (aliasClash) {
+				norm.alias = seidrUniqueImportName(norm.alias, takenAlias, SEIDR_CMD_ALIAS_MAX);
+			}
+			const memberClash = bag.people.some(function (p) {
+				return p.id !== localId && p.memberNumber === norm.memberNumber;
+			});
+			if (memberClash) {
+				takenAlias.add(existing.alias.toLowerCase());
+				takenMember.add(existing.memberNumber);
+				skipped += 1;
+				continue;
+			}
+			takenAlias.add(norm.alias.toLowerCase());
+			takenMember.add(norm.memberNumber);
+			for (let j = 0; j < bag.people.length; j++) {
+				if (bag.people[j].id === localId) {
+					bag.people[j] = norm;
+					break;
+				}
+			}
+			overwritten += 1;
+			continue;
+		}
+
+		if (bag.people.length >= SEIDR_CMD_PEOPLE_MAX) {
+			skipped += list.length - i;
+			break;
+		}
+		const incoming = row.person || ({} as SeidrCmdPerson);
+		const rawAlias = String(incoming.alias || "").trim();
+		const mn = typeof incoming.memberNumber === "number" ? Math.floor(incoming.memberNumber) : 0;
+		if (!rawAlias || mn <= 0) {
+			skipped += 1;
+			continue;
+		}
+		if (takenMember.has(mn)) {
+			skipped += 1;
+			continue;
+		}
+		const alias = seidrUniqueImportName(rawAlias, takenAlias, SEIDR_CMD_ALIAS_MAX);
+		const id = bag.nextPersonId;
+		const norm = seidrNormalizeCmdPerson({ id: id, alias: alias, memberNumber: mn });
+		if (!norm) {
+			skipped += 1;
+			continue;
+		}
+		bag.people.push(norm);
+		bag.nextPersonId = id + 1;
+		takenAlias.add(norm.alias.toLowerCase());
+		takenMember.add(norm.memberNumber);
+		imported += 1;
+	}
+
+	const saved = seidrSaveCommandsBag(bag);
+	if (!saved.ok) {
+		return {
+			ok: false,
+			imported: 0,
+			skipped: list.length,
+			overwritten: 0,
+			error: saved.error || "Save failed",
+		};
+	}
+	return { ok: true, imported: imported, skipped: skipped, overwritten: overwritten };
+}
+
+/** Import command slash actions with per-row add / overwrite. */
+export function seidrImportSelectedCmdActions(
+	rows: SeidrCmdActionImportRow[],
+): { ok: boolean; imported: number; skipped: number; overwritten: number; error?: string } {
+	const bag = seidrGetCommandsBag();
+	let imported = 0;
+	let skipped = 0;
+	let overwritten = 0;
+	const list = Array.isArray(rows) ? rows : [];
+
+	const taken = new Set<string>();
+	for (let i = 0; i < bag.actions.length; i++) {
+		taken.add(bag.actions[i].name.toLowerCase());
+	}
+
+	for (let i = 0; i < list.length; i++) {
+		const row = list[i];
+		const mode = row.mode === "overwrite" ? "overwrite" : "add";
+		const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+
+		if (mode === "overwrite" && localId != null) {
+			const existing = bag.actions.find(function (a) { return a.id === localId; });
+			if (!existing) {
+				skipped += 1;
+				continue;
+			}
+			const norm = seidrNormalizeCmdAction(Object.assign({}, row.action, { id: localId }));
+			if (!norm || !norm.name || !norm.slot || !norm.activity) {
+				skipped += 1;
+				continue;
+			}
+			taken.delete(existing.name.toLowerCase());
+			const nameKey = norm.name.toLowerCase();
+			const clash = bag.actions.some(function (a) {
+				return a.id !== localId && a.name.toLowerCase() === nameKey;
+			});
+			if (clash) {
+				norm.name = seidrUniqueImportName(norm.name, taken, SEIDR_CMD_NAME_MAX);
+			}
+			taken.add(norm.name.toLowerCase());
+			for (let j = 0; j < bag.actions.length; j++) {
+				if (bag.actions[j].id === localId) {
+					bag.actions[j] = norm;
+					break;
+				}
+			}
+			overwritten += 1;
+			continue;
+		}
+
+		if (bag.actions.length >= SEIDR_CMD_ACTIONS_MAX) {
+			skipped += list.length - i;
+			break;
+		}
+		let name = String(row.action.name || "").trim() || "action";
+		name = seidrUniqueImportName(name, taken, SEIDR_CMD_NAME_MAX);
+		const id = bag.nextActionId;
+		const norm = seidrNormalizeCmdAction(Object.assign({}, row.action, { id: id, name: name }));
+		if (!norm || !norm.name || !norm.slot || !norm.activity) {
+			skipped += 1;
+			continue;
+		}
+		bag.actions.push(norm);
+		bag.nextActionId = id + 1;
+		taken.add(norm.name.toLowerCase());
+		imported += 1;
+	}
+
+	const saved = seidrSaveCommandsBag(bag);
+	if (!saved.ok) {
+		return {
+			ok: false,
+			imported: 0,
+			skipped: list.length,
+			overwritten: 0,
+			error: saved.error || "Save failed",
+		};
+	}
+	return { ok: true, imported: imported, skipped: skipped, overwritten: overwritten };
 }

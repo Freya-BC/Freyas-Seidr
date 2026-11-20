@@ -1,7 +1,7 @@
 /** Seidr — defaults */
 import { Seidr } from "./seidr";
 
-Seidr.VERSION = "2.0.70";
+Seidr.VERSION = "2.0.74";
 Seidr.FULL_NAME = "Seidr";
 Seidr.PREFIX = "Seidr_";
 Seidr.HIDDEN = "Seidr";
@@ -79,3 +79,9 @@ Seidr.RM_LZ_PREFIX = "SeidrRm1:";
 Seidr.RM_B64_PREFIX = "SeidrRm2:";
 /** Clipboard export/import for Actions (LZ Base64). */
 Seidr.ACT_LZ_PREFIX = "SeidrAct1:";
+/** Clipboard export/import for Animations + Wiggles (LZ Base64). */
+Seidr.ANI_LZ_PREFIX = "SeidrAni1:";
+/** Clipboard export/import for Reactions (LZ Base64). */
+Seidr.RXN_LZ_PREFIX = "SeidrRxn1:";
+/** Clipboard export/import for Commands people + actions (LZ Base64). */
+Seidr.CMD_LZ_PREFIX = "SeidrCmd1:";

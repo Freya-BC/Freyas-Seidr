@@ -1,6 +1,7 @@
 /** Persist Reactions bag inside Seidr settings */
 import {
 	SEIDR_REACTIONS_MAX,
+	SEIDR_REACTION_NAME_MAX,
 	SEIDR_REACTION_STEPS_MAX,
 	seidrDefaultReaction,
 	seidrNormalizeReaction,
@@ -10,6 +11,8 @@ import {
 	type SeidrReactionsBag,
 } from "./model";
 import { seidrGetSettings, seidrSaveSettings } from "../settings/storage";
+import type { SeidrImportMode } from "../io/importCompare";
+import { seidrUniqueImportName } from "../io/importCompare";
 
 export function seidrGetReactionsBag(): SeidrReactionsBag {
 	const s = seidrGetSettings() as { reactions?: unknown };
@@ -90,4 +93,91 @@ export function seidrAddReaction(): SeidrReaction | null {
 	const saved = seidrSaveReactionsBag(bag);
 	if (!saved.ok) return null;
 	return r;
+}
+
+export type SeidrReactionImportRow = {
+	reaction: SeidrReaction;
+	mode: SeidrImportMode;
+	localId?: number | null;
+};
+
+/** Import reactions with per-row add / overwrite. */
+export function seidrImportSelectedReactions(
+	rows: SeidrReactionImportRow[],
+): { ok: boolean; imported: number; skipped: number; overwritten: number; error?: string } {
+	const bag = seidrGetReactionsBag();
+	let imported = 0;
+	let skipped = 0;
+	let overwritten = 0;
+	const list = Array.isArray(rows) ? rows : [];
+
+	const taken = new Set<string>();
+	for (let i = 0; i < bag.list.length; i++) {
+		taken.add(bag.list[i].name.toLowerCase());
+	}
+
+	for (let i = 0; i < list.length; i++) {
+		const row = list[i];
+		const mode = row.mode === "overwrite" ? "overwrite" : "add";
+		const localId = row.localId != null && row.localId > 0 ? row.localId : null;
+
+		if (mode === "overwrite" && localId != null) {
+			const existing = bag.list.find(function (r) { return r.id === localId; });
+			if (!existing) {
+				skipped += 1;
+				continue;
+			}
+			const norm = seidrNormalizeReaction(Object.assign({}, row.reaction, { id: localId }));
+			if (!norm || !seidrReactionHasTrigger(norm)) {
+				skipped += 1;
+				continue;
+			}
+			taken.delete(existing.name.toLowerCase());
+			const nameKey = norm.name.toLowerCase();
+			const clash = bag.list.some(function (r) {
+				return r.id !== localId && r.name.toLowerCase() === nameKey;
+			});
+			if (clash) {
+				norm.name = seidrUniqueImportName(norm.name, taken, SEIDR_REACTION_NAME_MAX);
+			}
+			taken.add(norm.name.toLowerCase());
+			for (let j = 0; j < bag.list.length; j++) {
+				if (bag.list[j].id === localId) {
+					bag.list[j] = norm;
+					break;
+				}
+			}
+			overwritten += 1;
+			continue;
+		}
+
+		if (bag.list.length >= SEIDR_REACTIONS_MAX) {
+			skipped += list.length - i;
+			break;
+		}
+		let name = String(row.reaction.name || "").trim() || "Reaction";
+		name = seidrUniqueImportName(name, taken, SEIDR_REACTION_NAME_MAX);
+		const id = bag.nextId;
+		const norm = seidrNormalizeReaction(Object.assign({}, row.reaction, { id: id, name: name }));
+		if (!norm || !seidrReactionHasTrigger(norm)) {
+			skipped += 1;
+			continue;
+		}
+		bag.list.push(norm);
+		bag.nextId = id + 1;
+		taken.add(norm.name.toLowerCase());
+		imported += 1;
+	}
+
+	const saved = seidrSaveReactionsBag(bag);
+	if (!saved.ok) {
+		return {
+			ok: false,
+			imported: 0,
+			skipped: list.length,
+			overwritten: 0,
+			error: saved.error || "Save failed",
+		};
+	}
+	return { ok: true, imported: imported, skipped: skipped, overwritten: overwritten };
 }
