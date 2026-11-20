@@ -109,13 +109,34 @@ function coerceTyped(raw: string | undefined): string | number | undefined {
 	return raw;
 }
 
+function wornPropertyFingerprint(group: string): string {
+	try {
+		const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+		if (item && item.Property && typeof item.Property === "object") {
+			return JSON.stringify(item.Property);
+		}
+	} catch (e) { /* ignore */ }
+	return JSON.stringify(null);
+}
+
 function applyFrame(group: string, frame: SeidrWiggleFrame, syncWire: boolean): void {
 	if (!frame || !frame.assetName || typeof InventoryWear !== "function") return;
 	const wearName = seidrWiggleRealAssetName(frame.assetName);
 	const wornName = currentAssetName(group);
 	const wornTyped = currentTypedState(group);
 	const nextTyped = frame.typedState != null ? String(frame.typedState) : "";
-	if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped) return;
+	let propDiffers = false;
+	if (frame.property != null && typeof frame.property === "object") {
+		try {
+			propDiffers = wornPropertyFingerprint(group) !== JSON.stringify(frame.property);
+		} catch (e) {
+			propDiffers = true;
+		}
+	}
+	// Same asset + typed still needs a re-wear when Property (modular rotation) differs
+	if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped && !propDiffers) {
+		return;
+	}
 	const color = frame.color !== undefined ? frame.color : undefined;
 	let item: any;
 	try {
@@ -167,14 +188,10 @@ function buildPlayFrames(anim: SeidrAnimation, group: string): { primary: SeidrW
 	};
 	if (anim.colorMode === "autoupdate") {
 		const worn = seidrCaptureWornFrame(Player, group);
-		if (worn) {
-			if (worn.color !== undefined) {
-				primary.color = worn.color;
-				secondary.color = worn.color;
-			}
-			if (worn.property !== undefined) {
-				primary.property = worn.property;
-			}
+		// Colors only — never overwrite typed / Property (size, rotation, show modules)
+		if (worn && worn.color !== undefined) {
+			primary.color = worn.color;
+			secondary.color = worn.color;
 		}
 	}
 	return { primary: primary, secondary: secondary };
@@ -265,6 +282,158 @@ export function seidrPlayWiggleTest(
 		}
 		return { ok: r.ok, error: r.error, restored: didSwap };
 	});
+}
+
+const WIGGLE_PREVIEW_MS = 30000;
+
+type FramePreview = {
+	which: "primary" | "secondary";
+	/** Appearance group locked when the preview session started. */
+	group: string;
+	/** Exact wardrobe snapshot from before the first Tail1/Tail2 press. */
+	restore: SeidrWiggleFrame | null;
+	timer: ReturnType<typeof setTimeout>;
+	gen: number;
+};
+
+let framePreview: FramePreview | null = null;
+let framePreviewGen = 0;
+
+function resolveEquipGroup(anim: SeidrAnimation): string | null {
+	const slot = (anim.slot || "tail") as SeidrWiggleSlot;
+	let group = seidrResolveWigglePlayGroup(anim, Player);
+	if (!group) group = anim.group || seidrWiggleBaseGroup(slot);
+	return group || null;
+}
+
+function cloneWiggleFrame(frame: SeidrWiggleFrame | null | undefined): SeidrWiggleFrame | null {
+	if (!frame || !frame.assetName) return null;
+	try {
+		return JSON.parse(JSON.stringify(frame)) as SeidrWiggleFrame;
+	} catch (e) {
+		const out: SeidrWiggleFrame = { assetName: frame.assetName };
+		if (frame.color !== undefined) out.color = frame.color;
+		if (frame.property !== undefined) out.property = frame.property;
+		if (frame.typedState != null) out.typedState = frame.typedState;
+		return out;
+	}
+}
+
+function buildEquipFrame(anim: SeidrAnimation, which: "primary" | "secondary", group: string): SeidrWiggleFrame | null {
+	const frame = which === "secondary" ? anim.secondary : anim.primary;
+	if (!frame || !frame.assetName) return null;
+	const playFrame: SeidrWiggleFrame = {
+		assetName: frame.assetName,
+		color: frame.color,
+		property: frame.property,
+		typedState: frame.typedState,
+	};
+	if (anim.colorMode === "autoupdate") {
+		const worn = seidrCaptureWornFrame(Player, group);
+		if (worn && worn.color !== undefined) playFrame.color = worn.color;
+	}
+	return playFrame;
+}
+
+function endFramePreview(doRestore: boolean): void {
+	if (!framePreview) return;
+	const prev = framePreview;
+	framePreview = null;
+	clearTimeout(prev.timer);
+	if (!doRestore) return;
+	if (prev.restore && prev.restore.assetName) {
+		applyFrame(prev.group, prev.restore, roomHasOthers());
+	} else {
+		clearSlotItem(prev.group, roomHasOthers());
+	}
+}
+
+/** Cancel timed Tail1/Tail2 preview and restore the pre-preview item. */
+export function seidrCancelWiggleFramePreview(): void {
+	endFramePreview(true);
+}
+
+/**
+ * Equip one saved frame for 30s (or until the same button is pressed again).
+ * First press snapshots the worn item; Tail1↔Tail2 only resets the 30s timer and
+ * still restores that original snapshot when the session ends.
+ */
+export function seidrToggleWiggleFramePreview(
+	anim: SeidrAnimation,
+	which: "primary" | "secondary",
+	durationMs: number = WIGGLE_PREVIEW_MS
+): { ok: boolean; error?: string; active?: boolean } {
+	if (!anim || anim.kind !== "wiggle") {
+		return { ok: false, error: "Not a wiggle animation" };
+	}
+	if (typeof Player === "undefined" || !Player) {
+		return { ok: false, error: "Not logged in" };
+	}
+	// Same button again → restore original and end session
+	if (framePreview && framePreview.which === which) {
+		endFramePreview(true);
+		return { ok: true, active: false };
+	}
+
+	let group: string;
+	let restore: SeidrWiggleFrame | null;
+	if (framePreview) {
+		// Switch Tail1↔Tail2: keep original snapshot + group; only restart the timer
+		group = framePreview.group;
+		restore = framePreview.restore;
+		clearTimeout(framePreview.timer);
+		framePreview = null;
+	} else {
+		const resolved = resolveEquipGroup(anim);
+		if (!resolved) return { ok: false, error: "No appearance group" };
+		group = resolved;
+		const worn = seidrCaptureWornFrame(Player, group);
+		restore = worn ? cloneWiggleFrame(seidrWornToFrame(worn)) : null;
+	}
+
+	const playFrame = buildEquipFrame(anim, which, group);
+	if (!playFrame) {
+		// Failed to build the other frame — put the original back if we had started
+		if (restore && restore.assetName) {
+			applyFrame(group, restore, roomHasOthers());
+		}
+		return { ok: false, error: which === "secondary" ? "No second frame" : "No first frame" };
+	}
+
+	applyFrame(group, playFrame, roomHasOthers());
+	const gen = ++framePreviewGen;
+	const timer = setTimeout(function () {
+		if (framePreview && framePreview.gen === gen) {
+			endFramePreview(true);
+		}
+	}, Math.max(1000, durationMs));
+	framePreview = { which: which, group: group, restore: restore, timer: timer, gen: gen };
+	return { ok: true, active: true };
+}
+
+/**
+ * Equip one saved wiggle frame immediately (no timer).
+ * Ends any timed preview and restores the pre-preview item first.
+ */
+export function seidrEquipWiggleFrame(
+	anim: SeidrAnimation,
+	which: "primary" | "secondary"
+): { ok: boolean; error?: string } {
+	if (!anim || anim.kind !== "wiggle") {
+		return { ok: false, error: "Not a wiggle animation" };
+	}
+	if (typeof Player === "undefined" || !Player) {
+		return { ok: false, error: "Not logged in" };
+	}
+	endFramePreview(true);
+	const group = resolveEquipGroup(anim);
+	if (!group) return { ok: false, error: "No appearance group" };
+	const playFrame = buildEquipFrame(anim, which, group);
+	if (!playFrame) {
+		return { ok: false, error: which === "secondary" ? "No second frame" : "No first frame" };
+	}
+	applyFrame(group, playFrame, roomHasOthers());
+	return { ok: true };
 }
 
 /**

@@ -81,10 +81,11 @@ Unknown names warn locally in chat. Define them under Settings → Animations fi
 Under **Animations → Wiggle**, add a set while wearing the **primary** item (Echo slots count).
 
 1. **Add Ear / Tail / Wing** while that item is worn.  
-2. Choose a **secondary** snapshot:  
-   - **Automatch** — Echo mirror names (`镜像` / Mirror) when available; for typed wings (e.g. DragonWings Spread ↔ Folded) picks the other typed option.  
-   - **Custom** — wear the other asset **or** the same wing with another type, then capture.  
-3. Colors: **Snapshot** (saved) or **Autoupdate** (use current worn colors each play).  
+2. Set the two frames:  
+   - **Tail 1 / Tail 2** (next to Save) — equip that saved frame for 30s; press again to restore.  
+   - **Capture first / Capture second** — store what you are wearing (same tail with another size/rotation/typed option is fine; or a different asset).  
+   - **Automatch** — typed Top Left ↔ Top Right when available; otherwise Echo mirror.  
+3. Colors: **Autoupdate** (default — dye from whatever you wear now; pose Property stays per frame) or **Snapshot**.  
 4. Set **Amount** and **Delay**, then **Save**. **Test** from the editor — if the primary is not worn, Seidr equips it for the test and restores whatever was on that slot afterward.
 
 Rules of thumb:
@@ -92,8 +93,10 @@ Rules of thumb:
 - One set per base item (e.g. one Fox Tail config).  
 - Primary must be worn to play that slot.  
 - Ear / Tail / Wing can run **together** (clip Wiggle step, Reaction Wiggle step, or overlapping plays).  
+- Same item twice is OK when size, rotation, typed option, or show-modules differ.  
+- Typed tails (Light Kitten, Fox/Raccoon straps, …) default to Top Left ↔ Top Right — no Echo mirror required.  
 - Wings often have no mirror — use typed Spread/Folded or two different wing assets.  
-- Stock sets are added automatically when missing (Echo mirror tails, ear pairs, **Black Kitty Ears - High** ↔ **Black Kitty Ears - Echo**, Elf Ears ↔ **Elf Ears 2**, typed Dragon wings). If a secondary never loads, install Echo (or the mod that adds it) — play reports **Asset counterpart is missing**.
+- Stock sets are added automatically when missing (typed kitten/fox/raccoon tails, Echo mirror for other tails, ear pairs, **Black Kitty Ears - High** ↔ **Black Kitty Ears - Echo**, Elf Ears ↔ **Elf Ears 2**, typed Dragon wings). If a secondary never loads, install Echo (or the mod that adds it) — play reports **Asset counterpart is missing**.
 
 ## Fast Wiggle
 

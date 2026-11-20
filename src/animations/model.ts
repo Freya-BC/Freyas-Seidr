@@ -203,7 +203,7 @@ export function seidrDefaultWiggleAnimation(
 		group: group,
 		primary: primary,
 		secondary: secondary,
-		colorMode: "snapshot",
+		colorMode: "autoupdate",
 		count: defs.count,
 		delayMs: defs.delayMs,
 	};
@@ -297,13 +297,18 @@ export function seidrNormalizeWiggleFrame(raw: unknown): SeidrWiggleFrame | null
 	return frame;
 }
 
-/** True when two wiggle frames would look different (asset and/or typed state). */
+/** True when two wiggle frames would look different (asset, typed, and/or Property). */
 export function seidrWiggleFramesDiffer(a: SeidrWiggleFrame | null | undefined, b: SeidrWiggleFrame | null | undefined): boolean {
 	if (!a || !b || !a.assetName || !b.assetName) return false;
 	if (a.assetName !== b.assetName) return true;
 	const ta = a.typedState != null ? String(a.typedState) : "";
 	const tb = b.typedState != null ? String(b.typedState) : "";
 	if (ta !== tb) return true;
+	try {
+		const pa = JSON.stringify(a.property == null ? null : a.property);
+		const pb = JSON.stringify(b.property == null ? null : b.property);
+		if (pa !== pb) return true;
+	} catch (e) { /* ignore */ }
 	return false;
 }
 

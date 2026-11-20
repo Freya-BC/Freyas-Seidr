@@ -423,8 +423,11 @@ export function seidrListWiggleSecondaryCandidates(
 	});
 }
 
-/** BCAR wing flap often uses the same asset with another typed option (e.g. DragonWings Spread↔Folded). */
-function typedOptionCount(group: string, assetName: string): number {
+/**
+ * Typed option count for an asset (e.g. KittenTailStrap1 TL/TR/BL/BR = 4,
+ * DragonWings Spread/Folded ≥ 2). Used for automatch / stock 0↔1 defaults.
+ */
+export function seidrWiggleTypedOptionCount(group: string, assetName: string): number {
 	try {
 		const bag = (window as any).AssetFemale3DCGExtended;
 		const cfg = bag && bag[group] && bag[group][assetName];
@@ -457,8 +460,8 @@ export type SeidrWiggleAutomatch = {
 };
 
 /**
- * Prefer Echo mirror asset; else for typed wings (etc.) the alternate TypeRecord.typed
- * on the same asset (0↔1), matching BCAR wing1/wing2 snapshots.
+ * Prefer same-asset typed 0↔1 when the asset has ≥2 typed options (Kitten TL↔TR,
+ * Dragon Spread↔Folded). Else Echo mirror / sibling table, then description automatch.
  */
 export function seidrFindAutomatchSecondaryFrame(
 	slot: SeidrWiggleSlot,
@@ -467,6 +470,18 @@ export function seidrFindAutomatchSecondaryFrame(
 	primaryTypedState?: string
 ): SeidrWiggleAutomatch | null {
 	const pCanon = seidrWiggleCanonicalName(primaryAssetName);
+	const n = seidrWiggleTypedOptionCount(group, primaryAssetName);
+	if (n >= 2) {
+		const cur = primaryTypedState != null && String(primaryTypedState).trim() !== ""
+			? parseInt(String(primaryTypedState), 10)
+			: 0;
+		const curN = Number.isFinite(cur) ? cur : 0;
+		// Prefer 0↔1 (Top Left↔Top Right / Spread↔Folded)
+		let alt = curN === 0 ? 1 : 0;
+		if (alt >= n) alt = curN === 0 ? Math.min(1, n - 1) : 0;
+		if (alt === curN && n > 1) alt = (curN + 1) % n;
+		return { assetName: pCanon, typedState: String(alt) };
+	}
 	if (ECHO_PRIMARY_TO_MIRROR[pCanon]) {
 		return { assetName: ECHO_PRIMARY_TO_MIRROR[pCanon] };
 	}
@@ -476,18 +491,6 @@ export function seidrFindAutomatchSecondaryFrame(
 	const list = seidrListWiggleSecondaryCandidates(slot, group, primaryAssetName);
 	for (let i = 0; i < list.length; i++) {
 		if (list[i].automatch) return { assetName: list[i].name };
-	}
-	const n = typedOptionCount(group, primaryAssetName);
-	if (n >= 2) {
-		const cur = primaryTypedState != null && String(primaryTypedState).trim() !== ""
-			? parseInt(String(primaryTypedState), 10)
-			: 0;
-		const curN = Number.isFinite(cur) ? cur : 0;
-		// Prefer 0↔1 (Spread↔Folded on DragonWings); wrap if needed
-		let alt = curN === 0 ? 1 : 0;
-		if (alt >= n) alt = curN === 0 ? Math.min(1, n - 1) : 0;
-		if (alt === curN && n > 1) alt = (curN + 1) % n;
-		return { assetName: primaryAssetName, typedState: String(alt) };
 	}
 	return null;
 }
@@ -540,8 +543,17 @@ function seidrWiggleBaseGroupFromGroup(group: string): string {
 	return group;
 }
 
+function propertyFingerprint(p: unknown): string {
+	try {
+		return JSON.stringify(p == null ? null : p);
+	} catch (e) {
+		return "";
+	}
+}
+
 /**
- * Secondary frame is usable: different asset that loads, or same asset with different typed state.
+ * Secondary frame is usable: different asset that loads, or same asset with a
+ * different typed state and/or Property (modular rotation, etc.).
  */
 export function seidrWiggleCounterpartReady(anim: SeidrAnimation, playGroup?: string | null): boolean {
 	if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.secondary) return false;
@@ -551,10 +563,11 @@ export function seidrWiggleCounterpartReady(anim: SeidrAnimation, playGroup?: st
 	const secondaryName = anim.secondary.assetName;
 	if (!primaryName || !secondaryName) return false;
 	if (!seidrWiggleAssetLoadable(group, primaryName)) return false;
-	const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
-	const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
 	if (seidrWiggleNameEquals(secondaryName, primaryName)) {
-		return sTyped !== "" && sTyped !== pTyped;
+		const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
+		const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
+		if (sTyped !== "" && sTyped !== pTyped) return true;
+		return propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property);
 	}
 	return seidrWiggleAssetLoadable(group, secondaryName);
 }

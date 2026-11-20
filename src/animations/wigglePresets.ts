@@ -13,6 +13,7 @@ import {
 	SEIDR_WIGGLE_PRIMARY_TO_MIRROR,
 	seidrWiggleCanonicalName,
 	seidrWiggleNameEquals,
+	seidrWiggleTypedOptionCount,
 } from "./wiggleSlots";
 
 type StockPair = {
@@ -92,6 +93,19 @@ function buildStockPairs(): StockPair[] {
 			slot = "ear";
 		}
 		if (slot === "ear") continue;
+		// Light Kitten / Fox / Raccoon straps: TL↔TR typed on the same asset (not Echo mirror)
+		const typedN = seidrWiggleTypedOptionCount(baseGroup(slot), primary);
+		if (typedN >= 2) {
+			push({
+				slot: slot,
+				primary: primary,
+				secondary: primary,
+				label: PRIMARY_LABEL[primary] || primary,
+				primaryTyped: "0",
+				secondaryTyped: "1",
+			});
+			continue;
+		}
 		push({
 			slot: slot,
 			primary: primary,
@@ -182,6 +196,21 @@ function repairWiggleFrames(bag: SeidrAnimationsBag): number {
 					a.secondary.assetName === "BunnyEars2" ||
 					a.secondary.assetName === "FloppyBunnyEars")) {
 				c = "DroopyBunnyEars";
+			}
+			// Typed tails (Kitten TL↔TR etc.): migrate old Echo-mirror stock → same asset 0↔1
+			if (a.primary && a.slot === "tail") {
+				const pCanon = seidrWiggleCanonicalName(a.primary.assetName);
+				const mirror = SEIDR_WIGGLE_PRIMARY_TO_MIRROR[pCanon];
+				const typedN = seidrWiggleTypedOptionCount(baseGroup("tail"), pCanon);
+				if (typedN >= 2 && mirror && seidrWiggleNameEquals(c, mirror)) {
+					a.secondary.assetName = pCanon;
+					a.secondary.typedState = "1";
+					if (a.primary.typedState == null || String(a.primary.typedState).trim() === "") {
+						a.primary.typedState = "0";
+					}
+					changed = true;
+					c = pCanon;
+				}
 			}
 			if (c !== a.secondary.assetName) {
 				a.secondary.assetName = c;

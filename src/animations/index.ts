@@ -46,9 +46,12 @@ export {
 export { seidrAnimIsPlaying, seidrPlayAnimation } from "./play";
 export {
 	seidrCancelWiggle,
+	seidrCancelWiggleFramePreview,
+	seidrEquipWiggleFrame,
 	seidrPlayWiggle,
 	seidrPlayWiggleSlots,
 	seidrPlayWiggleTest,
+	seidrToggleWiggleFramePreview,
 	seidrWiggleIsPlaying,
 } from "./wigglePlay";
 export {

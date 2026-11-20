@@ -1,4 +1,4 @@
-/* Seidr v2.0.65 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.68 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.65";
+  Seidr.VERSION = "2.0.68";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -1656,7 +1656,7 @@
       group,
       primary,
       secondary,
-      colorMode: "snapshot",
+      colorMode: "autoupdate",
       count: defs.count,
       delayMs: defs.delayMs
     };
@@ -1747,6 +1747,12 @@
     const ta = a.typedState != null ? String(a.typedState) : "";
     const tb = b.typedState != null ? String(b.typedState) : "";
     if (ta !== tb) return true;
+    try {
+      const pa = JSON.stringify(a.property == null ? null : a.property);
+      const pb = JSON.stringify(b.property == null ? null : b.property);
+      if (pa !== pb) return true;
+    } catch (e) {
+    }
     return false;
   }
   function seidrClampWiggleCount(raw, fallback) {
@@ -6769,7 +6775,7 @@
       };
     });
   }
-  function typedOptionCount(group, assetName) {
+  function seidrWiggleTypedOptionCount(group, assetName) {
     try {
       const bag = window.AssetFemale3DCGExtended;
       const cfg = bag && bag[group] && bag[group][assetName];
@@ -6797,6 +6803,15 @@
   }
   function seidrFindAutomatchSecondaryFrame(slot, group, primaryAssetName, primaryTypedState) {
     const pCanon = seidrWiggleCanonicalName(primaryAssetName);
+    const n = seidrWiggleTypedOptionCount(group, primaryAssetName);
+    if (n >= 2) {
+      const cur = primaryTypedState != null && String(primaryTypedState).trim() !== "" ? parseInt(String(primaryTypedState), 10) : 0;
+      const curN = Number.isFinite(cur) ? cur : 0;
+      let alt = curN === 0 ? 1 : 0;
+      if (alt >= n) alt = curN === 0 ? Math.min(1, n - 1) : 0;
+      if (alt === curN && n > 1) alt = (curN + 1) % n;
+      return { assetName: pCanon, typedState: String(alt) };
+    }
     if (ECHO_PRIMARY_TO_MIRROR[pCanon]) {
       return { assetName: ECHO_PRIMARY_TO_MIRROR[pCanon] };
     }
@@ -6806,15 +6821,6 @@
     const list = seidrListWiggleSecondaryCandidates(slot, group, primaryAssetName);
     for (let i = 0; i < list.length; i++) {
       if (list[i].automatch) return { assetName: list[i].name };
-    }
-    const n = typedOptionCount(group, primaryAssetName);
-    if (n >= 2) {
-      const cur = primaryTypedState != null && String(primaryTypedState).trim() !== "" ? parseInt(String(primaryTypedState), 10) : 0;
-      const curN = Number.isFinite(cur) ? cur : 0;
-      let alt = curN === 0 ? 1 : 0;
-      if (alt >= n) alt = curN === 0 ? Math.min(1, n - 1) : 0;
-      if (alt === curN && n > 1) alt = (curN + 1) % n;
-      return { assetName: primaryAssetName, typedState: String(alt) };
     }
     return null;
   }
@@ -6853,6 +6859,13 @@
     }
     return group;
   }
+  function propertyFingerprint(p) {
+    try {
+      return JSON.stringify(p == null ? null : p);
+    } catch (e) {
+      return "";
+    }
+  }
   function seidrWiggleCounterpartReady(anim, playGroup) {
     if (!anim || anim.kind !== "wiggle" || !anim.primary || !anim.secondary) return false;
     const group = playGroup || anim.group || (anim.slot ? seidrWiggleBaseGroup(anim.slot) : "");
@@ -6861,10 +6874,11 @@
     const secondaryName = anim.secondary.assetName;
     if (!primaryName || !secondaryName) return false;
     if (!seidrWiggleAssetLoadable(group, primaryName)) return false;
-    const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
-    const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
     if (seidrWiggleNameEquals(secondaryName, primaryName)) {
-      return sTyped !== "" && sTyped !== pTyped;
+      const pTyped = anim.primary.typedState != null ? String(anim.primary.typedState) : "";
+      const sTyped = anim.secondary.typedState != null ? String(anim.secondary.typedState) : "";
+      if (sTyped !== "" && sTyped !== pTyped) return true;
+      return propertyFingerprint(anim.primary.property) !== propertyFingerprint(anim.secondary.property);
     }
     return seidrWiggleAssetLoadable(group, secondaryName);
   }
@@ -6989,6 +7003,18 @@
         slot = "ear";
       }
       if (slot === "ear") continue;
+      const typedN = seidrWiggleTypedOptionCount(baseGroup(slot), primary);
+      if (typedN >= 2) {
+        push({
+          slot,
+          primary,
+          secondary: primary,
+          label: PRIMARY_LABEL[primary] || primary,
+          primaryTyped: "0",
+          secondaryTyped: "1"
+        });
+        continue;
+      }
       push({
         slot,
         primary,
@@ -7065,6 +7091,20 @@
         }
         if (a.primary && seidrWiggleNameEquals(a.primary.assetName, "BunnyEars1") && (c === "BunnyEars2" || c === "FloppyBunnyEars" || a.secondary.assetName === "BunnyEars2" || a.secondary.assetName === "FloppyBunnyEars")) {
           c = "DroopyBunnyEars";
+        }
+        if (a.primary && a.slot === "tail") {
+          const pCanon = seidrWiggleCanonicalName(a.primary.assetName);
+          const mirror = SEIDR_WIGGLE_PRIMARY_TO_MIRROR[pCanon];
+          const typedN = seidrWiggleTypedOptionCount(baseGroup("tail"), pCanon);
+          if (typedN >= 2 && mirror && seidrWiggleNameEquals(c, mirror)) {
+            a.secondary.assetName = pCanon;
+            a.secondary.typedState = "1";
+            if (a.primary.typedState == null || String(a.primary.typedState).trim() === "") {
+              a.primary.typedState = "0";
+            }
+            changed = true;
+            c = pCanon;
+          }
         }
         if (c !== a.secondary.assetName) {
           a.secondary.assetName = c;
@@ -7310,13 +7350,33 @@
     if (/^-?\d+$/.test(raw)) return parseInt(raw, 10);
     return raw;
   }
+  function wornPropertyFingerprint(group) {
+    try {
+      const item = typeof InventoryGet === "function" ? InventoryGet(Player, group) : null;
+      if (item && item.Property && typeof item.Property === "object") {
+        return JSON.stringify(item.Property);
+      }
+    } catch (e) {
+    }
+    return JSON.stringify(null);
+  }
   function applyFrame(group, frame, syncWire) {
     if (!frame || !frame.assetName || typeof InventoryWear !== "function") return;
     const wearName = seidrWiggleRealAssetName(frame.assetName);
     const wornName = currentAssetName(group);
     const wornTyped = currentTypedState(group);
     const nextTyped = frame.typedState != null ? String(frame.typedState) : "";
-    if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped) return;
+    let propDiffers = false;
+    if (frame.property != null && typeof frame.property === "object") {
+      try {
+        propDiffers = wornPropertyFingerprint(group) !== JSON.stringify(frame.property);
+      } catch (e) {
+        propDiffers = true;
+      }
+    }
+    if (seidrWiggleNameEquals(wornName, frame.assetName) && wornTyped === nextTyped && !propDiffers) {
+      return;
+    }
     const color = frame.color !== void 0 ? frame.color : void 0;
     let item;
     try {
@@ -7371,14 +7431,9 @@
     };
     if (anim.colorMode === "autoupdate") {
       const worn = seidrCaptureWornFrame(Player, group);
-      if (worn) {
-        if (worn.color !== void 0) {
-          primary.color = worn.color;
-          secondary.color = worn.color;
-        }
-        if (worn.property !== void 0) {
-          primary.property = worn.property;
-        }
+      if (worn && worn.color !== void 0) {
+        primary.color = worn.color;
+        secondary.color = worn.color;
       }
     }
     return { primary, secondary };
@@ -7461,6 +7516,99 @@
       }
       return { ok: r.ok, error: r.error, restored: didSwap };
     });
+  }
+  var WIGGLE_PREVIEW_MS = 3e4;
+  var framePreview = null;
+  var framePreviewGen = 0;
+  function resolveEquipGroup(anim) {
+    const slot = anim.slot || "tail";
+    let group = seidrResolveWigglePlayGroup(anim, Player);
+    if (!group) group = anim.group || seidrWiggleBaseGroup(slot);
+    return group || null;
+  }
+  function cloneWiggleFrame(frame) {
+    if (!frame || !frame.assetName) return null;
+    try {
+      return JSON.parse(JSON.stringify(frame));
+    } catch (e) {
+      const out = { assetName: frame.assetName };
+      if (frame.color !== void 0) out.color = frame.color;
+      if (frame.property !== void 0) out.property = frame.property;
+      if (frame.typedState != null) out.typedState = frame.typedState;
+      return out;
+    }
+  }
+  function buildEquipFrame(anim, which, group) {
+    const frame = which === "secondary" ? anim.secondary : anim.primary;
+    if (!frame || !frame.assetName) return null;
+    const playFrame = {
+      assetName: frame.assetName,
+      color: frame.color,
+      property: frame.property,
+      typedState: frame.typedState
+    };
+    if (anim.colorMode === "autoupdate") {
+      const worn = seidrCaptureWornFrame(Player, group);
+      if (worn && worn.color !== void 0) playFrame.color = worn.color;
+    }
+    return playFrame;
+  }
+  function endFramePreview(doRestore) {
+    if (!framePreview) return;
+    const prev = framePreview;
+    framePreview = null;
+    clearTimeout(prev.timer);
+    if (!doRestore) return;
+    if (prev.restore && prev.restore.assetName) {
+      applyFrame(prev.group, prev.restore, roomHasOthers());
+    } else {
+      clearSlotItem(prev.group, roomHasOthers());
+    }
+  }
+  function seidrCancelWiggleFramePreview() {
+    endFramePreview(true);
+  }
+  function seidrToggleWiggleFramePreview(anim, which, durationMs = WIGGLE_PREVIEW_MS) {
+    if (!anim || anim.kind !== "wiggle") {
+      return { ok: false, error: "Not a wiggle animation" };
+    }
+    if (typeof Player === "undefined" || !Player) {
+      return { ok: false, error: "Not logged in" };
+    }
+    if (framePreview && framePreview.which === which) {
+      endFramePreview(true);
+      return { ok: true, active: false };
+    }
+    let group;
+    let restore;
+    if (framePreview) {
+      group = framePreview.group;
+      restore = framePreview.restore;
+      clearTimeout(framePreview.timer);
+      framePreview = null;
+    } else {
+      const resolved = resolveEquipGroup(anim);
+      if (!resolved) return { ok: false, error: "No appearance group" };
+      group = resolved;
+      const worn = seidrCaptureWornFrame(Player, group);
+      restore = worn ? cloneWiggleFrame(seidrWornToFrame(worn)) : null;
+    }
+    const playFrame = buildEquipFrame(anim, which, group);
+    if (!playFrame) {
+      if (restore && restore.assetName) {
+        applyFrame(group, restore, roomHasOthers());
+      }
+      return { ok: false, error: which === "secondary" ? "No second frame" : "No first frame" };
+    }
+    applyFrame(group, playFrame, roomHasOthers());
+    const gen = ++framePreviewGen;
+    const timer = setTimeout(function() {
+      if (framePreview && framePreview.gen === gen) {
+        endFramePreview(true);
+      }
+    }, Math.max(1e3, durationMs));
+    framePreview = { which, group, restore, timer, gen };
+    return { ok: true, active: true };
   }
   function seidrPlayWiggle(anim) {
     if (!anim || anim.kind !== "wiggle") {
@@ -19634,11 +19782,17 @@
     if (!draftW.slot || !draftW.group || !draftW.primary) return "";
     const cands = seidrListWiggleSecondaryCandidates(draftW.slot, draftW.group, draftW.primary.assetName);
     const selected = draftW.secondary ? draftW.secondary.assetName : "";
-    const typedSame = draftW.secondary && draftW.secondary.assetName === draftW.primary.assetName && draftW.secondary.typedState != null && String(draftW.secondary.typedState) !== String(draftW.primary.typedState || "");
+    const sameAssetAlt = draftW.secondary && seidrWiggleFramesDiffer(draftW.primary, draftW.secondary) && (draftW.secondary.assetName === draftW.primary.assetName || seidrWiggleNameEquals(draftW.secondary.assetName, draftW.primary.assetName));
     const opts4 = [];
-    if (typedSame && selected) {
+    if (sameAssetAlt && selected) {
+      const bits = [selected];
+      if (draftW.secondary.typedState != null && String(draftW.secondary.typedState) !== "") {
+        bits.push("typed " + String(draftW.secondary.typedState));
+      } else {
+        bits.push("custom property");
+      }
       opts4.push(
-        '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(selected + " (typed " + String(draftW.secondary.typedState) + ")") + "</option>"
+        '<option value="' + escapeHtml7(selected) + '" selected>' + escapeHtml7(bits.join(" \xB7 ")) + "</option>"
       );
     }
     if (!cands.length && !opts4.length) {
@@ -19647,7 +19801,7 @@
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
       const label = (c.automatch ? "\u2605 " : "") + (c.description || seidrWiggleAssetLabel(c.name));
-      const isSel = !typedSame && c.name === selected;
+      const isSel = !sameAssetAlt && c.name === selected;
       opts4.push(
         '<option value="' + escapeHtml7(c.name) + '"' + (isSel ? " selected" : "") + ">" + escapeHtml7(label) + "</option>"
       );
@@ -19665,11 +19819,9 @@
     }
     const sec = d.secondary.assetName;
     if (!sec || !group) return "";
-    if (sec === d.primary.assetName) {
-      const pTyped = d.primary.typedState != null ? String(d.primary.typedState) : "";
-      const sTyped = d.secondary.typedState != null ? String(d.secondary.typedState) : "";
-      if (sTyped && sTyped !== pTyped) return "";
-      return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs a different typed state (e.g. Spread \u2194 Folded).</p>';
+    if (seidrWiggleNameEquals(sec, d.primary.assetName)) {
+      if (seidrWiggleFramesDiffer(d.primary, d.secondary)) return "";
+      return '<p class="seidr-settings-hint" style="color:#c45;">Same-asset secondary needs another typed option (e.g. Top Left \u2194 Top Right) or a different Property (rotation).</p>';
     }
     if (seidrWiggleAssetLoadable(group, sec)) return "";
     return '<p class="seidr-settings-hint" style="color:#c45;">Secondary <b>' + escapeHtml7(seidrWiggleAssetLabel(sec)) + "</b> not loaded \u2014 install Echo (or the mod that adds it), then re-open.</p>";
@@ -19691,18 +19843,19 @@
       '<input type="text" id="seidr-wiggle-name" maxlength="40" value="' + escapeHtml7(d.name) + '" />',
       "</div>",
       '<p class="seidr-settings-hint" style="margin-top:8px;">Slot: <b>' + escapeHtml7(slotLabel(slot)) + "</b> \xB7 Group: <code>" + escapeHtml7(d.group || "") + "</code></p>",
-      '<p class="seidr-settings-hint">Primary: <b>' + escapeHtml7(d.primary ? seidrWiggleAssetLabel(d.primary.assetName) : "") + "</b></p>",
+      '<p class="seidr-settings-hint">First: <b>' + escapeHtml7(d.primary ? seidrWiggleAssetLabel(d.primary.assetName) : "") + "</b>" + (framePoseHint(d.primary) ? " \xB7 <code>" + escapeHtml7(framePoseHint(d.primary)) + "</code>" : "") + "</p>",
+      '<p class="seidr-settings-hint">Second: <b>' + escapeHtml7(d.secondary ? seidrWiggleAssetLabel(d.secondary.assetName) : "") + "</b>" + (framePoseHint(d.secondary) ? " \xB7 <code>" + escapeHtml7(framePoseHint(d.secondary)) + "</code>" : "") + "</p>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Secondary</span>',
       '<select id="seidr-wiggle-secondary">' + secondaryOptionsHtml(d) + "</select>",
       "</div>",
       counterpartHintHtml(d),
       '<div class="seidr-settings-row" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">',
-      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch mirror</button>',
-      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-custom">Custom (wear secondary)</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-capture-first">Capture first</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-capture-second">Capture second</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-automatch">Automatch</button>',
       "</div>",
-      '<p class="seidr-settings-hint">Custom: equip the secondary on the same slot (or same wing with another type, e.g. Folded), then capture. Wings usually have no Echo mirror \u2014 use typed Spread/Folded or two wing assets.</p>',
-      d.secondary && d.secondary.typedState != null && String(d.secondary.typedState) !== "" ? '<p class="seidr-settings-hint">Secondary typed: <code>' + escapeHtml7(String(d.secondary.typedState)) + "</code>" + (d.primary && d.primary.typedState != null ? " \xB7 Primary typed: <code>" + escapeHtml7(String(d.primary.typedState)) + "</code>" : "") + "</p>" : "",
+      '<p class="seidr-settings-hint">Capture stores whatever you are wearing on this slot (same item with another size/rotation/typed option is fine; or a different asset). Automatch: typed Top Left\u2194Top Right when available, else Echo mirror. <b>' + escapeHtml7(slotLabel(slot)) + " 1 / 2</b> next to Save equips that frame for 30s (press again to restore). Colors Autoupdate keeps pose Property and only refreshes dye.</p>",
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Colors</span>',
       '<select id="seidr-wiggle-colors">',
@@ -19721,6 +19874,8 @@
       '<div class="seidr-settings-row" style="margin-top:10px;gap:8px;display:flex;flex-wrap:wrap;">',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-save">Save</button>',
       '<button type="button" class="seidr-act-btn" id="seidr-wiggle-test">Test</button>',
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail1">' + escapeHtml7(slotLabel(slot)) + " 1</button>",
+      '<button type="button" class="seidr-act-btn" id="seidr-wiggle-tail2">' + escapeHtml7(slotLabel(slot)) + " 2</button>",
       '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-wiggle-del">Delete</button>',
       "</div>",
       '<p class="seidr-cmd-msg" id="seidr-wiggle-msg"></p>'
@@ -19790,7 +19945,104 @@
     else if (secondary.color !== void 0) out.color = secondary.color;
     return out;
   }
+  function framePoseHint(frame) {
+    if (!frame) return "";
+    const bits = [];
+    if (frame.typedState != null && String(frame.typedState).trim() !== "") {
+      bits.push("typed " + String(frame.typedState));
+    }
+    try {
+      const prop = frame.property;
+      const tr = prop && prop.TypeRecord;
+      if (tr && typeof tr === "object") {
+        const keys = Object.keys(tr).sort();
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i];
+          if (k === "typed" && bits.length) continue;
+          bits.push(k + "=" + String(tr[k]));
+        }
+      }
+    } catch (e) {
+    }
+    return bits.length ? bits.join(", ") : "";
+  }
+  function wornOnWiggleSlot(cur) {
+    if (!cur.slot) return null;
+    if (cur.group) {
+      const onGroup = seidrCaptureWornFrame(
+        typeof Player !== "undefined" ? Player : null,
+        cur.group
+      );
+      if (onGroup) return onGroup;
+    }
+    const onSlot = seidrScanWornWiggleItems().filter(function(w) {
+      return w.slot === cur.slot;
+    });
+    if (!onSlot.length) return null;
+    if (cur.primary && cur.primary.assetName) {
+      const same = onSlot.find(function(w) {
+        return seidrWiggleNameEquals(w.assetName, cur.primary.assetName);
+      });
+      if (same) return same;
+    }
+    return onSlot[0];
+  }
   function wireWiggleEditor(root4) {
+    function onPreviewToggle(which) {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur) return;
+      wiggleDraft = cur;
+      const label = slotLabel(cur.slot || "tail") + (which === "secondary" ? " 2" : " 1");
+      const r = seidrToggleWiggleFramePreview(cur, which);
+      if (!r.ok) {
+        setWiggleMsg(root4, r.error || "Equip failed");
+        return;
+      }
+      setWiggleMsg(root4, r.active ? label + " equipped (30s \u2014 press again to restore)" : label + " restored");
+    }
+    root4.querySelector("#seidr-wiggle-tail1")?.addEventListener("click", function() {
+      onPreviewToggle("primary");
+    });
+    root4.querySelector("#seidr-wiggle-tail2")?.addEventListener("click", function() {
+      onPreviewToggle("secondary");
+    });
+    root4.querySelector("#seidr-wiggle-capture-first")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur || !cur.slot) return;
+      const worn = wornOnWiggleSlot(cur);
+      if (!worn) {
+        setWiggleMsg(root4, "Wear a " + slotLabel(cur.slot).toLowerCase() + " first");
+        return;
+      }
+      cur.primary = seidrWornToFrame(worn);
+      cur.group = worn.group;
+      if (cur.secondary && cur.colorMode !== "autoupdate") {
+        cur.secondary = applyPrimaryColorsToSecondary(cur.primary, cur.secondary);
+      }
+      wiggleDraft = cur;
+      renderWiggleEditor(root4);
+      const hint = framePoseHint(cur.primary);
+      setWiggleMsg(root4, "Captured first " + worn.assetName + (hint ? " (" + hint + ")" : ""));
+    });
+    root4.querySelector("#seidr-wiggle-capture-second")?.addEventListener("click", function() {
+      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
+      if (!cur || !cur.slot || !cur.primary) return;
+      const worn = wornOnWiggleSlot(cur);
+      if (!worn) {
+        setWiggleMsg(root4, "Wear a " + slotLabel(cur.slot).toLowerCase() + " first");
+        return;
+      }
+      const frame = seidrWornToFrame(worn);
+      if (!seidrWiggleFramesDiffer(cur.primary, frame)) {
+        setWiggleMsg(root4, "Second must differ from first (typed, size/rotation Property, or other asset)");
+        return;
+      }
+      cur.secondary = cur.colorMode === "autoupdate" ? frame : applyPrimaryColorsToSecondary(cur.primary, frame);
+      wiggleDraft = cur;
+      renderWiggleEditor(root4);
+      const hint = framePoseHint(cur.secondary);
+      setWiggleMsg(root4, "Captured second " + worn.assetName + (hint ? " (" + hint + ")" : ""));
+    });
     root4.querySelector("#seidr-wiggle-automatch")?.addEventListener("click", function() {
       const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
       if (!cur || !cur.slot || !cur.group || !cur.primary) return;
@@ -19801,7 +20053,7 @@
         cur.primary.typedState
       );
       if (!match) {
-        setWiggleMsg(root4, "No mirror/typed pair \u2014 use Custom (wear secondary / other wing type)");
+        setWiggleMsg(root4, "No typed/mirror pair \u2014 Capture second after changing typed/size/rotation");
         return;
       }
       const secFrame = { assetName: match.assetName };
@@ -19811,39 +20063,14 @@
       renderWiggleEditor(root4);
       setWiggleMsg(root4, match.typedState != null ? "Automatched typed " + match.assetName + " \u2192 " + match.typedState : "Automatched " + match.assetName);
     });
-    root4.querySelector("#seidr-wiggle-custom")?.addEventListener("click", function() {
-      const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
-      if (!cur || !cur.slot || !cur.group || !cur.primary) return;
-      const onSlot = seidrScanWornWiggleItems().filter(function(w) {
-        return w.slot === cur.slot && w.group === cur.group;
-      });
-      let pick = onSlot.find(function(w) {
-        return w.assetName !== cur.primary.assetName;
-      }) || null;
-      if (!pick) {
-        const pTyped = cur.primary.typedState != null ? String(cur.primary.typedState) : "";
-        pick = onSlot.find(function(w) {
-          const t = w.typedState != null ? String(w.typedState) : "";
-          return w.assetName === cur.primary.assetName && t !== pTyped;
-        }) || null;
-      }
-      if (!pick) {
-        setWiggleMsg(root4, "Wear another item (or same wing with another type), then Custom again");
-        return;
-      }
-      cur.secondary = seidrWornToFrame(pick);
-      wiggleDraft = cur;
-      renderWiggleEditor(root4);
-      setWiggleMsg(root4, "Captured secondary " + pick.assetName + (pick.typedState != null ? " typed=" + pick.typedState : ""));
-    });
     root4.querySelector("#seidr-wiggle-save")?.addEventListener("click", function() {
       const cur = readWiggleDraftFromDom(root4);
       if (!cur || !cur.primary || !cur.secondary || !cur.secondary.assetName) {
-        setWiggleMsg(root4, "Secondary required");
+        setWiggleMsg(root4, "Second frame required");
         return;
       }
       if (!seidrWiggleFramesDiffer(cur.primary, cur.secondary)) {
-        setWiggleMsg(root4, "Secondary must differ (other asset or typed state)");
+        setWiggleMsg(root4, "Second must differ (other asset, typed option, or Property)");
         return;
       }
       if (cur.colorMode !== "autoupdate" && cur.primary) {
@@ -19865,6 +20092,7 @@
     root4.querySelector("#seidr-wiggle-test")?.addEventListener("click", function() {
       const cur = readWiggleDraftFromDom(root4) || wiggleDraft;
       if (!cur) return;
+      seidrCancelWiggleFramePreview();
       const saved = seidrUpsertAnimation(cur);
       if (!saved.ok || !saved.animation) {
         setWiggleMsg(root4, saved.error || "Save before test failed");
@@ -19936,7 +20164,7 @@
     if (match && seidrWiggleFramesDiffer(primary, secondary)) {
       setWiggleMsg(root4, match.typedState != null ? "Added with typed automatch (" + match.typedState + ")" : "Added with automatch");
     } else {
-      setWiggleMsg(root4, "Added \u2014 Automatch or Custom a secondary (typed wing / other asset)");
+      setWiggleMsg(root4, "Added \u2014 Automatch, or Capture second after changing typed/size/rotation");
     }
     updateCap2(root4);
   }
