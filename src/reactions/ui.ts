@@ -309,6 +309,8 @@ function readDraftFromDom(root: HTMLElement): SeidrReaction | null {
 	const enabled = !enEl || enEl.checked;
 	const phrase = (phraseEl && phraseEl.value || "").trim().slice(0, SEIDR_REACTION_PHRASE_MAX);
 	const onClimax = !!(climaxEl && climaxEl.checked);
+	const onDeny = !!(root.querySelector("#seidr-rxn-deny") as HTMLInputElement | null)?.checked;
+	const onResist = !!(root.querySelector("#seidr-rxn-resist") as HTMLInputElement | null)?.checked;
 
 	const activities: SeidrReactionActivityTrigger[] = [];
 	root.querySelectorAll("[data-rxn-trig]").forEach(function (row) {
@@ -378,6 +380,8 @@ function readDraftFromDom(root: HTMLElement): SeidrReaction | null {
 		activities: activities,
 		phrase: phrase,
 		onClimax: onClimax,
+		onDeny: onDeny,
+		onResist: onResist,
 		steps: steps.length ? steps : [seidrDefaultReactionSayStep()],
 	};
 }
@@ -392,7 +396,7 @@ function renderEditor(root: HTMLElement) {
 	const firstAnim = seidrListAnimations()[0];
 	const triggersHtml = draft.activities.length
 		? draft.activities.map(triggerRowHtml).join("")
-		: '<p class="seidr-settings-hint">No activity triggers. Add one, a Phrase, or On climax.</p>';
+		: '<p class="seidr-settings-hint">No activity triggers. Add one, a Phrase, or an orgasm trigger.</p>';
 	const stepsHtml = draft.steps.map(stepCardHtml).join("");
 	host.innerHTML = [
 		'<div class="seidr-settings-field-row">',
@@ -404,7 +408,7 @@ function renderEditor(root: HTMLElement) {
 		'<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-enabled"' +
 		(draft.enabled ? " checked" : "") + " /> Enabled</label>",
 		"</div>",
-		'<p class="seidr-settings-hint" style="margin-top:12px;">Triggers — activity (I perform / On me), a Phrase you say, and/or On climax.</p>',
+		'<p class="seidr-settings-hint" style="margin-top:12px;">Triggers — activity (I perform / On me), a Phrase you say, and/or an orgasm trigger.</p>',
 		'<div id="seidr-rxn-trigs">' + triggersHtml + "</div>",
 		'<div class="seidr-settings-row" style="margin-top:8px;gap:8px;display:flex;flex-wrap:wrap;">',
 		'<button type="button" class="seidr-act-btn" id="seidr-rxn-add-trig">+ Activity</button>',
@@ -415,10 +419,14 @@ function renderEditor(root: HTMLElement) {
 		'" placeholder="Only when you say this exact line" value="' +
 		escapeHtml(draft.phrase || "") + '" />',
 		"</div>",
-		'<div class="seidr-settings-row" style="margin-top:8px;">',
+		'<div class="seidr-settings-row" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:16px;">',
 		'<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-climax"' +
 		(draft.onClimax ? " checked" : "") +
-		' /> On climax <span class="seidr-settings-hint">(your orgasm, ruin, or resist)</span></label>',
+		' /> On orgasm</label>',
+		'<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-deny"' +
+		(draft.onDeny ? " checked" : "") + ' /> On deny</label>',
+		'<label class="seidr-settings-check"><input type="checkbox" id="seidr-rxn-resist"' +
+		(draft.onResist ? " checked" : "") + ' /> On resist</label>',
 		"</div>",
 		'<p class="seidr-settings-hint" style="margin-top:12px;">Response script — up to ' +
 		SEIDR_REACTION_STEPS_MAX + " steps, run in order (local).</p>",

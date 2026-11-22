@@ -168,7 +168,7 @@ More detail: [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md).
 Author under **Settings → Reaction**. Scripts run on **your client only**.
 
 - Up to **50** reactions, **5** steps each (Say / Animation / **Wiggle** / Commands Action).
-- Triggers: activities you perform and/or performed on you (optional **Slot**), a Phrase **you** say, and/or **On climax**.
+- Triggers: activities you perform and/or performed on you (optional **Slot**), a Phrase **you** say, and/or **On orgasm**, **On deny**, and/or **On resist**.
 - Broken steps toast locally; no Hidden sync of playback.
 
 More detail: [`docs/REACTIONS.md`](docs/REACTIONS.md).

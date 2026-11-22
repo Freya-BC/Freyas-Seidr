@@ -24,9 +24,9 @@ Each reaction can combine:
 
 1. **Activities** — **Filter by Slot** narrows the Activity list (same Club zones as Commands; All = every Club/Seidr/mod activity) and is **saved** with the reaction so it restores when you switch back. Then pick **Activity**, and optionally **On slot** so only that zone counts when it fires (e.g. Caress on Ears vs Arms). Enable **I perform** and/or **On me**.  
 2. **Phrase** — exact line **you** say in room chat (case-insensitive). Other people’s chat, whispers, and emotes do not count.  
-3. **On climax** — when **you** orgasm, ruin, or successfully resist in the room. Other people’s climaxes do not count.
+3. **On orgasm**, **On deny**, and **On resist** — independently trigger when **you** orgasm, have an orgasm denied or ruined, or successfully resist in the room. Other people’s events do not count. Existing reactions with On climax enabled keep all three triggers enabled.
 
-Leave Phrase empty / climax unchecked if you only want activity triggers. Add at least one usable trigger before Save. If more than one enabled reaction matches the same event, only the first matching reaction in the list runs.
+Leave Phrase empty / the orgasm triggers unchecked if you only want activity triggers. Add at least one usable trigger before Save. If more than one enabled reaction matches the same event, only the first matching reaction in the list runs.
 
 ## Response steps
 

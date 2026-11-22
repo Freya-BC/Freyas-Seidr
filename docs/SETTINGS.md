@@ -17,6 +17,10 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Reaction** |
 
 ![General tab](../assets/docs/settings-general.png)
 
+### Appearance
+
+Choose **Seidr Classic** or **Plum & Gold** under Color scheme. The change applies immediately and is saved with your settings.
+
 ### Fast Open Actions
 
 ![Fast Open Actions](../assets/docs/settings-general-fast-open.png)
@@ -297,7 +301,7 @@ Local Autoreaction scripts (up to **50**). Each reaction can trigger when:
 - you **perform** a listed Club activity, and/or  
 - that activity is **performed on you** (optional **Slot** filter, e.g. Ears), and/or  
 - **you** say an exact chat Phrase (case-insensitive), and/or  
-- **you** climax (orgasm, ruin, or resist).
+- **you** orgasm, are denied, or resist, with separate toggles for each.
 
 The response is a script of up to **5** steps run in order on your client only:
 

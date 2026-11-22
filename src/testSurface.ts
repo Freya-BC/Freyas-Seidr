@@ -33,6 +33,8 @@ import {
 	seidrParseAnimationsImport,
 } from "./animations/io";
 import { seidrImportSelectedAnimations, seidrListAnimations } from "./animations/store";
+import { seidrMatchClimaxReaction } from "./reactions/match";
+import { seidrNormalizeReaction } from "./reactions/model";
 import { seidrExportReactionsString, seidrParseReactionsImport } from "./reactions/io";
 import { seidrImportSelectedReactions, seidrListReactions } from "./reactions/store";
 import { seidrExportCommandsString, seidrParseCommandsImport } from "./commands/io";
@@ -53,6 +55,8 @@ Seidr._test = Object.assign(Seidr._test || {}, {
 	deleteAnimation: seidrDeleteAnimation,
 	findAnimationByName: seidrFindAnimationByName,
 	upsertReaction: seidrUpsertReaction,
+	matchClimaxReaction: seidrMatchClimaxReaction,
+	normalizeReaction: seidrNormalizeReaction,
 	deleteReaction: seidrDeleteReaction,
 	poseIds: function () {
 		return SEIDR_ACTION_POSES.map(function (p) { return p.id; });

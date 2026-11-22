@@ -61,8 +61,10 @@ export type SeidrReaction = {
 	enabled: boolean;
 	activities: SeidrReactionActivityTrigger[];
 	phrase?: string;
-	/** When true, fires on your orgasm Activity (Orgasm* / OrgasmFail* / OrgasmResist*). */
+	/** Fires on your orgasm; older saves used this for all three outcomes. */
 	onClimax?: boolean;
+	onDeny?: boolean;
+	onResist?: boolean;
 	steps: SeidrReactionStep[];
 };
 
@@ -100,6 +102,8 @@ export function seidrDefaultReaction(id: number): SeidrReaction {
 		activities: [seidrDefaultReactionActivityTrigger()],
 		phrase: "",
 		onClimax: false,
+		onDeny: false,
+		onResist: false,
 		steps: [seidrDefaultReactionSayStep()],
 	};
 }
@@ -174,6 +178,10 @@ export function seidrNormalizeReaction(raw: unknown, fallbackId?: number): Seidr
 	const phraseRaw = typeof d.phrase === "string" ? d.phrase.trim() : "";
 	const phrase = phraseRaw ? phraseRaw.slice(0, SEIDR_REACTION_PHRASE_MAX) : "";
 	const onClimax = d.onClimax === true;
+	// Preserve the combined trigger in older saved reactions.
+	const legacy = d.onDeny === undefined && d.onResist === undefined;
+	const onDeny = legacy ? onClimax : d.onDeny === true;
+	const onResist = legacy ? onClimax : d.onResist === true;
 	const steps: SeidrReactionStep[] = [];
 	if (Array.isArray(d.steps)) {
 		for (let i = 0; i < d.steps.length && steps.length < SEIDR_REACTION_STEPS_MAX; i++) {
@@ -189,6 +197,8 @@ export function seidrNormalizeReaction(raw: unknown, fallbackId?: number): Seidr
 		activities: activities,
 		phrase: phrase,
 		onClimax: onClimax,
+		onDeny: onDeny,
+		onResist: onResist,
 		steps: steps,
 	};
 }
@@ -217,7 +227,7 @@ export function seidrNormalizeReactionsBag(raw: unknown): SeidrReactionsBag {
 
 /** True if the reaction has a usable activity, phrase, or climax trigger. */
 export function seidrReactionHasTrigger(r: SeidrReaction): boolean {
-	if (r.onClimax) return true;
+	if (r.onClimax || r.onDeny || r.onResist) return true;
 	if (r.phrase && String(r.phrase).trim()) return true;
 	for (let i = 0; i < r.activities.length; i++) {
 		const a = r.activities[i];

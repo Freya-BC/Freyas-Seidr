@@ -50,7 +50,10 @@ export type SeidrClusterNameScope = "seidrCluster" | "all";
 /** Modifier held while clicking a room character for Fast Open Actions. */
 export type SeidrFastOpenModifier = "Shift" | "Ctrl" | "Alt" | "Meta";
 
+export type SeidrColorScheme = "classic" | "wheel";
+
 export type SeidrSettings = {
+	colorScheme: SeidrColorScheme;
 	radial: RadialConfig;
 	/**
 	 * One-time local chat welcome already shown in a live ChatRoom.
@@ -339,6 +342,7 @@ function normalizeFastOpenSlot(raw: unknown): string {
 
 export function seidrDefaultSettings(): SeidrSettings {
 	return {
+		colorScheme: "classic",
 		radial: radialDefaults(),
 		welcomeLocalSeen: false,
 		roomManagerEnabled: true,
@@ -375,6 +379,7 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	const base = seidrDefaultSettings();
 	if (!raw || typeof raw !== "object") return base;
 	const d = raw as Partial<SeidrSettings>;
+	if (d.colorScheme === "wheel") base.colorScheme = "wheel";
 	base.radial = normalizeRadial(d.radial);
 	if (typeof d.welcomeLocalSeen === "boolean") base.welcomeLocalSeen = d.welcomeLocalSeen;
 	if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;

@@ -1,3 +1,4 @@
+import { seidrApplyColorScheme } from "./settings/theme";
 /** Seidr — boot after login */
 import { Seidr } from "./seidr";
 
@@ -37,6 +38,8 @@ Seidr.setHubs = function (hubs: Record<string, unknown>) {
 };
 
 Seidr.prepareReload = function () {
+	seidrApplyColorScheme("classic");
+	if (typeof Seidr.uninstallChangelog === "function") Seidr.uninstallChangelog();
 	uninstallRadial();
 	if (typeof Seidr.rmFlushStore === "function") {
 		try { Seidr.rmFlushStore(); } catch (e) { /* ignore */ }

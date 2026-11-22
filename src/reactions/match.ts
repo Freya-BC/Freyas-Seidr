@@ -121,7 +121,11 @@ export function seidrMatchClimaxReaction(data: any): SeidrReactionMatchContext |
 	const list = seidrListReactions();
 	for (let i = 0; i < list.length; i++) {
 		const r = list[i];
-		if (!r.enabled || !r.onClimax) continue;
+		if (!r.enabled) continue;
+		const content = String(data.Content || "").trim();
+		const matches = /^Orgasm\d+$/.test(content) ? r.onClimax
+			: /^OrgasmFail/.test(content) ? r.onDeny : r.onResist;
+		if (!matches) continue;
 		return { reaction: r, issuerMemberNumber: me, kind: "climax" };
 	}
 	return null;

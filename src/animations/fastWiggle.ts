@@ -78,14 +78,14 @@ function fwStylesCss(): string {
 		"  pointer-events: auto; position: fixed; z-index: 115;",
 		"  display: none; place-items: center; padding: 0;",
 		"  border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);",
-		"  background: rgba(36, 28, 48, 0.92); color: #f0e6d4; cursor: grab;",
+		"  background: rgb(var(--seidr-rgb-241c30, 36 28 48) / 0.92); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: grab;",
 		"  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
 		"  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
 		"  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
 		"  letter-spacing: 0.04em; text-transform: uppercase;",
 		"}",
 		"#seidr-fw-btn.seidr-fw-visible { display: grid; }",
-		"#seidr-fw-btn:hover { border-color: #d4a017; }",
+		"#seidr-fw-btn:hover { border-color: var(--seidr-color-d4a017, #d4a017); }",
 		"#seidr-fw-btn .seidr-fw-icon {",
 		"  user-select: none; pointer-events: none;",
 		"  display: grid; place-items: center; line-height: 1;",
@@ -99,19 +99,19 @@ function fwStylesCss(): string {
 		"  display: none; flex-direction: column; gap: " + MENU_GAP + "px;",
 		"  padding: " + MENU_PAD + "px; border-radius: 10px;",
 		"  border: 1px solid rgba(255,255,255,0.14);",
-		"  background: rgba(36, 28, 48, 0.95); color: #f0e6d4;",
+		"  background: rgb(var(--seidr-rgb-241c30, 36 28 48) / 0.95); color: var(--seidr-color-f0e6d4, #f0e6d4);",
 		"  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
 		"  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
 		"}",
 		"#seidr-fw-menu.seidr-fw-open { display: flex; }",
 		"#seidr-fw-menu button {",
 		"  flex: 0 0 auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);",
-		"  background: rgba(42, 34, 56, 0.9); color: #f0e6d4; cursor: pointer;",
+		"  background: rgb(var(--seidr-rgb-2a2238, 42 34 56) / 0.9); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: pointer;",
 		"  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
 		"  letter-spacing: 0.04em; text-transform: uppercase;",
 		"  display: grid; place-items: center; padding: 0;",
 		"}",
-		"#seidr-fw-menu button:hover { border-color: #d4a017; color: #d4a017; }",
+		"#seidr-fw-menu button:hover { border-color: var(--seidr-color-d4a017, #d4a017); color: var(--seidr-color-d4a017, #d4a017); }",
 		"#seidr-fw-menu button svg { display: block; width: 100%; height: 100%; }",
 	].join("\n");
 }
@@ -127,7 +127,7 @@ function injectStyles() {
 }
 
 /** Seidr chrome gold (Room Manager / Fast Wiggle accent). */
-const SEIDR_ICON_GOLD = "#d4a017";
+const SEIDR_ICON_GOLD = "var(--seidr-color-d4a017, #d4a017)";
 
 function slotIconLabel(slot: SeidrWiggleSlot): string {
 	if (slot === "ear") return "EAR";

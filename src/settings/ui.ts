@@ -1,5 +1,6 @@
 /** Seidr settings panel body */
 import { Seidr } from "../seidr";
+import { seidrApplyColorScheme } from "./theme";
 import { buildRadialTab } from "../radial/editor";
 
 declare const Player: any;
@@ -177,7 +178,10 @@ function seidrBuildGeneralHtml(): string {
 		return '<option value="' + s.id + '">' + s.label + "</option>";
 	}).join("");
 	return [
-		'<details class="seidr-settings-sec" data-seidr-tour="fast-open">',
+		'<details class="seidr-settings-sec" open><summary>Appearance</summary>',
+	'<div class="seidr-settings-field-row"><label class="seidr-settings-field-label" for="seidr-set-color-scheme">Color scheme</label><select id="seidr-set-color-scheme"><option value="classic">Seidr Classic</option><option value="wheel">Plum & Gold</option></select></div>',
+	'<p class="seidr-settings-hint">Changes Seidr’s interface colors immediately.</p></details>',
+	'<details class="seidr-settings-sec" data-seidr-tour="fast-open">',
 		"<summary>Fast Open Actions</summary>",
 		'<div class="seidr-settings-row">',
 		'<label><input type="checkbox" id="seidr-set-fast-open" /> Enable Fast Open Actions</label>',
@@ -752,6 +756,8 @@ export function seidrDiscardMapDrawDraft() {
 
 export function seidrRefreshSettingsUi() {
 	const s = seidrGetSettings();
+	const scheme = $("seidr-set-color-scheme") as HTMLSelectElement | null;
+	if (scheme) scheme.value = s.colorScheme;
 	const radialEnabled = $("seidr-set-radial-enabled") as HTMLInputElement | null;
 	const radialReopen = $("seidr-set-radial-reopen") as HTMLInputElement | null;
 	if (radialReopen) radialReopen.checked = s.radial.reopenLastWheel;
@@ -832,6 +838,15 @@ export function seidrRefreshSettingsUi() {
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
+	const scheme = $("seidr-set-color-scheme") as HTMLSelectElement | null;
+	scheme?.addEventListener("change", () => {
+		const colorScheme = scheme.value === "wheel" ? "wheel" : "classic";
+		seidrSaveSettings({ colorScheme });
+		const current = seidrGetSettings().colorScheme;
+		scheme.value = current;
+		seidrApplyColorScheme(current);
+		onChange?.();
+	});
 	const radialTrigger = $("seidr-set-radial-trigger") as HTMLSelectElement | null;
 	const radialModifier = $("seidr-set-radial-modifier") as HTMLSelectElement | null;
 	const radialModifierRow = $("seidr-radial-modifier-row");
