@@ -1,3 +1,4 @@
+import { normalizeRadial, radialDefaults, type RadialConfig } from "../radial/model";
 /** Seidr settings — RM launcher prefs + Drawing offsets (Option A) + Actions bag */
 import {
 	seidrNormalizeActionsBag,
@@ -50,6 +51,7 @@ export type SeidrClusterNameScope = "seidrCluster" | "all";
 export type SeidrFastOpenModifier = "Shift" | "Ctrl" | "Alt" | "Meta";
 
 export type SeidrSettings = {
+	radial: RadialConfig;
 	/**
 	 * One-time local chat welcome already shown in a live ChatRoom.
 	 * (Replaces unused `welcomeSeen` from 1.0.79 so missed boots get another chance.)
@@ -337,6 +339,7 @@ function normalizeFastOpenSlot(raw: unknown): string {
 
 export function seidrDefaultSettings(): SeidrSettings {
 	return {
+		radial: radialDefaults(),
 		welcomeLocalSeen: false,
 		roomManagerEnabled: true,
 		showQuickmenuButton: true,
@@ -372,6 +375,7 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 	const base = seidrDefaultSettings();
 	if (!raw || typeof raw !== "object") return base;
 	const d = raw as Partial<SeidrSettings>;
+	base.radial = normalizeRadial(d.radial);
 	if (typeof d.welcomeLocalSeen === "boolean") base.welcomeLocalSeen = d.welcomeLocalSeen;
 	if (typeof d.roomManagerEnabled === "boolean") base.roomManagerEnabled = d.roomManagerEnabled;
 	if (typeof d.showQuickmenuButton === "boolean") base.showQuickmenuButton = d.showQuickmenuButton;

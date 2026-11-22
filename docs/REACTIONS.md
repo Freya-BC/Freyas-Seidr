@@ -1,6 +1,6 @@
 # Reaction (Autoreaction)
 
-Autoreaction runs a short **local** script when something happens to you in the room — or when **you** say a phrase. Other players do not need Seidr for your reaction to play on your client; nothing about the script is synced as a Seidr Hidden message.
+Autoreaction runs a script on your client when an activity involves you, you say a phrase, or you climax. The script itself is not sent to other players as a Seidr Hidden message, and they do not need Seidr for it to run. Its effects can still be visible to the room: for example, **Say** sends chat, and pose changes, item swaps, or performed actions can be seen by others.
 
 Author under **`/seidr` → Reaction**.
 
@@ -26,7 +26,7 @@ Each reaction can combine:
 2. **Phrase** — exact line **you** say in room chat (case-insensitive). Other people’s chat, whispers, and emotes do not count.  
 3. **On climax** — when **you** orgasm, ruin, or successfully resist in the room. Other people’s climaxes do not count.
 
-Leave Phrase empty / climax unchecked if you only want activity triggers. Add at least one usable trigger before Save.
+Leave Phrase empty / climax unchecked if you only want activity triggers. Add at least one usable trigger before Save. If more than one enabled reaction matches the same event, only the first matching reaction in the list runs.
 
 ## Response steps
 
@@ -69,7 +69,9 @@ While a reaction is running (and briefly after), further triggers are ignored so
 On the Reaction tab:
 
 1. **Export** — `SeidrRxn1:` clipboard string of all reactions.
-2. **Import** — paste → **Parse** → pick reactions (New/Different checked, Same unticked). Different rows can **Overwrite** or **Add as new**. Animation steps remap by name to your local Animations; missing clips are cleared with a note.
+2. **Import** — paste → **Parse** → review reactions (New/Different checked, Same unticked). Different rows default to **Overwrite**; choose **Add as new** to keep a separate copy. Select the rows you want and click **Import selected**.
+
+Import required Animations **before parsing** the Reaction code. Animation steps are matched by name to your local clips or named Wiggles during parsing; a missing animation is cleared and reported in a note. If you import the missing animation afterward, parse the Reaction code again. Wiggle slot steps need matching local Wiggle sets, and Perform action steps need the corresponding local Commands Action bindings; these dependencies are not included in the Reaction export. Check the imported reaction and save any corrections.
 
 ## Storage
 

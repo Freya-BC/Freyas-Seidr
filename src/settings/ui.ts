@@ -1,5 +1,6 @@
 /** Seidr settings panel body */
 import { Seidr } from "../seidr";
+import { buildRadialTab } from "../radial/editor";
 
 declare const Player: any;
 import {
@@ -190,6 +191,16 @@ function seidrBuildGeneralHtml(): string {
 		'<select id="seidr-set-fast-open-slot">' + slotOpts + "</select>",
 		"</div>",
 		'<p class="seidr-settings-hint">Hold the modifier and click a room or map character to open Club Activity View on the default slot (falls back if that zone has no activities). If FAM Shift-click is installed, pick another modifier or disable this.</p>',
+		"</details>",
+		'<details class="seidr-settings-sec">',
+		'<summary>Action Wheel</summary>',
+		'<div class="seidr-settings-row"><label><input type="checkbox" id="seidr-set-radial-enabled" /> Activate Action Wheel</label></div>',
+		'<div class="seidr-settings-row"><label><input type="checkbox" id="seidr-set-radial-reopen" /> Reopen last used wheel</label></div>',
+		'<div class="seidr-settings-field-row" style="margin-top:8px;"><label class="seidr-settings-field-label" for="seidr-set-radial-trigger">Open with</label><select id="seidr-set-radial-trigger"><option value="right">Right click</option><option value="middle">Middle click</option><option value="modified-left">Modifier + left click</option></select></div>',
+		'<div class="seidr-settings-field-row" id="seidr-radial-modifier-row" style="margin-top:8px;"><label class="seidr-settings-field-label" for="seidr-set-radial-modifier">Modifier</label><select id="seidr-set-radial-modifier">' + modOpts + '</select></div>',
+		'<p class="seidr-settings-hint">When using a modifier, choose a different one from Fast Open Actions.</p>',
+		'<div class="seidr-settings-field-row seidr-radial-transparency" style="margin-top:8px;"><label class="seidr-settings-field-label" for="seidr-set-radial-transparency">Transparency</label><input type="range" id="seidr-set-radial-transparency" min="0" max="100" step="5" /><output id="seidr-set-radial-value" for="seidr-set-radial-transparency"></output></div>',
+		'<div class="seidr-settings-row" style="margin-top:8px;"><button type="button" id="seidr-set-radial-designer">Open Wheel Designer</button></div>',
 		"</details>",
 		'<details class="seidr-settings-sec">',
 		"<summary>Room Manager</summary>",
@@ -741,6 +752,20 @@ export function seidrDiscardMapDrawDraft() {
 
 export function seidrRefreshSettingsUi() {
 	const s = seidrGetSettings();
+	const radialEnabled = $("seidr-set-radial-enabled") as HTMLInputElement | null;
+	const radialReopen = $("seidr-set-radial-reopen") as HTMLInputElement | null;
+	if (radialReopen) radialReopen.checked = s.radial.reopenLastWheel;
+	const radialTransparency = $("seidr-set-radial-transparency") as HTMLInputElement | null;
+	const radialValue = $("seidr-set-radial-value");
+	const radialTrigger = $("seidr-set-radial-trigger") as HTMLSelectElement | null;
+	const radialModifier = $("seidr-set-radial-modifier") as HTMLSelectElement | null;
+	const radialModifierRow = $("seidr-radial-modifier-row");
+	if (radialTrigger) radialTrigger.value = s.radial.trigger;
+	if (radialModifier) radialModifier.value = s.radial.modifier;
+	if (radialModifierRow) radialModifierRow.hidden = s.radial.trigger !== "modified-left";
+	if (radialEnabled) radialEnabled.checked = s.radial.enabled;
+	if (radialTransparency) radialTransparency.value = String(s.radial.transparency);
+	if (radialValue) radialValue.textContent = s.radial.transparency + "%";
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
@@ -807,6 +832,28 @@ export function seidrRefreshSettingsUi() {
 }
 
 export function seidrBindSettingsUi(onChange?: () => void) {
+	const radialTrigger = $("seidr-set-radial-trigger") as HTMLSelectElement | null;
+	const radialModifier = $("seidr-set-radial-modifier") as HTMLSelectElement | null;
+	const radialModifierRow = $("seidr-radial-modifier-row");
+	const persistRadialTrigger = () => {
+		const current = seidrGetSettings().radial;
+		const trigger = radialTrigger?.value === "middle" || radialTrigger?.value === "modified-left" ? radialTrigger.value : "right";
+		const modifier = FAST_OPEN_MODIFIERS.find(item => item.id === radialModifier?.value)?.id ?? "Shift";
+		seidrSaveSettings({radial: {...current, trigger, modifier}});
+		if (radialModifierRow) radialModifierRow.hidden = trigger !== "modified-left";
+		onChange?.();
+	};
+	radialTrigger?.addEventListener("change", persistRadialTrigger);
+	radialModifier?.addEventListener("change", persistRadialTrigger);
+	const radialEnabled = $("seidr-set-radial-enabled") as HTMLInputElement | null;
+	const radialReopen = $("seidr-set-radial-reopen") as HTMLInputElement | null;
+	radialReopen?.addEventListener("change", () => { seidrSaveSettings({radial: {...seidrGetSettings().radial, reopenLastWheel: radialReopen.checked}}); onChange?.(); });
+	const radialTransparency = $("seidr-set-radial-transparency") as HTMLInputElement | null;
+	const radialValue = $("seidr-set-radial-value");
+	radialEnabled?.addEventListener("change", () => { seidrSaveSettings({radial: {...seidrGetSettings().radial, enabled: radialEnabled.checked}}); onChange?.(); });
+	radialTransparency?.addEventListener("input", () => { if (radialValue) radialValue.textContent = radialTransparency.value + "%"; });
+	radialTransparency?.addEventListener("change", () => { seidrSaveSettings({radial: {...seidrGetSettings().radial, transparency: Number(radialTransparency.value)}}); onChange?.(); });
+	$("seidr-set-radial-designer")?.addEventListener("click", () => buildRadialTab(document.createElement("div"), true));
 	const en = $("seidr-set-rm-enabled") as HTMLInputElement | null;
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;

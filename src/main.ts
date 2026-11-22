@@ -17,6 +17,8 @@ import "./animations/index";
 import "./reactions/index";
 import "./poses/index";
 import "./fastOpen";
+import { installRadial, uninstallRadial } from "./radial/runtime";
+import { installRadialStyles } from "./radial/styles";
 import "./net";
 import "./roomManager/index";
 import "./settings/index";
@@ -34,6 +36,7 @@ Seidr.setHubs = function (hubs: Record<string, unknown>) {
 };
 
 Seidr.prepareReload = function () {
+	uninstallRadial();
 	if (typeof Seidr.rmFlushStore === "function") {
 		try { Seidr.rmFlushStore(); } catch (e) { /* ignore */ }
 	}
@@ -42,11 +45,11 @@ Seidr.prepareReload = function () {
 	}
 	Seidr._booted = false;
 	Seidr._hookState = {};
-	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-fw-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles"].forEach(function (id) {
+	["seidr-styles", "seidr-loaded", "seidr-rm-styles", "seidr-fw-styles", "seidr-settings-styles", "seidr-cmd-styles", "seidr-chat-font", "seidr-pose-styles", "seidr-radial-styles"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
-	["seidr-rm-root", "seidr-fw-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel"].forEach(function (id) {
+	["seidr-rm-root", "seidr-fw-root", "seidr-settings-root", "seidr-cmd-ac", "seidr-tour", "seidr-pose-btn", "seidr-pose-panel", "seidr-radial-editor"].forEach(function (id) {
 		const node = document.getElementById(id);
 		if (node && node.parentNode) node.parentNode.removeChild(node);
 	});
@@ -71,7 +74,8 @@ function injectStyle() {
 		"  position: fixed;",
 		"  z-index: 120;",
 		"  right: 16px;",
-		"  bottom: 18px;",
+		// Leave separate rows for Better Maps and Freyas Protection startup notices.
+		"  bottom: 178px;",
 		"  max-width: min(90vw, 320px);",
 		"  padding: 10px 14px;",
 		"  border-radius: 8px;",
@@ -112,6 +116,8 @@ function showLoadedToast() {
 function installHooks() {
 	Seidr.registerBcModSdk();
 	Seidr.installActivities();
+	installRadialStyles();
+	installRadial();
 	Seidr.installDraw();
 	if (typeof Seidr.installArousalBars === "function") {
 		try { Seidr.installArousalBars(); } catch (e) { console.warn("[Seidr] Arousal bars", e); }

@@ -152,7 +152,7 @@ Author under **Settings → Animations**. Clips and Wiggles play on **you** only
 
 ![Animations tab](assets/docs/settings-animations.png)
 
-- Up to **50** entries (clips + Wiggle sets), **20** steps per clip, **60 s** total wait.
+- Up to **50 clips** and **50 Wiggle sets**, **20** steps per clip, **60 s** total wait.
 - Clip steps: **Pose**, **Face**, or **Wiggle** (Ear / Tail / Wing together) + wait; optional Action text when the clip starts.
 - **Wiggle** section: Ear / Tail / Wing asset swaps (mirrors or typed wing poses); usable from clips, Reactions, Actions, and Fast Wiggle.
 - Play: `/animation <name>` or `/ani <name>` (Tab autocomplete). Optional **Fast Wiggle** floating button (Settings → General).

@@ -298,7 +298,7 @@ The response is a script of up to **5** steps run in order on your client only:
 3. **Wiggle** — Ear / Tail / Wing checkboxes; plays those sets together (skips missing / not worn)  
 4. **Perform action** — a Commands Action binding, targeting **Self** or the **Issuer** (the other party of the activity; for Phrase triggers, Issuer is you)
 
-Before running, Seidr checks that animations exist and actions are available. If not, a local chat toast reports `Reaction "…" not functional: …`. Playback is not synced to other players.
+Before running, Seidr checks that animations exist and actions are available. If not, a local chat toast reports `Reaction "…" not functional: …`. The script itself is not synced to other players; its chat, actions, pose changes and item swaps can still be visible in the room.
 
 Full guide: [REACTIONS.md](REACTIONS.md).
 

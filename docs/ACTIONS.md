@@ -132,6 +132,8 @@ On the Actions tab:
 
 Handy for moving a set of actions between characters or sharing with a friend. Animations, Reactions, and Commands have the same Export/Import pattern on their tabs.
 
+If an action uses **Play animation**, import its Animations first, before parsing the Actions code. Seidr matches the animation by name during parsing; if it cannot find it, the effect is disabled and a note appears. Import the missing animation and parse the Actions code again, or select an animation in the editor afterward.
+
 ## Storage
 
 Actions live in their own synced key `ExtensionSettings.SeidrActions`. See [SETTINGS.md](SETTINGS.md) / README Storage.

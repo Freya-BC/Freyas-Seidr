@@ -1,6 +1,6 @@
 # Animations
 
-Animations are short clips that play on **you** (the local Player). They do not pose other people in the room — use `/poses` for that.
+Animations are short clips that play on **your character**. They do not pose other people in the room — use `/poses` for that. Pose changes and Wiggle item swaps can be visible to others; an optional Action text is also posted to the room.
 
 Under **`/seidr` → Animations** you author:
 
@@ -125,7 +125,11 @@ Fast Select (when enabled) can map letter `d` + Tab to `/animation `.
 On the Animations tab (clips and wiggles together):
 
 1. **Export** — `SeidrAni1:` clipboard string of all clips and wiggle sets.
-2. **Import** — paste → **Parse** → pick items (New/Different checked, Same unticked). Different rows can **Overwrite** or **Add as new**. Use **Select all** / **Deselect all**.
+2. **Import** — paste the code → **Parse** → review the items. **New** and **Different** are checked; **Same** is unchecked. For a Different item, **Overwrite** is selected by default; choose **Add as new** to keep a separate copy when possible. Use **Select all** / **Deselect all**, then **Import selected**.
+
+Wiggles are also matched by slot and primary item, even if their names differ. A `replaces …` hint identifies the existing set. Because there can be only one set for the same slot and primary item, importing a collision can replace that set even if you choose **Add as new**. Review those rows before importing.
+
+If you are moving Actions or Reactions that use animations too, import Animations first, then parse the Actions and Reactions codes so their animation references can be matched by name.
 
 ## Storage
 

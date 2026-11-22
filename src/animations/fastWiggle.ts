@@ -7,7 +7,6 @@ import type { SeidrAnimation, SeidrWiggleSlot } from "./model";
 import { seidrPlayAnimation } from "./play";
 import { seidrReadyWiggleBySlot } from "./wiggleSlots";
 
-declare const Player: any;
 declare const MainCanvas: { canvas?: HTMLCanvasElement } | undefined;
 declare const CurrentScreen: string | undefined;
 declare const CurrentCharacter: unknown;
@@ -16,7 +15,7 @@ let root: HTMLElement | null = null;
 let btn: HTMLButtonElement | null = null;
 let menu: HTMLElement | null = null;
 let sessionBtnPos: { fx: number; fy: number } | null = null;
-let persistedPos: { fx: number; fy: number } | null = null;
+let chatAnchorY: number | null = null;
 let dragMoved = false;
 let chatLogObserver: ResizeObserver | null = null;
 let installed = false;
@@ -39,27 +38,6 @@ function clubScale(): number {
 
 function btnSize(): number {
 	return Math.max(28, Math.round(BTN_BASE * clubScale()));
-}
-
-function geomKey(): string {
-	const id = typeof Player !== "undefined" && Player && Player.MemberNumber != null ? Player.MemberNumber : "0";
-	return "SeidrFwUi_" + id;
-}
-
-function readPersistedPos(): { fx: number; fy: number } | null {
-	try {
-		const raw = localStorage.getItem(geomKey());
-		if (!raw) return null;
-		const d = JSON.parse(raw) as { fx?: number; fy?: number };
-		if (typeof d.fx === "number" && typeof d.fy === "number") return { fx: d.fx, fy: d.fy };
-	} catch (e) { /* ignore */ }
-	return null;
-}
-
-function writePersistedPos(fx: number, fy: number) {
-	try {
-		localStorage.setItem(geomKey(), JSON.stringify({ fx: fx, fy: fy }));
-	} catch (e) { /* ignore */ }
 }
 
 function chatLogEl(): HTMLElement | null {
@@ -288,10 +266,19 @@ function applyLauncherPosition(pos: RmLauncherPosition) {
 			if (pos === "chatTop") y = chat.top + 8;
 			else if (pos === "chatBottom") y = chat.bottom - size - 8;
 			else y = chat.top + chat.height / 2 - size / 2;
+			// Keep the launcher clear of Club’s map movement controls.
+			const controls = document.getElementById("chat-room-map-controls");
+			if (controls && getComputedStyle(controls).visibility !== "hidden") {
+				const r = controls.getBoundingClientRect();
+				if (r.width > 0 && r.height > 0 && x < r.right + GAP && x + size > r.left - GAP && y < r.bottom + GAP && y + size > r.top - GAP) {
+					y = r.top - size - GAP;
+				}
+			}
+			chatAnchorY = y / Math.max(1, vh);
 			setBtnXY(x, y);
 			return;
 		}
-		setBtnXY(vw - size - PAD, vh * 0.55);
+		setBtnXY(vw - size - PAD, chatAnchorY == null ? vh * 0.55 : chatAnchorY * vh);
 		return;
 	}
 
@@ -321,8 +308,6 @@ function placeBtnDefault() {
 	applyBtnSize();
 	if (sessionBtnPos) {
 		placeFromFractions(sessionBtnPos.fx, sessionBtnPos.fy);
-	} else if (persistedPos) {
-		placeFromFractions(persistedPos.fx, persistedPos.fy);
 	} else {
 		const settings = seidrGetSettings();
 		applyLauncherPosition(settings.fastWigglePosition || "chatBottom");
@@ -502,8 +487,6 @@ function ensureShell() {
 		const fx = x / Math.max(1, window.innerWidth);
 		const fy = y / Math.max(1, window.innerHeight);
 		sessionBtnPos = { fx: fx, fy: fy };
-		persistedPos = sessionBtnPos;
-		writePersistedPos(fx, fy);
 		disconnectChatLogObserver();
 	});
 	btn.addEventListener("pointerup", function () {
@@ -515,7 +498,6 @@ function ensureShell() {
 		if (menu.contains(t) || (btn && btn.contains(t))) return;
 		closeMenu();
 	});
-	persistedPos = readPersistedPos();
 }
 
 function disconnectChatLogObserver() {
@@ -528,13 +510,13 @@ function disconnectChatLogObserver() {
 function syncChatLogObserver() {
 	disconnectChatLogObserver();
 	if (!btn || !btn.classList.contains("seidr-fw-visible")) return;
-	if (sessionBtnPos || persistedPos) return;
+	if (sessionBtnPos) return;
 	const pos = seidrGetSettings().fastWigglePosition || "chatBottom";
 	if (pos !== "chatLeft" && pos !== "chatTop" && pos !== "chatBottom") return;
 	const el = chatLogEl();
 	if (!el || typeof ResizeObserver === "undefined") return;
 	chatLogObserver = new ResizeObserver(function () {
-		if (sessionBtnPos || persistedPos) return;
+		if (sessionBtnPos) return;
 		placeBtnDefault();
 	});
 	chatLogObserver.observe(el);
@@ -576,7 +558,7 @@ export function seidrFwUpdateVisibility() {
 
 export function seidrFwOnSettingsChanged() {
 	sessionBtnPos = null;
-	persistedPos = readPersistedPos();
+	chatAnchorY = null;
 	seidrFwUpdateVisibility();
 }
 
@@ -593,6 +575,7 @@ export function seidrInstallFastWiggle() {
 	ensureShell();
 	Seidr.tryHook("FastWiggle:ChatRoomLoad", "ChatRoomLoad", 11, function (args: unknown[], next: (a: unknown[]) => unknown) {
 		const r = next(args);
+		sessionBtnPos = null;
 		seidrFwUpdateVisibility();
 		return r;
 	});

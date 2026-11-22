@@ -3,6 +3,7 @@
  * Lets Testbench `eval` steps drive real code paths (settings save, animation play).
  */
 import { Seidr } from "./seidr";
+import { radialAllowed, radialCatalog } from "./radial/runtime";
 import { seidrGetSettings, seidrSaveSettings } from "./settings/storage";
 import {
 	seidrDeleteAnimation,
@@ -43,6 +44,8 @@ import {
 } from "./commands/store";
 
 Seidr._test = Object.assign(Seidr._test || {}, {
+	radialAllowed,
+	radialCatalog,
 	getSettings: seidrGetSettings,
 	saveSettings: seidrSaveSettings,
 	upsertAnimation: seidrUpsertAnimation,
