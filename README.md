@@ -25,12 +25,13 @@
 8. [Reaction (Autoreaction)](#reaction-autoreaction)
 9. [Chat Commands](#chat-commands)
 10. [Fast Open](#fast-open)
-11. [Room Manager](#room-manager)
-12. [Settings](#settings)
-13. [Echo coexistence](#echo-coexistence)
-14. [Storage](#storage)
-15. [Build (maintainers)](#build-maintainers)
-16. [Detailed docs](#detailed-docs)
+11. [Fast Action Wheel](#fast-action-wheel)
+12. [Room Manager](#room-manager)
+13. [Settings](#settings)
+14. [Echo coexistence](#echo-coexistence)
+15. [Storage](#storage)
+16. [Build (maintainers)](#build-maintainers)
+17. [Detailed docs](#detailed-docs)
 
 ---
 
@@ -74,6 +75,7 @@ The in-app Tutorial is the fastest way to learn People, `/a` Actions, and Tab co
 | **Reaction** | Local Autoreaction scripts (Say / Animation / Wiggle / Commands Action) |
 | **Chat Commands** | `/a` bindings, `/strip` / `/stripe`, `/poses` / `/p`, `/animation` / `/ani`, `/seidr`, `/roommanager` + Tab AC / Fast Select; Club `/beep` / `/whisper` Tab assist + beep Reply |
 | **Fast Open** | Modifier-click a room or map character to open Activity View on a chosen Item\* slot |
+| **Fast Action Wheel** | Open a customizable radial menu of activities for yourself or another character, including in map rooms |
 | **Room Manager** | Admin panel: room defs, access lists, backgrounds, map series + versions |
 | **Maps (Settings)** | Library of map versions; Default can sync; other versions stay local |
 | **Drawing / Names / Map Cuddle** | Lineup pull/cuddle spacing (+ Advanced / Sync); nickname modes + Who; map-room Map Cuddle offsets (zoom-scaled) |
@@ -223,6 +225,18 @@ More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
 ---
 
+## Fast Action Wheel
+
+Right-click a character to open a customizable wheel of activities. Select an action to run it, use the centre arrows to switch wheels, or select **Cuddle** for currently available Seidr hold actions. The wheel also works in map rooms.
+
+![Fast Action Wheel](assets/docs/action-wheel.png)
+
+Choose the opening gesture and transparency under **Settings → General → Action Wheel**. Use the pen beside the character name or **Open Wheel Designer** in Settings to arrange actions and icons.
+
+See [Action Wheel documentation](docs/ACTION_WHEEL.md) for shortcuts, settings, and the full editor guide.
+
+---
+
 ## Room Manager
 
 For **room admins** (and on ChatAdmin create/edit):
@@ -265,6 +279,7 @@ Tabs: **General** | **Actions** | **Commands** | **Animations** | **Reaction** |
 | Section | Options |
 |---------|---------|
 | **Fast Open Actions** | Enable, modifier, default Item\* slot |
+| **Action Wheel** | Enable, opening gesture, session wheel memory, transparency, and Wheel Designer |
 | **Room Manager** | Activate master switch, show quickmenu ⌂, open panel |
 | **Launcher position** | Top/Bottom/Middle × Left/Right, Chat Left / Top / Bottom |
 | **Drawing** | Pull X/Y and Cuddle X/Y (−400…400). Optional **Advanced Mode** + **Allow Sync** (private rooms). **Names** / **Who**. Save Drawing to keep offsets |
@@ -336,6 +351,7 @@ Requires Node 18+. Source is TypeScript under `src/` with `bc-stubs`. Public Rel
 | [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md) | Pose / face / Wiggle-slot clips, Wiggle sets, Fast Wiggle |
 | [`docs/REACTIONS.md`](docs/REACTIONS.md) | Autoreaction scripts (Say / Animation / Wiggle / Action) |
 | [`docs/COMMANDS.md`](docs/COMMANDS.md) | Slash commands, People, Tab autocomplete, Fast Select |
+| [`docs/ACTION_WHEEL.md`](docs/ACTION_WHEEL.md) | Action Wheel, Cuddle menu, shortcuts, and Wheel Designer |
 | [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md) | Admin room / access / backgrounds / maps |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference, Tutorial |
 

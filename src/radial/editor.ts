@@ -79,7 +79,7 @@ export function buildRadialTab(pane: HTMLElement, openDirectly = false) {
 		const panel = el("section", "sr-editor-window");
 		panel.setAttribute("role", "dialog");
 		panel.setAttribute("aria-modal", "true");
-		panel.setAttribute("aria-label", "Wheel editor");
+		panel.setAttribute("aria-label", "Wheel Designer");
 		const header = el("header", "sr-window-header");
 		function syncSettingsVisibility() {
 			const settingsPanel = document.getElementById("seidr-settings-panel");
@@ -103,7 +103,7 @@ export function buildRadialTab(pane: HTMLElement, openDirectly = false) {
 		settings.setAttribute("aria-label", "Open Seidr settings");
 		const headerActions = el("div", "sr-header-actions");
 		headerActions.append(settings, close);
-		header.append(el("strong", "", "Wheel editor"), headerActions);
+		header.append(el("strong", "", "Wheel Designer"), headerActions);
 		body = el("div", "sr-window-body");
 		panel.append(header, body);
 		overlay.append(panel);

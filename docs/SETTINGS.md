@@ -31,6 +31,14 @@ Jump into Club **Activity View** without hunting through the character menu.
 
 Hold the modifier, click someone in the room or on the map. If Freyas Action Manager is also loaded and uses Shift-click, FAM’s handler wins on lineup when both bind Shift — pick another modifier here if that happens.
 
+### Action Wheel
+
+![Action Wheel settings](../assets/docs/action-wheel-settings.png)
+
+Open a customizable activity wheel for a character in a room or on a map. **Activate Action Wheel** is on by default. Choose right click, middle click, or a modifier with left click, and adjust transparency. **Reopen last used wheel** remembers the last main wheel for the current browser session and is off by default. **Open Wheel Designer** lets you arrange actions and icons.
+
+See [Action Wheel documentation](ACTION_WHEEL.md) for the complete guide.
+
 ### Room Manager
 
 ![Room Manager settings](../assets/docs/settings-general-room-manager.png)

@@ -17,7 +17,7 @@ export function installRadialStyles(){if(document.getElementById("seidr-radial-s
 .sr-info-row .sr-tooltip{position:static;transform:none;min-width:180px;max-width:min(300px,calc(100vw - 80px));overflow-wrap:anywhere}
 .sr-wheel-edit{flex:0 0 36px;width:36px;height:36px;display:grid;place-items:center;padding:3px;border:1px solid #d4a017;border-radius:7px;background:#1c1626;color:#f0e6d4;font-size:22px;cursor:pointer}
 .sr-wheel-edit:hover,.sr-wheel-edit:focus-visible{background:#504064;color:#d4a017}
-.sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:#0d0914a8}
+.sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:transparent}
 .sr-editor-overlay.sr-with-settings{background:transparent;pointer-events:none}
 .sr-editor-overlay.sr-with-settings .sr-editor-window{pointer-events:auto}
 #seidr-settings-root.sr-settings-above{z-index:11001}

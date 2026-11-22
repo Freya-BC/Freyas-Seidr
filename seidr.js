@@ -1,4 +1,4 @@
-/* Seidr v2.0.106 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.0.109 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -9,7 +9,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.0.106";
+  Seidr.VERSION = "2.0.109";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -14889,6 +14889,18 @@
     key: '<circle cx="8" cy="8" r="4.5"/><path d="m11 11 10 10m-4-4 2-2m-5 0 2-2"/>',
     exit: '<path d="M10 4H4v16h6m-1-8h12m-4-4 4 4-4 4"/>'
   };
+  var HOLD_ICONS = {
+    Seidr_PullLeft: '<circle cx="18.5" cy="7" r="2.5"/><path d="M16 12c.7-1 1.6-1.5 2.5-1.5 2 0 3.5 1.8 3.5 4.5v2M14 16H3m4-4-4 4 4 4"/>',
+    Seidr_PullRight: '<circle cx="5.5" cy="7" r="2.5"/><path d="M8 12c-.7-1-1.6-1.5-2.5-1.5C3.5 10.5 2 12.3 2 15v2m8-1h11m-4-4 4 4-4 4"/>',
+    Seidr_Cuddle: '<circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="7" r="2.5"/><path d="M3 19c0-4 1.5-6.5 5-6.5 2 0 3 1 4 2.5 1-1.5 2-2.5 4-2.5 3.5 0 5 2.5 5 6.5M7 15.5l5 3 5-3"/>',
+    Seidr_JoinLeft: '<circle cx="7" cy="7" r="2.5"/><path d="M3 15c0-2.5 1.5-4.5 4-4.5s4 2 4 4.5v2m10-1H13m3-3-3 3 3 3"/>',
+    Seidr_JoinRight: '<circle cx="17" cy="7" r="2.5"/><path d="M13 15c0-2.5 1.5-4.5 4-4.5s4 2 4 4.5v2M3 16h8m-3-3 3 3-3 3"/>',
+    Seidr_JoinCuddle: '<path d="M12 21S3 16 3 9a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 7-9 12-9 12Z"/><path d="M8 12h8m-3-3 3 3-3 3"/>',
+    Seidr_RemoveLeft: '<circle cx="6" cy="7" r="2.5"/><path d="M2 16c0-3 1.5-5 4-5s4 2 4 5m4-3 6 6m0-6-6 6M2 20h8"/>',
+    Seidr_RemoveRight: '<circle cx="18" cy="7" r="2.5"/><path d="M14 16c0-3 1.5-5 4-5s4 2 4 5M4 13l6 6m0-6-6 6m4 1h14"/>',
+    Seidr_RemoveCuddle: '<path d="M12 20S4 16 4 10a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3c0 6-8 10-8 10Z"/><path d="m9 10 6 6m0-6-6 6"/>',
+    Seidr_Remove: '<path d="M10 4H4v16h6m-1-8h12m-4-4 4 4-4 4"/>'
+  };
   var PNG_FRAMES = {
     "blow-kiss": [174.9, 116.6, -33, -11.1],
     "brush": [160.9, 107.3, -32.6, -4.5],
@@ -14971,7 +14983,7 @@
     svg.setAttribute("stroke-linecap", "round");
     svg.setAttribute("stroke-linejoin", "round");
     svg.setAttribute("aria-hidden", "true");
-    svg.innerHTML = RADIAL_ICONS[id];
+    svg.innerHTML = HOLD_ICONS[entry.name] ?? RADIAL_ICONS[id];
     return svg;
   }
 
@@ -21661,7 +21673,7 @@
       const panel4 = el("section", "sr-editor-window");
       panel4.setAttribute("role", "dialog");
       panel4.setAttribute("aria-modal", "true");
-      panel4.setAttribute("aria-label", "Wheel editor");
+      panel4.setAttribute("aria-label", "Wheel Designer");
       const header = el("header", "sr-window-header");
       function syncSettingsVisibility() {
         const settingsPanel2 = document.getElementById("seidr-settings-panel");
@@ -21685,7 +21697,7 @@
       settings.setAttribute("aria-label", "Open Seidr settings");
       const headerActions = el("div", "sr-header-actions");
       headerActions.append(settings, close2);
-      header.append(el("strong", "", "Wheel editor"), headerActions);
+      header.append(el("strong", "", "Wheel Designer"), headerActions);
       body = el("div", "sr-window-body");
       panel4.append(header, body);
       overlay.append(panel4);
@@ -22384,7 +22396,7 @@
 .sr-info-row .sr-tooltip{position:static;transform:none;min-width:180px;max-width:min(300px,calc(100vw - 80px));overflow-wrap:anywhere}
 .sr-wheel-edit{flex:0 0 36px;width:36px;height:36px;display:grid;place-items:center;padding:3px;border:1px solid #d4a017;border-radius:7px;background:#1c1626;color:#f0e6d4;font-size:22px;cursor:pointer}
 .sr-wheel-edit:hover,.sr-wheel-edit:focus-visible{background:#504064;color:#d4a017}
-.sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:#0d0914a8}
+.sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:transparent}
 .sr-editor-overlay.sr-with-settings{background:transparent;pointer-events:none}
 .sr-editor-overlay.sr-with-settings .sr-editor-window{pointer-events:auto}
 #seidr-settings-root.sr-settings-above{z-index:11001}
