@@ -20,6 +20,7 @@ import "./fastOpen";
 import { installRadial, uninstallRadial } from "./radial/runtime";
 import { installRadialStyles } from "./radial/styles";
 import "./net";
+import { installStatusIcon } from "./statusIcon";
 import "./roomManager/index";
 import "./settings/index";
 import "./testSurface";
@@ -141,6 +142,7 @@ function installHooks() {
 		try { Seidr.installReactions(); } catch (e) { console.warn("[Seidr] Reactions", e); }
 	}
 	Seidr.installNet();
+	installStatusIcon();
 	if (typeof Seidr.installNetStats === "function") {
 		try { Seidr.installNetStats(); } catch (e) { console.warn("[Seidr] NetStats", e); }
 	}

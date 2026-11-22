@@ -227,7 +227,7 @@ More detail: [`docs/COMMANDS.md`](docs/COMMANDS.md).
 
 ## Fast Action Wheel
 
-Right-click a character to open a customizable wheel of activities. Select an action to run it, use the centre arrows to switch wheels, or select **Cuddle** for currently available Seidr hold actions. The wheel also works in map rooms.
+Right-click a character to open a customizable wheel of activities. Select an action to run it, use the centre arrows to switch wheels, or select **Hold** for currently available Seidr hold actions. The wheel also works in map rooms.
 
 ![Fast Action Wheel](assets/docs/action-wheel.png)
 
@@ -351,7 +351,7 @@ Requires Node 18+. Source is TypeScript under `src/` with `bc-stubs`. Public Rel
 | [`docs/ANIMATIONS.md`](docs/ANIMATIONS.md) | Pose / face / Wiggle-slot clips, Wiggle sets, Fast Wiggle |
 | [`docs/REACTIONS.md`](docs/REACTIONS.md) | Autoreaction scripts (Say / Animation / Wiggle / Action) |
 | [`docs/COMMANDS.md`](docs/COMMANDS.md) | Slash commands, People, Tab autocomplete, Fast Select |
-| [`docs/ACTION_WHEEL.md`](docs/ACTION_WHEEL.md) | Action Wheel, Cuddle menu, shortcuts, and Wheel Designer |
+| [`docs/ACTION_WHEEL.md`](docs/ACTION_WHEEL.md) | Action Wheel, Hold menu, shortcuts, and Wheel Designer |
 | [`docs/ROOM_MANAGER.md`](docs/ROOM_MANAGER.md) | Admin room / access / backgrounds / maps |
 | [`docs/SETTINGS.md`](docs/SETTINGS.md) | Preference panel reference, Tutorial |
 

@@ -24,7 +24,7 @@ If you also use Fast Open Actions or another mod with a modifier-click shortcut,
 
 ## Choose and navigate actions
 
-- The field above the wheel shows the selected character’s name. Hover an unavailable action to see the reason there, when one is available.
+- The field above the wheel shows the selected character’s name. Hover an unavailable action to see its reason near the cursor, when one is available.
 - Grey actions are currently unavailable. This can happen because an action is for yourself or another character, permissions or current conditions prevent it, or the action’s mod is inactive. A saved missing action stays in your layout so it can return when its mod is active again.
 - Use the centre **left** and **right** arrows to switch wheels. The number shows the current wheel and total. You can also use the keyboard’s Left and Right arrows when chat is not focused.
 - In map rooms, the wheel captures the arrow keys while open, so they do not move your character. Normal map controls return when it closes.
@@ -33,11 +33,11 @@ If you also use Fast Open Actions or another mod with a modifier-click shortcut,
 
 Seidr checks an activity’s availability again when you select it. The availability message may be general when Club or another mod does not provide a more specific reason.
 
-## Cuddle menu
+## Hold menu
 
 ![Cuddle wheel with the currently available pull, cuddle, and join actions](../assets/docs/action-wheel-cuddle.png)
 
-**Cuddle** is fixed at the top of wheel 1. Select it to open a second wheel with the Seidr pull, cuddle, join, and remove activities that are currently valid for the selected character and situation. Use the left arrow to return or **×** to close. If none are available, the field above the wheel says so.
+**Hold** is fixed at the top of wheel 1. Select it to open a second wheel with the Seidr pull, cuddle, join, and remove activities that are currently valid for the selected character and situation. Use the left arrow to return or **×** to close. If none are available, the field above the wheel says so. The screenshot of the main wheel shows the previous **Cuddle** label.
 
 ## Wheel Designer
 
@@ -59,7 +59,7 @@ The designer is a movable, resizable window. Drag its header to move it and drag
 5. Click an activity’s icon to choose another icon. In that popup, **Move to wheel…** moves the activity to a different wheel with free space.
 6. Select **Save changes** to apply your layout. **Discard** reloads the saved layout. **Reset defaults** loads the default layout into the editor; select **Save changes** to apply it.
 
-Each wheel can hold up to eight actions, and you can create up to twelve wheels. Segments resize as the number of actions changes. The fixed Cuddle segment cannot be moved, replaced, removed, or assigned another icon.
+Each wheel can hold up to eight actions, and you can create up to twelve wheels. Segments resize as the number of actions changes. The fixed Hold segment cannot be moved, replaced, removed, or assigned another icon.
 
 ### Default wheels
 
@@ -67,7 +67,7 @@ New configurations start with three wheels:
 
 | Wheel | Actions |
 |---|---|
-| 1 | Cuddle, Pet Head, Brush Hair, Kiss Cheek, Kiss Lips, French Kiss, Caress Arm |
+| 1 | Hold, Pet Head, Brush Hair, Kiss Cheek, Kiss Lips, French Kiss, Caress Arm |
 | 2 | Polite Kiss on Hand, Wiggle Body, Massage Back, Rub Bodies, Kiss Neck, Caress Breasts, Grope Breasts, Caress Nipple |
 | 3 | Kiss Nipple, Caress Butt, Spank Butt, Grope Butt, Caress Clitoris, Masturbate Clitoris, Caress Pussy, Masturbate Pussy |
 

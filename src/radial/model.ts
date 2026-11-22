@@ -2,7 +2,7 @@ export type RadialEntry = { name: string; group: string; label: string; icon?: s
 export type RadialTrigger = "right" | "middle" | "modified-left";
 export type RadialModifier = "Shift" | "Ctrl" | "Alt" | "Meta";
 export type RadialConfig = { enabled: boolean; transparency: number; trigger: RadialTrigger; modifier: RadialModifier; reopenLastWheel: boolean; wheels: RadialEntry[][] };
-export const CUDDLE: RadialEntry = { name: "__cuddle", group: "ItemArms", label: "Cuddle" };
+export const CUDDLE: RadialEntry = { name: "__cuddle", group: "ItemArms", label: "Hold" };
 export function radialDefaults(): RadialConfig {
  return { enabled: true, transparency: 20, trigger: "right", modifier: "Shift", reopenLastWheel: false, wheels: [
   [CUDDLE,

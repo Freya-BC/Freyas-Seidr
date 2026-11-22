@@ -89,7 +89,7 @@ function render() {
  const entries: RadialEntry[] = submenu ? holds.map(name=>({name,group:"ItemTorso",label:radialLabel(name,"ItemTorso")})).filter(e=>!!radialAllowed(e,target).item) : config.wheels[wheel];
  const info=el("div","sr-tooltip visible"); info.setAttribute("role","status");
  const targetName = String(target.Nickname || target.Name || "Character");
- const showInfo = (reason?: string) => { info.textContent = reason ? `${targetName} · ${reason}` : targetName; };
+ const showInfo = (message?: string) => { info.textContent = message ? `${targetName} · ${message}` : targetName; };
  const infoRow=el("div","sr-info-row"); showInfo(); infoRow.appendChild(info);
  const edit=el("button","sr-wheel-edit"); edit.type="button"; edit.title="Open wheel designer"; edit.setAttribute("aria-label","Open wheel designer");
  edit.append(radialPngIcon("edit", () => document.createTextNode("✎")));
@@ -101,14 +101,14 @@ function render() {
   const path=document.createElementNS("http://www.w3.org/2000/svg","path"); path.setAttribute("d",wedge(i,entries.length)); path.setAttribute("class",result.reason?"sr-slice disabled":"sr-slice"); svg.appendChild(path);
   const angle=-Math.PI/2+i*2*Math.PI/entries.length, x=50+32*Math.cos(angle), y=50+32*Math.sin(angle);
   const button=el("button","sr-action"); const icon=el("span","sr-icon"); icon.appendChild(radialIcon(entry)); button.append(icon,el("span","sr-segment-label",entry.label)); button.type="button"; button.style.left=x+"%"; button.style.top=y+"%"; button.title=result.reason || entry.label; button.setAttribute("aria-label",entry.label+(result.reason?": "+result.reason:"")); if(result.reason) button.setAttribute("aria-disabled","true");
-  const highlight=(on:boolean)=>{path.classList.toggle("active",on); showInfo(on ? result.reason : undefined);};
+  const highlight=(on:boolean)=>{path.classList.toggle("active",on);};
   for (const node of [path,button]) { node.addEventListener("mouseenter",()=>highlight(true)); node.addEventListener("mouseleave",()=>highlight(false)); node.addEventListener("focus",()=>highlight(true)); node.addEventListener("blur",()=>highlight(false)); }
-  button.onclick=()=>{ if(entry.name === "__cuddle") {submenu=true;render();return;} const current=radialAllowed(entry,target); if(!current.item){showInfo(current.reason || "Unavailable");return;} const group=AssetGroupGet(target.AssetFamily,entry.group as any); try { ActivityRun(Player,target,group,current.item); close(); } catch(e) { console.warn("[Seidr] radial activity",e); button.title="Could not run activity"; } };
+  button.onclick=()=>{ if(entry.name === "__cuddle") {submenu=true;render();return;} const current=radialAllowed(entry,target); if(!current.item){button.title=current.reason || "Unavailable"; button.setAttribute("aria-label",entry.label+": "+button.title); const tooltip=path.querySelector("title"); if(tooltip) tooltip.textContent=button.title; return;} const group=AssetGroupGet(target.AssetFamily,entry.group as any); try { ActivityRun(Player,target,group,current.item); close(); } catch(e) { console.warn("[Seidr] radial activity",e); button.title="Could not run activity"; } };
   path.addEventListener("click",()=>button.click()); path.style.cursor=result.reason?"help":"pointer";
   const tip=document.createElementNS("http://www.w3.org/2000/svg","title"); tip.textContent=result.reason || entry.label; path.appendChild(tip);
   disk.appendChild(button);
  });
- if(!entries.length) showInfo(submenu ? "No valid cuddle actions" : "No actions on this wheel");
+ if(!entries.length) showInfo(submenu ? "No valid hold actions" : "No actions on this wheel");
  const hub=el("div","sr-hub"); const controls=el("div","sr-controls"); hub.appendChild(controls);
  const add=(label:string, description:string, fn:()=>void)=>{const b=el("button",description === "Close" ? "sr-close" : "sr-arrow",label);b.type="button";b.title=description;b.setAttribute("aria-label",description);b.onclick=fn;controls.appendChild(b);};
  if(submenu) add("←","Back",()=>{submenu=false;render();}); else add("←","Previous wheel",()=>{wheel=(wheel+config.wheels.length-1)%config.wheels.length;render();});

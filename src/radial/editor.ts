@@ -238,7 +238,7 @@ export function buildRadialTab(pane: HTMLElement, openDirectly = false) {
 			if (entry) {
 				const icon = fixed(i) ? el("span", "sr-editor-icon") : button("", () => showIcons(icon, entry, i, preview));
 				icon.className = "sr-editor-icon";
-				icon.title = fixed(i) ? "Fixed Cuddle action" : "Choose icon for " + entry.label;
+				icon.title = fixed(i) ? "Fixed Hold menu" : "Choose icon for " + entry.label;
 				icon.setAttribute("aria-label", icon.title);
 				icon.append(radialIcon(entry));
 				content.append(icon, el("span", "sr-segment-label", entry.label));
@@ -288,7 +288,7 @@ export function buildRadialTab(pane: HTMLElement, openDirectly = false) {
 		actions().forEach((entry, i) => {
 			const row = el("div", "sr-editor-row");
 			const label = el("span", "sr-entry-label", entry.label);
-			label.append(el("small", "", fixed(i) ? "Fixed · opens cuddle options" : entry.group));
+			label.append(el("small", "", fixed(i) ? "Fixed · opens hold options" : entry.group));
 			if (!fixed(i)) beginDrag(row, {index: i});
 			row.ondragover = e => { if (!fixed(i) && drag && "index" in drag) e.preventDefault(); };
 			row.ondrop = e => { if (drag && "index" in drag) { e.preventDefault(); move(drag.index, i); drag = undefined; } };
