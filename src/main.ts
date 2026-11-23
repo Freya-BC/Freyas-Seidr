@@ -18,7 +18,7 @@ import "./animations/index";
 import "./reactions/index";
 import "./poses/index";
 import "./fastOpen";
-import { installRadial, uninstallRadial } from "./radial/runtime";
+import { installRadial, installRadialMapGrid, uninstallRadial } from "./radial/runtime";
 import { installRadialStyles } from "./radial/styles";
 import "./net";
 import { installStatusIcon } from "./statusIcon";
@@ -121,7 +121,6 @@ function installHooks() {
 	Seidr.registerBcModSdk();
 	Seidr.installActivities();
 	installRadialStyles();
-	installRadial();
 	Seidr.installDraw();
 	if (typeof Seidr.installArousalBars === "function") {
 		try { Seidr.installArousalBars(); } catch (e) { console.warn("[Seidr] Arousal bars", e); }
@@ -155,6 +154,8 @@ function installHooks() {
 	if (typeof Seidr.installMapHolds === "function") {
 		try { Seidr.installMapHolds(); } catch (e) { console.warn("[Seidr] Map holds", e); }
 	}
+	installRadial();
+	installRadialMapGrid();
 	if (typeof Seidr.installRoomManager === "function") {
 		try { Seidr.installRoomManager(); } catch (e) { console.warn("[Seidr] Room Manager", e); }
 	}

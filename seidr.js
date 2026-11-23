@@ -1,4 +1,4 @@
-/* Seidr v2.2.3 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.2.6 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -42,7 +42,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.2.3";
+  Seidr.VERSION = "2.2.6";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -22207,6 +22207,13 @@
   var abort = null;
   var mapDrawing = false;
   var mapHitboxes = [];
+  function radialMapTargetAt(x, y) {
+    for (let i = mapHitboxes.length - 1; i >= 0; i--) {
+      const hit = mapHitboxes[i];
+      if (x >= hit.x && x < hit.x + hit.width && y >= hit.y && y < hit.y + hit.height && ChatRoomCharacter.includes(hit.character)) return hit.character;
+    }
+    return null;
+  }
   function title(name) {
     return name.replace(/^Seidr_/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ");
   }
@@ -22408,13 +22415,7 @@
           const [left, top, width, height] = tag.rect;
           return x >= left && x < left + width && y >= top && y < top + height;
         })?.C;
-        if (!found) for (let i = mapHitboxes.length - 1; i >= 0; i--) {
-          const hit = mapHitboxes[i];
-          if (x >= hit.x && x < hit.x + hit.width && y >= hit.y && y < hit.y + hit.height && ChatRoomCharacter.includes(hit.character)) {
-            found = hit.character;
-            break;
-          }
-        }
+        if (!found) found = radialMapTargetAt(x, y);
       }
     } else if (typeof ChatRoomIsViewActive === "function" && ChatRoomIsViewActive("Character")) {
       ChatRoomCharacterViewLoopCharacters((idx, cx, cy, space, zoom) => {
@@ -22448,11 +22449,8 @@
     render2();
     return true;
   }
-  function installRadial() {
-    abort?.abort();
-    abort = new AbortController();
-    const signal = abort.signal;
-    Seidr.tryHook("radialMapGrid", "ChatRoomMapViewDrawGrid", 0, (args, next) => {
+  function installRadialMapGrid() {
+    Seidr.tryHook("radialMapGrid", "ChatRoomMapViewDrawGrid", 6, (args, next) => {
       mapHitboxes = [];
       mapDrawing = true;
       try {
@@ -22461,8 +22459,13 @@
         mapDrawing = false;
       }
     });
-    Seidr.tryHook("radialMapCharacter", "DrawCharacter", 0, (args, next) => {
-      if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
+  }
+  function installRadial() {
+    abort?.abort();
+    abort = new AbortController();
+    const signal = abort.signal;
+    Seidr.tryHook("radialMapCharacter", "DrawCharacter", 4, (args, next) => {
+      if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && !mapHitboxes.some((hit) => hit.character === args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
         mapHitboxes.push({ character: args[0], x: args[1], y: args[2], width: 500 * args[3], height: 1e3 * args[3] });
       }
       return next(args);
@@ -25857,7 +25860,6 @@ button.sr-editor-icon:hover,button.sr-editor-icon:focus-visible{border-color:var
     Seidr.registerBcModSdk();
     Seidr.installActivities();
     installRadialStyles();
-    installRadial();
     Seidr.installDraw();
     if (typeof Seidr.installArousalBars === "function") {
       try {
@@ -25931,6 +25933,8 @@ button.sr-editor-icon:hover,button.sr-editor-icon:focus-visible{border-color:var
         console.warn("[Seidr] Map holds", e);
       }
     }
+    installRadial();
+    installRadialMapGrid();
     if (typeof Seidr.installRoomManager === "function") {
       try {
         Seidr.installRoomManager();

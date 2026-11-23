@@ -45,6 +45,13 @@ function readLastWheel(): number {
 let abort: AbortController | null = null;
 let mapDrawing = false;
 let mapHitboxes: { character: any; x: number; y: number; width: number; height: number }[] = [];
+export function radialMapTargetAt(x: number, y: number): any {
+ for (let i = mapHitboxes.length - 1; i >= 0; i--) {
+  const hit = mapHitboxes[i];
+  if (x >= hit.x && x < hit.x + hit.width && y >= hit.y && y < hit.y + hit.height && ChatRoomCharacter.includes(hit.character)) return hit.character;
+ }
+ return null;
+}
 function title(name: string) { return name.replace(/^Seidr_/, "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " "); }
 export function radialLabel(name: string, group: string): string {
  try { for (const key of ["Label-ChatOther-"+group+"-"+name, "Label-ChatSelf-"+group+"-"+name, "Activity"+name]) { const value = ActivityDictionaryText(key); if (value && value !== key && !value.includes("MISSING TEXT")) return value; } } catch (_) { /* fallback */ }
@@ -130,10 +137,7 @@ function openFromClick(e: MouseEvent): boolean {
   if(x<=split && !chrome && !ChatRoomMapViewEditStarted && !["Tile","Object","ObjectSettings"].includes(ChatRoomMapViewEditMode)) {
    const tags = typeof ChatRoomMapViewNameTags !== "undefined" && Array.isArray(ChatRoomMapViewNameTags) ? ChatRoomMapViewNameTags : [];
    found = tags.find(tag => { const [left, top, width, height] = tag.rect; return x >= left && x < left + width && y >= top && y < top + height; })?.C;
-   if (!found) for (let i = mapHitboxes.length - 1; i >= 0; i--) {
-    const hit = mapHitboxes[i];
-    if (x >= hit.x && x < hit.x + hit.width && y >= hit.y && y < hit.y + hit.height && ChatRoomCharacter.includes(hit.character)) { found = hit.character; break; }
-   }
+   if (!found) found = radialMapTargetAt(x, y);
   }
  }
  else if (typeof ChatRoomIsViewActive === "function" && ChatRoomIsViewActive("Character" as any)) {
@@ -149,15 +153,19 @@ function openFromClick(e: MouseEvent): boolean {
  const size=Math.max(180,Math.min(470,window.innerWidth-16,window.innerHeight-60)); root.style.width=size+"px"; root.style.left=Math.max(8,Math.min(e.clientX-size/2,window.innerWidth-size-8))+"px"; root.style.top=Math.max(8,Math.min(e.clientY-size/2,window.innerHeight-size-8))+"px"; render();
  return true;
 }
-export function installRadial() {
- abort?.abort(); abort=new AbortController(); const signal=abort.signal;
- Seidr.tryHook("radialMapGrid", "ChatRoomMapViewDrawGrid", 0, (args, next) => {
+// Wrap the map-hold grid hook to track the original Club draw pass.
+// Install this after map holds so fallback hooks nest in the same order as ModSDK.
+export function installRadialMapGrid() {
+ Seidr.tryHook("radialMapGrid", "ChatRoomMapViewDrawGrid", 6, (args, next) => {
   mapHitboxes = [];
   mapDrawing = true;
   try { return next(args); } finally { mapDrawing = false; }
  });
- Seidr.tryHook("radialMapCharacter", "DrawCharacter", 0, (args, next) => {
-  if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
+}
+export function installRadial() {
+ abort?.abort(); abort=new AbortController(); const signal=abort.signal;
+ Seidr.tryHook("radialMapCharacter", "DrawCharacter", 4, (args, next) => {
+  if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && !mapHitboxes.some(hit => hit.character === args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
    mapHitboxes.push({character: args[0], x: args[1], y: args[2], width: 500 * args[3], height: 1000 * args[3]});
   }
   return next(args);
