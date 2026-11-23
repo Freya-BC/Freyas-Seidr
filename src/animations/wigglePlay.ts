@@ -1,4 +1,6 @@
 /** Play wiggle animations: alternate two assets; one loop per Ear/Tail/Wing slot (parallel OK) */
+import { seidrPublishActionText } from "../chat/actionText";
+import { seidrGetSettings } from "../settings/storage";
 import type { SeidrAnimation, SeidrWiggleFrame, SeidrWiggleSlot } from "./model";
 import {
 	seidrClampWiggleCount,
@@ -497,6 +499,11 @@ export function seidrPlayWiggle(anim: SeidrAnimation): Promise<{ ok: boolean; er
 	const run = bySlot[slot];
 	const gen = run.generation;
 	run.playing = true;
+	if (seidrGetSettings().showWiggleTexts) {
+		const action = slot === "wing" ? "flaps PronounPossessive wings" :
+			slot === "ear" ? "wiggles PronounPossessive ears" : "wiggles PronounPossessive tail";
+		seidrPublishActionText(anim.chatText?.trim() || "SourceCharacter " + action + ".", Player, Player);
+	}
 
 	const sequence: SeidrWiggleFrame[] = [];
 	for (let i = 0; i < count; i++) {

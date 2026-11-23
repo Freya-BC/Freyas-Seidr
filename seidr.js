@@ -1,4 +1,4 @@
-/* Seidr v2.2.0 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.2.3 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -42,7 +42,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.2.0";
+  Seidr.VERSION = "2.2.3";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -2519,6 +2519,7 @@
       showQuickmenuButton: true,
       launcherPosition: "chatTop",
       showFastWiggleButton: true,
+      showWiggleTexts: true,
       fastWigglePosition: "chatBottom",
       drawOffsets: seidrDefaultDrawOffsets(),
       drawAdvancedMode: false,
@@ -2557,6 +2558,7 @@
       base.launcherPosition = d.launcherPosition;
     }
     if (typeof d.showFastWiggleButton === "boolean") base.showFastWiggleButton = d.showFastWiggleButton;
+    if (typeof d.showWiggleTexts === "boolean") base.showWiggleTexts = d.showWiggleTexts;
     if (typeof d.fastWigglePosition === "string" && POSITION_IDS.indexOf(d.fastWigglePosition) >= 0) {
       base.fastWigglePosition = d.fastWigglePosition;
     }
@@ -8108,6 +8110,10 @@
     const run = bySlot[slot];
     const gen = run.generation;
     run.playing = true;
+    if (seidrGetSettings().showWiggleTexts) {
+      const action = slot === "wing" ? "flaps PronounPossessive wings" : slot === "ear" ? "wiggles PronounPossessive ears" : "wiggles PronounPossessive tail";
+      seidrPublishActionText(anim.chatText?.trim() || "SourceCharacter " + action + ".", Player, Player);
+    }
     const sequence = [];
     for (let i = 0; i < count; i++) {
       sequence.push(i % 2 === 0 ? frames.secondary : frames.primary);
@@ -8258,9 +8264,6 @@
       return Promise.resolve({ ok: false, error: "Not logged in" });
     }
     if (seidrAnimIsWiggle(anim)) {
-      if (anim.chatText && String(anim.chatText).trim()) {
-        seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
-      }
       return seidrPlayWiggle(anim).catch(function() {
         return { ok: false, error: "Wiggle interrupted" };
       });
@@ -15006,6 +15009,26 @@
     if (name.includes("whisper")) return "chat";
     return "spark";
   }
+  var RADIAL_CACHE = "seidr-wheel-icons-v1";
+  var radialLoads = /* @__PURE__ */ new Map();
+  function radialImageBlob(url) {
+    const pending = radialLoads.get(url);
+    if (pending) return pending;
+    const load = (async () => {
+      const cache2 = await caches.open(RADIAL_CACHE);
+      const cached = await cache2.match(url);
+      if (cached) return cached.blob();
+      const response = await fetch(url, { mode: "cors" });
+      if (!response.ok) throw new Error("Wheel icon request failed");
+      void cache2.put(url, response.clone()).catch(() => {
+      });
+      return response.blob();
+    })();
+    radialLoads.set(url, load);
+    void load.finally(() => radialLoads.delete(url)).catch(() => {
+    });
+    return load;
+  }
   function radialPngIcon(name, fallback) {
     const isLogo = name === "seidr-logo";
     const [width, height, left, top] = isLogo ? [139, 139, -19.5, 0] : PNG_FRAMES[name];
@@ -15019,7 +15042,18 @@
     img.onerror = () => frame.replaceWith(fallback());
     frame.append(img);
     if (isLogo) img.classList.add("sr-cuddle-crest");
-    img.src = isLogo ? Seidr.LOGO_URL : "https://freya-bc.github.io/Freyas-Seidr/assets/wheel-icon-concepts/" + name + ".png";
+    const url = isLogo ? Seidr.LOGO_URL : "https://freya-bc.github.io/Freyas-Seidr/assets/wheel-icon-concepts/" + name + ".png";
+    void radialImageBlob(url).then((blob) => {
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => URL.revokeObjectURL(objectUrl);
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        frame.replaceWith(fallback());
+      };
+      img.src = objectUrl;
+    }).catch(() => {
+      img.src = url;
+    });
     return frame;
   }
   function radialIcon(entry) {
@@ -15628,6 +15662,432 @@
       (document.head || document.documentElement).appendChild(el3);
     }
     el3.textContent = seidrSettingsCss();
+  }
+
+  // src/radial/editor.ts
+  var svgNamespace = "http://www.w3.org/2000/svg";
+  function el(tag, cls = "", text = "") {
+    const node = document.createElement(tag);
+    node.className = cls;
+    node.textContent = text;
+    return node;
+  }
+  function button(label, action, disabled = false) {
+    const node = el("button", "sr-edit-button", label);
+    node.type = "button";
+    node.disabled = disabled;
+    node.onclick = action;
+    return node;
+  }
+  function option(label, value) {
+    return new Option(label, value);
+  }
+  function buildRadialTab(pane, openDirectly = false) {
+    let draft4 = normalizeRadial(seidrGetSettings().radial);
+    let selected = 0;
+    let overlay;
+    let settingsObserver;
+    let body;
+    let drag;
+    let notice = "";
+    const catalogue = radialCatalog();
+    const requirements = /* @__PURE__ */ new Map();
+    if (typeof ActivityFemale3DCG !== "undefined") {
+      for (const activity of ActivityFemale3DCG) {
+        const items = (Array.isArray(activity.Prerequisite) ? activity.Prerequisite : []).flatMap((rule) => {
+          const match = /^(TargetNeeds|Needs)-(.+)$/.exec(rule);
+          return match ? [(match[1] === "TargetNeeds" ? "Target item: " : "Item: ") + match[2].replace(/([a-z])([A-Z])/g, "$1 $2")] : [];
+        });
+        if (items.length) requirements.set(activity.Name, items.join(", "));
+      }
+    }
+    let search = "", slot = "";
+    const actions = () => draft4.wheels[selected];
+    const fixed = (index) => selected === 0 && index === 0;
+    const refresh = () => render3(body ?? pane, !!body);
+    function changeWheel(delta) {
+      selected = (selected + delta + draft4.wheels.length) % draft4.wheels.length;
+      refresh();
+    }
+    function closeVisual() {
+      settingsObserver?.disconnect();
+      settingsObserver = void 0;
+      document.getElementById("seidr-settings-root")?.classList.remove("sr-settings-above");
+      overlay?.remove();
+      overlay = body = void 0;
+      drag = void 0;
+      refresh();
+      pane.querySelector("button")?.focus();
+    }
+    function openVisual() {
+      const existing = document.getElementById("seidr-radial-editor");
+      if (existing) {
+        existing.hidden = false;
+        existing.querySelector(".sr-window-header button")?.focus();
+        return;
+      }
+      overlay = el("div", "sr-editor-overlay");
+      overlay.id = "seidr-radial-editor";
+      const panel4 = el("section", "sr-editor-window");
+      panel4.setAttribute("role", "dialog");
+      panel4.setAttribute("aria-modal", "true");
+      panel4.setAttribute("aria-label", "Wheel Designer");
+      const header = el("header", "sr-window-header");
+      function syncSettingsVisibility() {
+        const settingsPanel2 = document.getElementById("seidr-settings-panel");
+        const isOpen = !!settingsPanel2 && !settingsPanel2.hasAttribute("hidden") && settingsPanel2.classList.contains("seidr-settings-open");
+        overlay?.classList.toggle("sr-with-settings", isOpen);
+        document.getElementById("seidr-settings-root")?.classList.toggle("sr-settings-above", isOpen);
+      }
+      const close2 = button("\xD7", closeVisual);
+      close2.setAttribute("aria-label", "Close wheel editor");
+      const settings = button("\u2699", () => {
+        seidrOpenSettings();
+        const settingsPanel2 = document.getElementById("seidr-settings-panel");
+        syncSettingsVisibility();
+        settingsObserver?.disconnect();
+        if (settingsPanel2) {
+          settingsObserver = new MutationObserver(syncSettingsVisibility);
+          settingsObserver.observe(settingsPanel2, { attributes: true, attributeFilter: ["hidden", "class"] });
+        }
+      });
+      settings.title = "Open Seidr settings";
+      settings.setAttribute("aria-label", "Open Seidr settings");
+      const headerActions = el("div", "sr-header-actions");
+      headerActions.append(settings, close2);
+      header.append(el("strong", "", "Wheel Designer"), headerActions);
+      body = el("div", "sr-window-body");
+      panel4.append(header, body);
+      overlay.append(panel4);
+      document.body.append(overlay);
+      const settingsPanel = document.getElementById("seidr-settings-panel");
+      if (settingsPanel) {
+        settingsObserver = new MutationObserver(syncSettingsVisibility);
+        settingsObserver.observe(settingsPanel, { attributes: true, attributeFilter: ["hidden", "class"] });
+      }
+      syncSettingsVisibility();
+      for (const event of ["pointerdown", "mousedown", "mouseup", "click", "wheel"]) {
+        overlay.addEventListener(event, (e) => e.stopPropagation());
+      }
+      panel4.onkeydown = (e) => {
+        if (e.key === "Escape" && !e.defaultPrevented) {
+          e.stopPropagation();
+          closeVisual();
+        }
+      };
+      header.onpointerdown = (e) => {
+        if (e.button !== 0 || e.target.closest("button")) return;
+        const rect = panel4.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
+        Object.assign(panel4.style, { left: rect.left + "px", top: rect.top + "px", transform: "none" });
+        header.setPointerCapture(e.pointerId);
+        header.onpointermove = (move2) => {
+          panel4.style.left = Math.max(0, Math.min(innerWidth - panel4.offsetWidth, move2.clientX - offsetX)) + "px";
+          panel4.style.top = Math.max(0, Math.min(innerHeight - panel4.offsetHeight, move2.clientY - offsetY)) + "px";
+          panel4.style.maxWidth = "calc(100vw - " + panel4.style.left + ")";
+          panel4.style.maxHeight = "calc(100vh - " + panel4.style.top + ")";
+        };
+        header.onlostpointercapture = () => {
+          header.onpointermove = null;
+        };
+      };
+      refresh();
+      close2.focus();
+    }
+    function move(from, to) {
+      if (fixed(from) || fixed(to) || from === to) return;
+      const [entry] = actions().splice(from, 1);
+      actions().splice(to, 0, entry);
+      refresh();
+    }
+    function wheelDestination(entry, index) {
+      const destination = el("select");
+      destination.setAttribute("aria-label", "Move " + entry.label + " to another wheel");
+      destination.append(option("Move to wheel\u2026", ""));
+      draft4.wheels.forEach((wheel2, i) => {
+        if (i === selected) return;
+        const choice = option("Wheel " + (i + 1) + (wheel2.length >= 8 ? " (full)" : ""), String(i));
+        choice.disabled = wheel2.length >= 8;
+        destination.append(choice);
+      });
+      destination.disabled = fixed(index) || draft4.wheels.length < 2;
+      destination.onchange = () => {
+        if (destination.value === "" || fixed(index)) return;
+        const next = draft4.wheels[Number(destination.value)];
+        if (next.length >= 8) return;
+        next.push(...actions().splice(index, 1));
+        refresh();
+      };
+      return destination;
+    }
+    function showIcons(anchor, entry, index, preview) {
+      preview.querySelector(".sr-icon-popup")?.remove();
+      const popup = el("div", "sr-icon-popup");
+      popup.setAttribute("role", "dialog");
+      popup.setAttribute("aria-label", "Edit " + entry.label);
+      const dismiss = () => {
+        popup.remove();
+        anchor.focus();
+      };
+      const close2 = button("\xD7", dismiss);
+      close2.setAttribute("aria-label", "Close icon picker");
+      const header = el("div", "sr-icon-popup-head");
+      header.append(el("strong", "", entry.label), close2);
+      const grid = el("div", "sr-icon-grid");
+      for (const id of RADIAL_ICON_IDS) {
+        const choice = button("", () => {
+          entry.icon = id;
+          anchor.replaceChildren(radialIcon(entry));
+          dismiss();
+        });
+        choice.className = "sr-icon-option";
+        choice.title = id;
+        choice.setAttribute("aria-label", id);
+        choice.setAttribute("aria-pressed", String(id === radialIconId(entry)));
+        choice.append(radialIcon({ name: entry.name, icon: id }));
+        grid.append(choice);
+      }
+      popup.append(header, grid, wheelDestination(entry, index));
+      popup.onkeydown = (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        dismiss();
+      };
+      preview.append(popup);
+      popup.querySelector('[aria-pressed="true"]')?.focus();
+    }
+    function beginDrag(node, source) {
+      node.draggable = true;
+      node.ondragstart = (event) => {
+        if (!event.dataTransfer) return;
+        drag = source;
+        event.dataTransfer.effectAllowed = "index" in source ? "move" : "copy";
+        event.dataTransfer.setData("text/plain", node.textContent ?? "Wheel action");
+      };
+      node.ondragend = () => {
+        drag = void 0;
+      };
+    }
+    function wheelPreview() {
+      const preview = el("div", "sr-visual-preview");
+      const disc = document.createElementNS(svgNamespace, "svg");
+      disc.classList.add("sr-preview-disc");
+      disc.setAttribute("viewBox", "0 0 400 400");
+      disc.setAttribute("aria-hidden", "true");
+      preview.append(disc, el("div", "sr-preview-hub", selected + 1 + " / " + draft4.wheels.length));
+      const entries = actions();
+      const count = Math.min(8, entries.length + 1);
+      for (let i = 0; i < count; i++) {
+        const entry = entries[i];
+        const path = document.createElementNS(svgNamespace, "path");
+        path.setAttribute("d", wedge(i, count));
+        path.setAttribute("class", entry ? "sr-slice" : "sr-slice sr-slot-empty");
+        disc.append(path);
+        const angle = -Math.PI / 2 + i * 2 * Math.PI / count;
+        const x = Math.cos(angle), y = Math.sin(angle);
+        const content = el("div", "sr-segment-content");
+        content.style.left = 50 + 32.5 * x + "%";
+        content.style.top = 50 + 32.5 * y + "%";
+        if (entry) {
+          const icon = fixed(i) ? el("span", "sr-editor-icon") : button("", () => showIcons(icon, entry, i, preview));
+          icon.className = "sr-editor-icon";
+          icon.title = fixed(i) ? "Fixed Hold menu" : "Choose icon for " + entry.label;
+          icon.setAttribute("aria-label", icon.title);
+          icon.append(radialIcon(entry));
+          content.append(icon, el("span", "sr-segment-label", entry.label));
+          content.title = entry.label;
+          if (!fixed(i)) beginDrag(content, { index: i });
+        } else {
+          content.append(el("span", "sr-empty-plus", "+"), el("span", "", "Drop action"));
+        }
+        preview.append(content);
+        if (fixed(i)) continue;
+        for (const target2 of [path, content]) {
+          target2.addEventListener("dragover", (event) => {
+            const e = event;
+            if (!drag) return;
+            e.preventDefault();
+            if (e.dataTransfer) e.dataTransfer.dropEffect = "index" in drag ? "move" : "copy";
+            path.classList.add("active");
+          });
+          target2.addEventListener("dragleave", () => path.classList.remove("active"));
+          target2.addEventListener("drop", (e) => {
+            e.preventDefault();
+            path.classList.remove("active");
+            const source = drag;
+            drag = void 0;
+            if (!source) return;
+            if ("index" in source) move(source.index, Math.min(i, entries.length - 1));
+            else {
+              entries[i] = { ...source.entry };
+              refresh();
+            }
+          });
+        }
+        if (!entry) continue;
+        const remove = button("\xD7", () => {
+          entries.splice(i, 1);
+          refresh();
+        });
+        remove.className = "sr-remove-item";
+        remove.title = "Remove " + entry.label;
+        remove.setAttribute("aria-label", remove.title);
+        remove.style.left = `calc(${50 + 48.75 * x}% + ${16 * x}px)`;
+        remove.style.top = `calc(${50 + 48.75 * y}% + ${16 * y}px)`;
+        preview.append(remove);
+      }
+      return preview;
+    }
+    function listEditor() {
+      const list = el("div", "sr-editor-list");
+      actions().forEach((entry, i) => {
+        const row = el("div", "sr-editor-row");
+        const label = el("span", "sr-entry-label", entry.label);
+        label.append(el("small", "", fixed(i) ? "Fixed \xB7 opens hold options" : entry.group));
+        if (!fixed(i)) beginDrag(row, { index: i });
+        row.ondragover = (e) => {
+          if (!fixed(i) && drag && "index" in drag) e.preventDefault();
+        };
+        row.ondrop = (e) => {
+          if (drag && "index" in drag) {
+            e.preventDefault();
+            move(drag.index, i);
+            drag = void 0;
+          }
+        };
+        row.append(
+          label,
+          button("\u2191", () => move(i, i - 1), fixed(i) || i === 0 || fixed(i - 1)),
+          button("\u2193", () => move(i, i + 1), fixed(i) || i === actions().length - 1),
+          wheelDestination(entry, i),
+          button("Remove", () => {
+            actions().splice(i, 1);
+            refresh();
+          }, fixed(i))
+        );
+        list.append(row);
+      });
+      return list;
+    }
+    function activityPicker(visual) {
+      const picker = el("section", "sr-picker");
+      const filters = el("div", "sr-filters");
+      const input = el("input");
+      input.type = "search";
+      input.placeholder = "Search activities";
+      input.setAttribute("aria-label", "Search activities");
+      input.value = search;
+      const select = el("select");
+      select.setAttribute("aria-label", "Filter activities by body slot");
+      select.append(option("All body slots", ""));
+      for (const group of [...new Set(catalogue.map((entry) => entry.group))].sort()) {
+        select.append(option(group.replace(/^Item/, ""), group));
+      }
+      select.value = slot;
+      const results = el("div", "sr-picker-results");
+      function populate() {
+        results.replaceChildren();
+        const query = search.trim().toLowerCase();
+        for (const entry of catalogue) {
+          const item = requirements.get(entry.name) ?? "";
+          if (slot && slot !== entry.group || ![entry.label, entry.name, entry.group, item].join(" ").toLowerCase().includes(query)) continue;
+          const tile = el("div", visual ? "sr-picker-tile" : "sr-picker-row");
+          if (visual) {
+            beginDrag(tile, { entry });
+            const icon = el("span", "sr-tile-icon");
+            icon.append(radialIcon(entry));
+            tile.append(icon);
+          }
+          tile.append(el("span", "sr-tile-label", entry.label), el("small", "sr-item-info", entry.group.replace(/^Item/, "")));
+          if (visual && item) tile.append(el("small", "sr-item-info", item));
+          const add = button(visual ? "+" : "Add", () => {
+            actions().push({ ...entry });
+            refresh();
+          }, actions().length >= 8);
+          add.title = "Add " + entry.label;
+          add.setAttribute("aria-label", add.title);
+          tile.append(add);
+          results.append(tile);
+        }
+        if (!results.childElementCount) results.append(el("p", "sr-help", "No matching activities."));
+      }
+      input.oninput = () => {
+        search = input.value;
+        populate();
+      };
+      select.onchange = () => {
+        slot = select.value;
+        populate();
+      };
+      filters.append(input, select);
+      picker.append(el("h3", "", "Activities"), filters, results);
+      populate();
+      return picker;
+    }
+    function render3(root4, visual) {
+      root4.replaceChildren();
+      if (!visual) {
+        const enabled = el("input");
+        enabled.type = "checkbox";
+        enabled.checked = draft4.enabled;
+        enabled.onchange = () => {
+          draft4.enabled = enabled.checked;
+        };
+        const label = el("label", "sr-editor-enable");
+        label.append(enabled, " Enable action wheel");
+        root4.append(button("Open visual editor", openVisual), el("h2", "", "Fast Action Wheel"), label);
+      }
+      const nav = el("div", "sr-editor-nav");
+      const previous = button("\u2039", () => changeWheel(-1), draft4.wheels.length === 1);
+      const next = button("\u203A", () => changeWheel(1), draft4.wheels.length === 1);
+      previous.setAttribute("aria-label", "Previous wheel");
+      next.setAttribute("aria-label", "Next wheel");
+      nav.append(
+        previous,
+        el("strong", "", "Wheel " + (selected + 1) + " of " + draft4.wheels.length),
+        next,
+        button("+ New wheel", () => {
+          draft4.wheels.push([]);
+          selected = draft4.wheels.length - 1;
+          refresh();
+        }, draft4.wheels.length >= 12),
+        button("Delete wheel", () => {
+          draft4.wheels.splice(selected, 1);
+          selected--;
+          refresh();
+        }, selected === 0)
+      );
+      const layout = el("div", visual ? "sr-visual-layout" : "");
+      const left = el("div", "sr-visual-left");
+      left.append(visual ? wheelPreview() : listEditor());
+      if (visual) left.append(el("p", "sr-help", "Drag to rearrange or replace. Click an icon to change it."));
+      layout.append(left, activityPicker(visual));
+      const footer = el("div", "sr-editor-footer");
+      function reset(defaults) {
+        draft4 = normalizeRadial(defaults ? null : seidrGetSettings().radial);
+        selected = 0;
+        notice = defaults ? "Defaults restored in this draft." : "Changes discarded.";
+        refresh();
+      }
+      const status = el("span", "sr-save-status", notice);
+      status.setAttribute("role", "status");
+      const save = button("Save changes", () => {
+        const current = seidrGetSettings().radial;
+        draft4.transparency = current.transparency;
+        draft4.trigger = current.trigger;
+        draft4.modifier = current.modifier;
+        draft4.reopenLastWheel = current.reopenLastWheel;
+        if (visual) draft4.enabled = current.enabled;
+        const result = seidrSaveSettings({ radial: normalizeRadial(draft4) });
+        status.textContent = notice = result.ok ? "Wheel settings saved." : result.error ?? "Could not save wheel settings.";
+      });
+      save.classList.add("sr-save");
+      footer.append(status, button("Reset defaults", () => reset(true)), button("Discard", () => reset(false)), save);
+      root4.append(nav, layout, footer);
+    }
+    render3(pane, false);
+    if (openDirectly) openVisual();
   }
 
   // src/settings/drawOffsets.ts
@@ -19009,7 +19469,7 @@
     if (!map2) return { ok: false, error: "Map not found" };
     const canon = rmCanonicalVersionName(versionName, "Version");
     if (rmIsDefaultVersionName(canon)) {
-      return { ok: false, error: "Use Overwrite Default to update Default" };
+      return { ok: false, error: "Select Default and use Overwrite selected version" };
     }
     const extras = extrasOnly(map2.versions);
     if (extras.length >= localVerMax()) {
@@ -19068,6 +19528,39 @@
     const ls = upsertLocalEntry(mapId, map2.name, [nextDef].concat(extras));
     if (!ls.ok) return { ok: false, error: ls.error };
     return { ok: true, version: nextDef };
+  }
+  function rmOverwriteVersion(mapId, versionId) {
+    const map2 = rmGetMap(mapId);
+    if (!map2) return { ok: false, error: "Map not found" };
+    const ver = map2.versions.find(function(v) {
+      return v.id === versionId;
+    });
+    if (ver && rmIsDefaultVersionName(ver.name)) {
+      return rmOverwriteDefault(mapId);
+    }
+    const data = rmExportCurrentMap();
+    if (!data) return { ok: false, error: "No map to save (map room required)" };
+    if (!ver) return { ok: false, error: "Version not found" };
+    const next = {
+      id: ver.id,
+      name: ver.name,
+      data,
+      savedAt: Date.now()
+    };
+    if (map2.location === "remote") {
+      const extras = extrasOnly(map2.versions).map(function(v) {
+        return v.id === versionId ? next : v;
+      });
+      const ls2 = upsertLocalEntry(mapId, map2.name, extras);
+      if (!ls2.ok) return { ok: false, error: ls2.error };
+      return { ok: true, version: next };
+    }
+    const all = map2.versions.map(function(v) {
+      return v.id === versionId ? next : v;
+    });
+    const ls = upsertLocalEntry(mapId, map2.name, all);
+    if (!ls.ok) return { ok: false, error: ls.error };
+    return { ok: true, version: next };
   }
   function rmLoadMapVersion(mapId, versionId) {
     const map2 = rmGetMap(mapId);
@@ -19832,7 +20325,7 @@
         '<div class="seidr-settings-row" style="margin-top:10px; gap:6px; display:flex; flex-wrap:wrap;">',
         '<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
         '<button type="button" class="seidr-act-btn" id="seidr-maps-load"' + loadDisabled + ">Load version</button>",
-        '<button type="button" class="seidr-act-btn" id="seidr-maps-overwrite"' + versionSaveDisabled + ">Overwrite Default</button>",
+        '<button type="button" class="seidr-act-btn" id="seidr-maps-overwrite"' + versionSaveDisabled + ">Overwrite selected version</button>",
         '<button type="button" class="seidr-act-btn" id="seidr-maps-add-ver"' + versionSaveDisabled + ">Save new version</button>",
         '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-maps-del-ver">Delete version</button>',
         '<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-maps-del-map">Delete map</button>',
@@ -20011,21 +20504,29 @@
       });
     });
     root4.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function() {
-      if (!editMapId) return;
+      if (!editMapId || !editVersionId) return;
       const mapId = editMapId;
-      void rmConfirm("Overwrite Default with the current room map?", {
-        title: "Overwrite Default",
+      const versionId = editVersionId;
+      const version = rmListVersions(mapId).find(function(v) {
+        return v.id === versionId;
+      });
+      if (!version) {
+        setMsg5(root4, "Version not found");
+        return;
+      }
+      void rmConfirm("Overwrite version \u201C" + version.name + "\u201D with the current room map?", {
+        title: "Overwrite version",
         confirmLabel: "Overwrite"
       }).then(function(ok) {
         if (!ok) return;
-        const r = rmOverwriteDefault(mapId);
+        const r = rmOverwriteVersion(mapId, versionId);
         if (!r.ok) {
           setMsg5(root4, r.error || "Overwrite failed");
           return;
         }
         editVersionId = r.version ? r.version.id : rmDefaultVersionId(mapId);
         refreshAll(root4);
-        setMsg5(root4, "Default overwritten");
+        setMsg5(root4, "Version overwritten");
       });
     });
     root4.querySelector("#seidr-maps-add-ver")?.addEventListener("click", function() {
@@ -20047,7 +20548,7 @@
           return;
         }
         if (verName.trim() === RM_MAP_DEFAULT_NAME) {
-          setMsg5(root4, "Use Overwrite Default to update Default");
+          setMsg5(root4, "Select Default and use Overwrite selected version");
           return;
         }
         const r = rmSaveNewVersion(mapId, verName);
@@ -20525,6 +21026,8 @@
       '<label><input type="checkbox" id="seidr-set-fast-wiggle" /> Show Fast Wiggle Button</label>',
       "</div>",
       '<p class="seidr-settings-hint">Floating button to play configured Ear / Tail / Wing wiggles. Hidden when no matching item is worn. Never overlaps the Room Manager button.</p>',
+      '<div class="seidr-settings-row"><label><input type="checkbox" id="seidr-set-wiggle-texts" /> Show Wiggle Texts</label></div>',
+      '<p class="seidr-settings-hint">Show a public action line whenever a wiggle plays, including in reactions and animation clips.</p>',
       '<div class="seidr-settings-field-row" style="margin-top:8px;">',
       '<span class="seidr-settings-field-label">Position</span>',
       '<select id="seidr-set-fw-pos">' + opts4 + "</select>",
@@ -20998,6 +21501,7 @@
     const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
     const fw = $2("seidr-set-fast-wiggle");
+    const fwt = $2("seidr-set-wiggle-texts");
     const fwp = $2("seidr-set-fw-pos");
     const am = $2("seidr-set-arousal-mode");
     const as = $2("seidr-set-arousal-scope");
@@ -21013,6 +21517,7 @@
     if (qm) qm.checked = s.showQuickmenuButton !== false;
     if (pos) pos.value = s.launcherPosition;
     if (fw) fw.checked = !!s.showFastWiggleButton;
+    if (fwt) fwt.checked = s.showWiggleTexts;
     if (fwp) fwp.value = s.fastWigglePosition || "chatBottom";
     if (am) am.value = s.arousalBarMode;
     if (as) as.value = s.arousalBarScope;
@@ -21106,6 +21611,7 @@
     const qm = $2("seidr-set-quickmenu");
     const pos = $2("seidr-set-rm-pos");
     const fw = $2("seidr-set-fast-wiggle");
+    const fwt = $2("seidr-set-wiggle-texts");
     const fwp = $2("seidr-set-fw-pos");
     const am = $2("seidr-set-arousal-mode");
     const ascope = $2("seidr-set-arousal-scope");
@@ -21125,6 +21631,7 @@
         showQuickmenuButton: !!(qm && qm.checked),
         launcherPosition: pos && pos.value ? pos.value : "chatTop",
         showFastWiggleButton: !!(fw && fw.checked),
+        showWiggleTexts: !!(fwt && fwt.checked),
         fastWigglePosition: fwp && fwp.value ? fwp.value : "chatBottom",
         arousalBarMode: am && am.value ? am.value : "off",
         arousalBarScope: ascope && ascope.value ? ascope.value : "seidrCluster",
@@ -21150,6 +21657,7 @@
     if (qm) qm.addEventListener("change", persist);
     if (pos) pos.addEventListener("change", persist);
     if (fw) fw.addEventListener("change", persist);
+    if (fwt) fwt.addEventListener("change", persist);
     if (fwp) fwp.addEventListener("change", persist);
     if (am) am.addEventListener("change", persist);
     if (ascope) ascope.addEventListener("change", persist);
@@ -21671,432 +22179,6 @@
   Seidr.closeSettings = seidrCloseSettings;
   Seidr.registerPreference = seidrRegisterPreference;
 
-  // src/radial/editor.ts
-  var svgNamespace = "http://www.w3.org/2000/svg";
-  function el(tag, cls = "", text = "") {
-    const node = document.createElement(tag);
-    node.className = cls;
-    node.textContent = text;
-    return node;
-  }
-  function button(label, action, disabled = false) {
-    const node = el("button", "sr-edit-button", label);
-    node.type = "button";
-    node.disabled = disabled;
-    node.onclick = action;
-    return node;
-  }
-  function option(label, value) {
-    return new Option(label, value);
-  }
-  function buildRadialTab(pane, openDirectly = false) {
-    let draft4 = normalizeRadial(seidrGetSettings().radial);
-    let selected = 0;
-    let overlay;
-    let settingsObserver;
-    let body;
-    let drag;
-    let notice = "";
-    const catalogue = radialCatalog();
-    const requirements = /* @__PURE__ */ new Map();
-    if (typeof ActivityFemale3DCG !== "undefined") {
-      for (const activity of ActivityFemale3DCG) {
-        const items = (Array.isArray(activity.Prerequisite) ? activity.Prerequisite : []).flatMap((rule) => {
-          const match = /^(TargetNeeds|Needs)-(.+)$/.exec(rule);
-          return match ? [(match[1] === "TargetNeeds" ? "Target item: " : "Item: ") + match[2].replace(/([a-z])([A-Z])/g, "$1 $2")] : [];
-        });
-        if (items.length) requirements.set(activity.Name, items.join(", "));
-      }
-    }
-    let search = "", slot = "";
-    const actions = () => draft4.wheels[selected];
-    const fixed = (index) => selected === 0 && index === 0;
-    const refresh = () => render3(body ?? pane, !!body);
-    function changeWheel(delta) {
-      selected = (selected + delta + draft4.wheels.length) % draft4.wheels.length;
-      refresh();
-    }
-    function closeVisual() {
-      settingsObserver?.disconnect();
-      settingsObserver = void 0;
-      document.getElementById("seidr-settings-root")?.classList.remove("sr-settings-above");
-      overlay?.remove();
-      overlay = body = void 0;
-      drag = void 0;
-      refresh();
-      pane.querySelector("button")?.focus();
-    }
-    function openVisual() {
-      const existing = document.getElementById("seidr-radial-editor");
-      if (existing) {
-        existing.hidden = false;
-        existing.querySelector(".sr-window-header button")?.focus();
-        return;
-      }
-      overlay = el("div", "sr-editor-overlay");
-      overlay.id = "seidr-radial-editor";
-      const panel4 = el("section", "sr-editor-window");
-      panel4.setAttribute("role", "dialog");
-      panel4.setAttribute("aria-modal", "true");
-      panel4.setAttribute("aria-label", "Wheel Designer");
-      const header = el("header", "sr-window-header");
-      function syncSettingsVisibility() {
-        const settingsPanel2 = document.getElementById("seidr-settings-panel");
-        const isOpen = !!settingsPanel2 && !settingsPanel2.hasAttribute("hidden") && settingsPanel2.classList.contains("seidr-settings-open");
-        overlay?.classList.toggle("sr-with-settings", isOpen);
-        document.getElementById("seidr-settings-root")?.classList.toggle("sr-settings-above", isOpen);
-      }
-      const close2 = button("\xD7", closeVisual);
-      close2.setAttribute("aria-label", "Close wheel editor");
-      const settings = button("\u2699", () => {
-        seidrOpenSettings();
-        const settingsPanel2 = document.getElementById("seidr-settings-panel");
-        syncSettingsVisibility();
-        settingsObserver?.disconnect();
-        if (settingsPanel2) {
-          settingsObserver = new MutationObserver(syncSettingsVisibility);
-          settingsObserver.observe(settingsPanel2, { attributes: true, attributeFilter: ["hidden", "class"] });
-        }
-      });
-      settings.title = "Open Seidr settings";
-      settings.setAttribute("aria-label", "Open Seidr settings");
-      const headerActions = el("div", "sr-header-actions");
-      headerActions.append(settings, close2);
-      header.append(el("strong", "", "Wheel Designer"), headerActions);
-      body = el("div", "sr-window-body");
-      panel4.append(header, body);
-      overlay.append(panel4);
-      document.body.append(overlay);
-      const settingsPanel = document.getElementById("seidr-settings-panel");
-      if (settingsPanel) {
-        settingsObserver = new MutationObserver(syncSettingsVisibility);
-        settingsObserver.observe(settingsPanel, { attributes: true, attributeFilter: ["hidden", "class"] });
-      }
-      syncSettingsVisibility();
-      for (const event of ["pointerdown", "mousedown", "mouseup", "click", "wheel"]) {
-        overlay.addEventListener(event, (e) => e.stopPropagation());
-      }
-      panel4.onkeydown = (e) => {
-        if (e.key === "Escape" && !e.defaultPrevented) {
-          e.stopPropagation();
-          closeVisual();
-        }
-      };
-      header.onpointerdown = (e) => {
-        if (e.button !== 0 || e.target.closest("button")) return;
-        const rect = panel4.getBoundingClientRect();
-        const offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
-        Object.assign(panel4.style, { left: rect.left + "px", top: rect.top + "px", transform: "none" });
-        header.setPointerCapture(e.pointerId);
-        header.onpointermove = (move2) => {
-          panel4.style.left = Math.max(0, Math.min(innerWidth - panel4.offsetWidth, move2.clientX - offsetX)) + "px";
-          panel4.style.top = Math.max(0, Math.min(innerHeight - panel4.offsetHeight, move2.clientY - offsetY)) + "px";
-          panel4.style.maxWidth = "calc(100vw - " + panel4.style.left + ")";
-          panel4.style.maxHeight = "calc(100vh - " + panel4.style.top + ")";
-        };
-        header.onlostpointercapture = () => {
-          header.onpointermove = null;
-        };
-      };
-      refresh();
-      close2.focus();
-    }
-    function move(from, to) {
-      if (fixed(from) || fixed(to) || from === to) return;
-      const [entry] = actions().splice(from, 1);
-      actions().splice(to, 0, entry);
-      refresh();
-    }
-    function wheelDestination(entry, index) {
-      const destination = el("select");
-      destination.setAttribute("aria-label", "Move " + entry.label + " to another wheel");
-      destination.append(option("Move to wheel\u2026", ""));
-      draft4.wheels.forEach((wheel2, i) => {
-        if (i === selected) return;
-        const choice = option("Wheel " + (i + 1) + (wheel2.length >= 8 ? " (full)" : ""), String(i));
-        choice.disabled = wheel2.length >= 8;
-        destination.append(choice);
-      });
-      destination.disabled = fixed(index) || draft4.wheels.length < 2;
-      destination.onchange = () => {
-        if (destination.value === "" || fixed(index)) return;
-        const next = draft4.wheels[Number(destination.value)];
-        if (next.length >= 8) return;
-        next.push(...actions().splice(index, 1));
-        refresh();
-      };
-      return destination;
-    }
-    function showIcons(anchor, entry, index, preview) {
-      preview.querySelector(".sr-icon-popup")?.remove();
-      const popup = el("div", "sr-icon-popup");
-      popup.setAttribute("role", "dialog");
-      popup.setAttribute("aria-label", "Edit " + entry.label);
-      const dismiss = () => {
-        popup.remove();
-        anchor.focus();
-      };
-      const close2 = button("\xD7", dismiss);
-      close2.setAttribute("aria-label", "Close icon picker");
-      const header = el("div", "sr-icon-popup-head");
-      header.append(el("strong", "", entry.label), close2);
-      const grid = el("div", "sr-icon-grid");
-      for (const id of RADIAL_ICON_IDS) {
-        const choice = button("", () => {
-          entry.icon = id;
-          anchor.replaceChildren(radialIcon(entry));
-          dismiss();
-        });
-        choice.className = "sr-icon-option";
-        choice.title = id;
-        choice.setAttribute("aria-label", id);
-        choice.setAttribute("aria-pressed", String(id === radialIconId(entry)));
-        choice.append(radialIcon({ name: entry.name, icon: id }));
-        grid.append(choice);
-      }
-      popup.append(header, grid, wheelDestination(entry, index));
-      popup.onkeydown = (e) => {
-        if (e.key !== "Escape") return;
-        e.preventDefault();
-        e.stopPropagation();
-        dismiss();
-      };
-      preview.append(popup);
-      popup.querySelector('[aria-pressed="true"]')?.focus();
-    }
-    function beginDrag(node, source) {
-      node.draggable = true;
-      node.ondragstart = (event) => {
-        if (!event.dataTransfer) return;
-        drag = source;
-        event.dataTransfer.effectAllowed = "index" in source ? "move" : "copy";
-        event.dataTransfer.setData("text/plain", node.textContent ?? "Wheel action");
-      };
-      node.ondragend = () => {
-        drag = void 0;
-      };
-    }
-    function wheelPreview() {
-      const preview = el("div", "sr-visual-preview");
-      const disc = document.createElementNS(svgNamespace, "svg");
-      disc.classList.add("sr-preview-disc");
-      disc.setAttribute("viewBox", "0 0 400 400");
-      disc.setAttribute("aria-hidden", "true");
-      preview.append(disc, el("div", "sr-preview-hub", selected + 1 + " / " + draft4.wheels.length));
-      const entries = actions();
-      const count = Math.min(8, entries.length + 1);
-      for (let i = 0; i < count; i++) {
-        const entry = entries[i];
-        const path = document.createElementNS(svgNamespace, "path");
-        path.setAttribute("d", wedge(i, count));
-        path.setAttribute("class", entry ? "sr-slice" : "sr-slice sr-slot-empty");
-        disc.append(path);
-        const angle = -Math.PI / 2 + i * 2 * Math.PI / count;
-        const x = Math.cos(angle), y = Math.sin(angle);
-        const content = el("div", "sr-segment-content");
-        content.style.left = 50 + 32.5 * x + "%";
-        content.style.top = 50 + 32.5 * y + "%";
-        if (entry) {
-          const icon = fixed(i) ? el("span", "sr-editor-icon") : button("", () => showIcons(icon, entry, i, preview));
-          icon.className = "sr-editor-icon";
-          icon.title = fixed(i) ? "Fixed Hold menu" : "Choose icon for " + entry.label;
-          icon.setAttribute("aria-label", icon.title);
-          icon.append(radialIcon(entry));
-          content.append(icon, el("span", "sr-segment-label", entry.label));
-          content.title = entry.label;
-          if (!fixed(i)) beginDrag(content, { index: i });
-        } else {
-          content.append(el("span", "sr-empty-plus", "+"), el("span", "", "Drop action"));
-        }
-        preview.append(content);
-        if (fixed(i)) continue;
-        for (const target2 of [path, content]) {
-          target2.addEventListener("dragover", (event) => {
-            const e = event;
-            if (!drag) return;
-            e.preventDefault();
-            if (e.dataTransfer) e.dataTransfer.dropEffect = "index" in drag ? "move" : "copy";
-            path.classList.add("active");
-          });
-          target2.addEventListener("dragleave", () => path.classList.remove("active"));
-          target2.addEventListener("drop", (e) => {
-            e.preventDefault();
-            path.classList.remove("active");
-            const source = drag;
-            drag = void 0;
-            if (!source) return;
-            if ("index" in source) move(source.index, Math.min(i, entries.length - 1));
-            else {
-              entries[i] = { ...source.entry };
-              refresh();
-            }
-          });
-        }
-        if (!entry) continue;
-        const remove = button("\xD7", () => {
-          entries.splice(i, 1);
-          refresh();
-        });
-        remove.className = "sr-remove-item";
-        remove.title = "Remove " + entry.label;
-        remove.setAttribute("aria-label", remove.title);
-        remove.style.left = `calc(${50 + 48.75 * x}% + ${16 * x}px)`;
-        remove.style.top = `calc(${50 + 48.75 * y}% + ${16 * y}px)`;
-        preview.append(remove);
-      }
-      return preview;
-    }
-    function listEditor() {
-      const list = el("div", "sr-editor-list");
-      actions().forEach((entry, i) => {
-        const row = el("div", "sr-editor-row");
-        const label = el("span", "sr-entry-label", entry.label);
-        label.append(el("small", "", fixed(i) ? "Fixed \xB7 opens hold options" : entry.group));
-        if (!fixed(i)) beginDrag(row, { index: i });
-        row.ondragover = (e) => {
-          if (!fixed(i) && drag && "index" in drag) e.preventDefault();
-        };
-        row.ondrop = (e) => {
-          if (drag && "index" in drag) {
-            e.preventDefault();
-            move(drag.index, i);
-            drag = void 0;
-          }
-        };
-        row.append(
-          label,
-          button("\u2191", () => move(i, i - 1), fixed(i) || i === 0 || fixed(i - 1)),
-          button("\u2193", () => move(i, i + 1), fixed(i) || i === actions().length - 1),
-          wheelDestination(entry, i),
-          button("Remove", () => {
-            actions().splice(i, 1);
-            refresh();
-          }, fixed(i))
-        );
-        list.append(row);
-      });
-      return list;
-    }
-    function activityPicker(visual) {
-      const picker = el("section", "sr-picker");
-      const filters = el("div", "sr-filters");
-      const input = el("input");
-      input.type = "search";
-      input.placeholder = "Search activities";
-      input.setAttribute("aria-label", "Search activities");
-      input.value = search;
-      const select = el("select");
-      select.setAttribute("aria-label", "Filter activities by body slot");
-      select.append(option("All body slots", ""));
-      for (const group of [...new Set(catalogue.map((entry) => entry.group))].sort()) {
-        select.append(option(group.replace(/^Item/, ""), group));
-      }
-      select.value = slot;
-      const results = el("div", "sr-picker-results");
-      function populate() {
-        results.replaceChildren();
-        const query = search.trim().toLowerCase();
-        for (const entry of catalogue) {
-          const item = requirements.get(entry.name) ?? "";
-          if (slot && slot !== entry.group || ![entry.label, entry.name, entry.group, item].join(" ").toLowerCase().includes(query)) continue;
-          const tile = el("div", visual ? "sr-picker-tile" : "sr-picker-row");
-          if (visual) {
-            beginDrag(tile, { entry });
-            const icon = el("span", "sr-tile-icon");
-            icon.append(radialIcon(entry));
-            tile.append(icon);
-          }
-          tile.append(el("span", "sr-tile-label", entry.label), el("small", "sr-item-info", entry.group.replace(/^Item/, "")));
-          if (visual && item) tile.append(el("small", "sr-item-info", item));
-          const add = button(visual ? "+" : "Add", () => {
-            actions().push({ ...entry });
-            refresh();
-          }, actions().length >= 8);
-          add.title = "Add " + entry.label;
-          add.setAttribute("aria-label", add.title);
-          tile.append(add);
-          results.append(tile);
-        }
-        if (!results.childElementCount) results.append(el("p", "sr-help", "No matching activities."));
-      }
-      input.oninput = () => {
-        search = input.value;
-        populate();
-      };
-      select.onchange = () => {
-        slot = select.value;
-        populate();
-      };
-      filters.append(input, select);
-      picker.append(el("h3", "", "Activities"), filters, results);
-      populate();
-      return picker;
-    }
-    function render3(root4, visual) {
-      root4.replaceChildren();
-      if (!visual) {
-        const enabled = el("input");
-        enabled.type = "checkbox";
-        enabled.checked = draft4.enabled;
-        enabled.onchange = () => {
-          draft4.enabled = enabled.checked;
-        };
-        const label = el("label", "sr-editor-enable");
-        label.append(enabled, " Enable action wheel");
-        root4.append(button("Open visual editor", openVisual), el("h2", "", "Fast Action Wheel"), label);
-      }
-      const nav = el("div", "sr-editor-nav");
-      const previous = button("\u2039", () => changeWheel(-1), draft4.wheels.length === 1);
-      const next = button("\u203A", () => changeWheel(1), draft4.wheels.length === 1);
-      previous.setAttribute("aria-label", "Previous wheel");
-      next.setAttribute("aria-label", "Next wheel");
-      nav.append(
-        previous,
-        el("strong", "", "Wheel " + (selected + 1) + " of " + draft4.wheels.length),
-        next,
-        button("+ New wheel", () => {
-          draft4.wheels.push([]);
-          selected = draft4.wheels.length - 1;
-          refresh();
-        }, draft4.wheels.length >= 12),
-        button("Delete wheel", () => {
-          draft4.wheels.splice(selected, 1);
-          selected--;
-          refresh();
-        }, selected === 0)
-      );
-      const layout = el("div", visual ? "sr-visual-layout" : "");
-      const left = el("div", "sr-visual-left");
-      left.append(visual ? wheelPreview() : listEditor());
-      if (visual) left.append(el("p", "sr-help", "Drag to rearrange or replace. Click an icon to change it."));
-      layout.append(left, activityPicker(visual));
-      const footer = el("div", "sr-editor-footer");
-      function reset(defaults) {
-        draft4 = normalizeRadial(defaults ? null : seidrGetSettings().radial);
-        selected = 0;
-        notice = defaults ? "Defaults restored in this draft." : "Changes discarded.";
-        refresh();
-      }
-      const status = el("span", "sr-save-status", notice);
-      status.setAttribute("role", "status");
-      const save = button("Save changes", () => {
-        const current = seidrGetSettings().radial;
-        draft4.transparency = current.transparency;
-        draft4.trigger = current.trigger;
-        draft4.modifier = current.modifier;
-        draft4.reopenLastWheel = current.reopenLastWheel;
-        if (visual) draft4.enabled = current.enabled;
-        const result = seidrSaveSettings({ radial: normalizeRadial(draft4) });
-        status.textContent = notice = result.ok ? "Wheel settings saved." : result.error ?? "Could not save wheel settings.";
-      });
-      save.classList.add("sr-save");
-      footer.append(status, button("Reset defaults", () => reset(true)), button("Discard", () => reset(false)), save);
-      root4.append(nav, layout, footer);
-    }
-    render3(pane, false);
-    if (openDirectly) openVisual();
-  }
-
   // src/radial/runtime.ts
   var holds = ["Seidr_PullLeft", "Seidr_PullRight", "Seidr_Cuddle", "Seidr_JoinLeft", "Seidr_JoinRight", "Seidr_JoinCuddle", "Seidr_RemoveLeft", "Seidr_RemoveRight", "Seidr_RemoveCuddle", "Seidr_Remove"];
   var target = null;
@@ -22207,6 +22289,20 @@
       buildRadialTab(document.createElement("div"), true);
     };
     infoRow.appendChild(edit);
+    const settings = el2("button", "sr-wheel-edit sr-wheel-settings");
+    settings.type = "button";
+    settings.title = "Open Seidr settings";
+    settings.setAttribute("aria-label", "Open Seidr settings");
+    const gear = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    gear.setAttribute("viewBox", "0 0 24 24");
+    gear.setAttribute("aria-hidden", "true");
+    gear.innerHTML = '<path d="M10 2h4l.5 2.3 1.6.7 2-1.3 2.8 2.8-1.3 2 .7 1.6 2.3.5v4l-2.3.5-.7 1.6 1.3 2-2.8 2.8-2-1.3-1.6.7L14 22h-4l-.5-2.3-1.6-.7-2 1.3-2.8-2.8 1.3-2-.7-1.6L1.4 14v-4l2.3-.5.7-1.6-1.3-2 2.8-2.8 2 1.3 1.6-.7L10 2Z"/><circle cx="12" cy="12" r="3"/>';
+    settings.appendChild(gear);
+    settings.onclick = () => {
+      close();
+      seidrOpenSettings();
+    };
+    infoRow.appendChild(settings);
     root4.appendChild(infoRow);
     const disk = el2("div", "sr-disk");
     root4.appendChild(disk);
@@ -22462,6 +22558,8 @@
 .sr-info-row{position:absolute;z-index:5;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 100px)}
 .sr-info-row .sr-tooltip{position:static;transform:none;min-width:180px;max-width:min(300px,calc(100vw - 80px));overflow-wrap:anywhere}
 .sr-wheel-edit{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;padding:3px;border:1px solid var(--seidr-color-d4a017, #d4a017);border-radius:7px;background:var(--seidr-color-1c1626, #1c1626);color:var(--seidr-color-f0e6d4, #f0e6d4);font-size:22px;cursor:pointer}
+.sr-wheel-settings{left:calc(100% + 52px)}
+.sr-wheel-settings svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
 .sr-wheel-edit:hover,.sr-wheel-edit:focus-visible{background:var(--seidr-color-504064, #504064);color:var(--seidr-color-d4a017, #d4a017)}
 .sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:transparent}
 .sr-editor-overlay.sr-with-settings{background:transparent;pointer-events:none}
@@ -23668,7 +23766,7 @@ button.sr-editor-icon:hover,button.sr-editor-icon:focus-visible{border-color:var
       '<div class="seidr-rm-row" style="margin-top:6px;">',
       '<button type="button" data-rm="map-save-as">Save as\u2026</button>',
       '<button type="button" data-rm="map-save-ver">Save new Version</button>',
-      '<button type="button" data-rm="map-overwrite">Overwrite Default</button>',
+      '<button type="button" data-rm="map-overwrite">Overwrite selected version</button>',
       '<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
       '<button type="button" data-rm="map-delete-ver">Delete version</button>',
       '<button type="button" data-rm="map-delete">Delete map</button>',
@@ -23877,7 +23975,7 @@ button.sr-editor-icon:hover,button.sr-editor-icon:focus-visible{border-color:var
           });
           if (!verName) return;
           if (verName === RM_MAP_DEFAULT_NAME) {
-            setMsg6("Use Overwrite Default to update Default");
+            setMsg6("Select Default and use Overwrite selected version");
             return;
           }
           const r = rmSaveNewVersion(mapId, verName);
@@ -23886,16 +23984,24 @@ button.sr-editor-icon:hover,button.sr-editor-icon:focus-visible{border-color:var
           fillVersionSelect(mapId, r.version && r.version.id);
         } else if (act2 === "map-overwrite") {
           const mapId = selectedRmMapId();
-          if (!mapId) {
-            setMsg6("Select a map");
+          const verId = selectedRmVersionId();
+          if (!mapId || !verId) {
+            setMsg6("Select a map and version");
             return;
           }
-          if (!await rmConfirm("Overwrite Default with the current room map?", {
-            title: "Overwrite Default",
+          const version = rmListVersions(mapId).find(function(v) {
+            return v.id === verId;
+          });
+          if (!version) {
+            setMsg6("Version not found");
+            return;
+          }
+          if (!await rmConfirm("Overwrite version \u201C" + version.name + "\u201D with the current room map?", {
+            title: "Overwrite version",
             confirmLabel: "Overwrite"
           })) return;
-          const r = rmOverwriteDefault(mapId);
-          setMsg6(r.ok ? "Default overwritten" : r.error || "Failed");
+          const r = rmOverwriteVersion(mapId, verId);
+          setMsg6(r.ok ? "Version overwritten" : r.error || "Failed");
           rmRefreshUi();
           fillVersionSelect(mapId, r.version && r.version.id);
         } else if (act2 === "map-load") {

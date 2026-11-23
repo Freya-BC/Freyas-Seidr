@@ -1,6 +1,7 @@
 import { Seidr } from "../seidr";
 import { radialIcon, radialPngIcon } from "./icons";
 import { seidrGetSettings } from "../settings/storage";
+import { seidrOpenSettings } from "../settings/shell";
 import { type RadialEntry } from "./model";
 import { seidrAllowAct } from "../room";
 import { buildRadialTab } from "./editor";
@@ -93,7 +94,10 @@ function render() {
  const infoRow=el("div","sr-info-row"); showInfo(); infoRow.appendChild(info);
  const edit=el("button","sr-wheel-edit"); edit.type="button"; edit.title="Open wheel designer"; edit.setAttribute("aria-label","Open wheel designer");
  edit.append(radialPngIcon("edit", () => document.createTextNode("✎")));
- edit.onclick=()=>{close(); buildRadialTab(document.createElement("div"), true);}; infoRow.appendChild(edit); root.appendChild(infoRow);
+ edit.onclick=()=>{close(); buildRadialTab(document.createElement("div"), true);}; infoRow.appendChild(edit);
+ const settings=el("button","sr-wheel-edit sr-wheel-settings"); settings.type="button"; settings.title="Open Seidr settings"; settings.setAttribute("aria-label","Open Seidr settings");
+ const gear=document.createElementNS("http://www.w3.org/2000/svg","svg"); gear.setAttribute("viewBox","0 0 24 24"); gear.setAttribute("aria-hidden","true"); gear.innerHTML='<path d="M10 2h4l.5 2.3 1.6.7 2-1.3 2.8 2.8-1.3 2 .7 1.6 2.3.5v4l-2.3.5-.7 1.6 1.3 2-2.8 2.8-2-1.3-1.6.7L14 22h-4l-.5-2.3-1.6-.7-2 1.3-2.8-2.8 1.3-2-.7-1.6L1.4 14v-4l2.3-.5.7-1.6-1.3-2 2.8-2.8 2 1.3 1.6-.7L10 2Z"/><circle cx="12" cy="12" r="3"/>'; settings.appendChild(gear);
+ settings.onclick=()=>{close(); seidrOpenSettings();}; infoRow.appendChild(settings); root.appendChild(infoRow);
  const disk=el("div","sr-disk"); root.appendChild(disk);
  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("viewBox","0 0 400 400"); svg.setAttribute("aria-hidden","true"); disk.appendChild(svg);
  entries.forEach((entry,i)=>{

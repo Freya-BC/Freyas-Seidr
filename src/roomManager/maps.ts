@@ -544,7 +544,7 @@ export function rmSaveNewVersion(
 	if (!map) return { ok: false, error: "Map not found" };
 	const canon = rmCanonicalVersionName(versionName, "Version");
 	if (rmIsDefaultVersionName(canon)) {
-		return { ok: false, error: "Use Overwrite Default to update Default" };
+		return { ok: false, error: "Select Default and use Overwrite selected version" };
 	}
 	const extras = extrasOnly(map.versions);
 	if (extras.length >= localVerMax()) {
@@ -609,7 +609,7 @@ export function rmOverwriteDefault(
 	return { ok: true, version: nextDef };
 }
 
-/** @deprecated prefer rmOverwriteDefault — overwrites Default when versionId is Default */
+/** Overwrite the selected version, preserving its identity and storage location. */
 export function rmOverwriteVersion(
 	mapId: string,
 	versionId: string,

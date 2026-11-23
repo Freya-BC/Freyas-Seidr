@@ -14,7 +14,7 @@ import {
 	rmListVersions,
 	rmLoadMapVersion,
 	rmLocalMapsStats,
-	rmOverwriteDefault,
+	rmOverwriteVersion,
 	rmParseMapsImport,
 	rmRenameMap,
 	rmRenameVersion,
@@ -175,7 +175,7 @@ function renderMapSection(root: HTMLElement) {
 			'<button type="button" class="seidr-act-btn" id="seidr-maps-save-meta">Save names</button>',
 			'<button type="button" class="seidr-act-btn" id="seidr-maps-load"' + loadDisabled + ">Load version</button>",
 			'<button type="button" class="seidr-act-btn" id="seidr-maps-overwrite"' + versionSaveDisabled +
-			">Overwrite Default</button>",
+			">Overwrite selected version</button>",
 			'<button type="button" class="seidr-act-btn" id="seidr-maps-add-ver"' + versionSaveDisabled +
 			">Save new version</button>",
 			'<button type="button" class="seidr-act-btn seidr-act-btn-danger" id="seidr-maps-del-ver">Delete version</button>',
@@ -378,21 +378,24 @@ function wireMapSection(root: HTMLElement) {
 	});
 
 	root.querySelector("#seidr-maps-overwrite")?.addEventListener("click", function () {
-		if (!editMapId) return;
+		if (!editMapId || !editVersionId) return;
 		const mapId = editMapId;
-		void rmConfirm("Overwrite Default with the current room map?", {
-			title: "Overwrite Default",
+		const versionId = editVersionId;
+		const version = rmListVersions(mapId).find(function (v) { return v.id === versionId; });
+		if (!version) { setMsg(root, "Version not found"); return; }
+		void rmConfirm("Overwrite version “" + version.name + "” with the current room map?", {
+			title: "Overwrite version",
 			confirmLabel: "Overwrite",
 		}).then(function (ok) {
 			if (!ok) return;
-			const r = rmOverwriteDefault(mapId);
+			const r = rmOverwriteVersion(mapId, versionId);
 			if (!r.ok) {
 				setMsg(root, r.error || "Overwrite failed");
 				return;
 			}
 			editVersionId = r.version ? r.version.id : rmDefaultVersionId(mapId);
 			refreshAll(root);
-			setMsg(root, "Default overwritten");
+			setMsg(root, "Version overwritten");
 		});
 	});
 
@@ -415,7 +418,7 @@ function wireMapSection(root: HTMLElement) {
 				return;
 			}
 			if (verName.trim() === RM_MAP_DEFAULT_NAME) {
-				setMsg(root, "Use Overwrite Default to update Default");
+				setMsg(root, "Select Default and use Overwrite selected version");
 				return;
 			}
 			const r = rmSaveNewVersion(mapId, verName);

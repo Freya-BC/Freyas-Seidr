@@ -66,6 +66,8 @@ export type SeidrSettings = {
 	launcherPosition: RmLauncherPosition;
 	/** Floating Fast Wiggle button in ChatRoom (off by default). */
 	showFastWiggleButton: boolean;
+	/** Publish action text when a wiggle plays. */
+	showWiggleTexts: boolean;
 	/** Default placement for Fast Wiggle (same enum as Room Manager). */
 	fastWigglePosition: RmLauncherPosition;
 	/** DrawCharacter pose offsets only (not hitboxes). */
@@ -349,6 +351,7 @@ export function seidrDefaultSettings(): SeidrSettings {
 		showQuickmenuButton: true,
 		launcherPosition: "chatTop",
 		showFastWiggleButton: true,
+		showWiggleTexts: true,
 		fastWigglePosition: "chatBottom",
 		drawOffsets: seidrDefaultDrawOffsets(),
 		drawAdvancedMode: false,
@@ -388,6 +391,7 @@ export function seidrNormalizeSettings(raw: unknown): SeidrSettings {
 		base.launcherPosition = d.launcherPosition as RmLauncherPosition;
 	}
 	if (typeof d.showFastWiggleButton === "boolean") base.showFastWiggleButton = d.showFastWiggleButton;
+	if (typeof d.showWiggleTexts === "boolean") base.showWiggleTexts = d.showWiggleTexts;
 	if (typeof d.fastWigglePosition === "string" && POSITION_IDS.indexOf(d.fastWigglePosition as RmLauncherPosition) >= 0) {
 		base.fastWigglePosition = d.fastWigglePosition as RmLauncherPosition;
 	}

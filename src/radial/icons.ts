@@ -91,6 +91,29 @@ export function radialIconId(entry:{name:string;icon?:string;group?:string}):str
  if (name.includes("whisper")) return "chat";
  return "spark";
 }
+// Bump this name when the published wheel assets change. Only the fixed set of
+// Seidr icon URLs is cached, and browser storage can evict it at any time.
+const RADIAL_CACHE = "seidr-wheel-icons-v1";
+const radialLoads = new Map<string, Promise<Blob>>();
+
+function radialImageBlob(url: string): Promise<Blob> {
+ const pending = radialLoads.get(url);
+ if (pending) return pending;
+ const load = (async () => {
+  const cache = await caches.open(RADIAL_CACHE);
+  const cached = await cache.match(url);
+  if (cached) return cached.blob();
+  const response = await fetch(url, { mode: "cors" });
+  if (!response.ok) throw new Error("Wheel icon request failed");
+  // A full or unavailable cache must not prevent the icon from displaying.
+  void cache.put(url, response.clone()).catch(() => {});
+  return response.blob();
+ })();
+ radialLoads.set(url, load);
+ void load.finally(() => radialLoads.delete(url)).catch(() => {});
+ return load;
+}
+
 export function radialPngIcon(name: string, fallback: () => Node): HTMLElement {
  const isLogo = name === "seidr-logo";
  // Frame the crest above the wordmark so it stays legible at wheel size.
@@ -105,7 +128,15 @@ export function radialPngIcon(name: string, fallback: () => Node): HTMLElement {
  img.onerror = () => frame.replaceWith(fallback());
  frame.append(img);
  if (isLogo) img.classList.add("sr-cuddle-crest");
- img.src = isLogo ? Seidr.LOGO_URL : "https://freya-bc.github.io/Freyas-Seidr/assets/wheel-icon-concepts/" + name + ".png";
+ const url = isLogo ? Seidr.LOGO_URL : "https://freya-bc.github.io/Freyas-Seidr/assets/wheel-icon-concepts/" + name + ".png";
+ // Cache Storage and CORS may be unavailable (for example in a restricted
+ // browser context); the normal image request remains a working fallback.
+ void radialImageBlob(url).then(blob => {
+  const objectUrl = URL.createObjectURL(blob);
+  img.onload = () => URL.revokeObjectURL(objectUrl);
+  img.onerror = () => { URL.revokeObjectURL(objectUrl); frame.replaceWith(fallback()); };
+  img.src = objectUrl;
+ }).catch(() => { img.src = url; });
  return frame;
 }
 

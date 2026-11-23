@@ -16,6 +16,8 @@ export function installRadialStyles(){if(document.getElementById("seidr-radial-s
 .sr-info-row{position:absolute;z-index:5;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);max-width:calc(100vw - 100px)}
 .sr-info-row .sr-tooltip{position:static;transform:none;min-width:180px;max-width:min(300px,calc(100vw - 80px));overflow-wrap:anywhere}
 .sr-wheel-edit{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;padding:3px;border:1px solid var(--seidr-color-d4a017, #d4a017);border-radius:7px;background:var(--seidr-color-1c1626, #1c1626);color:var(--seidr-color-f0e6d4, #f0e6d4);font-size:22px;cursor:pointer}
+.sr-wheel-settings{left:calc(100% + 52px)}
+.sr-wheel-settings svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round}
 .sr-wheel-edit:hover,.sr-wheel-edit:focus-visible{background:var(--seidr-color-504064, #504064);color:var(--seidr-color-d4a017, #d4a017)}
 .sr-editor-overlay{position:fixed;inset:0;z-index:11000;background:transparent}
 .sr-editor-overlay.sr-with-settings{background:transparent;pointer-events:none}

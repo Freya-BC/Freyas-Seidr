@@ -234,6 +234,8 @@ function seidrBuildGeneralHtml(): string {
 		'<label><input type="checkbox" id="seidr-set-fast-wiggle" /> Show Fast Wiggle Button</label>',
 		"</div>",
 		'<p class="seidr-settings-hint">Floating button to play configured Ear / Tail / Wing wiggles. Hidden when no matching item is worn. Never overlaps the Room Manager button.</p>',
+		'<div class="seidr-settings-row"><label><input type="checkbox" id="seidr-set-wiggle-texts" /> Show Wiggle Texts</label></div>',
+		'<p class="seidr-settings-hint">Show a public action line whenever a wiggle plays, including in reactions and animation clips.</p>',
 		'<div class="seidr-settings-field-row" style="margin-top:8px;">',
 		'<span class="seidr-settings-field-label">Position</span>',
 		'<select id="seidr-set-fw-pos">' + opts + "</select>",
@@ -776,6 +778,7 @@ export function seidrRefreshSettingsUi() {
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const fw = $("seidr-set-fast-wiggle") as HTMLInputElement | null;
+	const fwt = $("seidr-set-wiggle-texts") as HTMLInputElement | null;
 	const fwp = $("seidr-set-fw-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const as = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
@@ -791,6 +794,7 @@ export function seidrRefreshSettingsUi() {
 	if (qm) qm.checked = s.showQuickmenuButton !== false;
 	if (pos) pos.value = s.launcherPosition;
 	if (fw) fw.checked = !!s.showFastWiggleButton;
+	if (fwt) fwt.checked = s.showWiggleTexts;
 	if (fwp) fwp.value = s.fastWigglePosition || "chatBottom";
 	if (am) am.value = s.arousalBarMode;
 	if (as) as.value = s.arousalBarScope;
@@ -873,6 +877,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	const qm = $("seidr-set-quickmenu") as HTMLInputElement | null;
 	const pos = $("seidr-set-rm-pos") as HTMLSelectElement | null;
 	const fw = $("seidr-set-fast-wiggle") as HTMLInputElement | null;
+	const fwt = $("seidr-set-wiggle-texts") as HTMLInputElement | null;
 	const fwp = $("seidr-set-fw-pos") as HTMLSelectElement | null;
 	const am = $("seidr-set-arousal-mode") as HTMLSelectElement | null;
 	const ascope = $("seidr-set-arousal-scope") as HTMLSelectElement | null;
@@ -892,6 +897,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 			showQuickmenuButton: !!(qm && qm.checked),
 			launcherPosition: (pos && pos.value ? pos.value : "chatTop") as RmLauncherPosition,
 			showFastWiggleButton: !!(fw && fw.checked),
+			showWiggleTexts: !!(fwt && fwt.checked),
 			fastWigglePosition: (fwp && fwp.value ? fwp.value : "chatBottom") as RmLauncherPosition,
 			arousalBarMode: (am && am.value ? am.value : "off") as SeidrArousalBarMode,
 			arousalBarScope: (ascope && ascope.value ? ascope.value : "seidrCluster") as SeidrArousalBarScope,
@@ -917,6 +923,7 @@ export function seidrBindSettingsUi(onChange?: () => void) {
 	if (qm) qm.addEventListener("change", persist);
 	if (pos) pos.addEventListener("change", persist);
 	if (fw) fw.addEventListener("change", persist);
+	if (fwt) fwt.addEventListener("change", persist);
 	if (fwp) fwp.addEventListener("change", persist);
 	if (am) am.addEventListener("change", persist);
 	if (ascope) ascope.addEventListener("change", persist);

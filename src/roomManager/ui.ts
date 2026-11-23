@@ -29,6 +29,7 @@ import {
 	rmListVersions,
 	rmLoadMapVersion,
 	rmOverwriteDefault,
+	rmOverwriteVersion,
 	rmSaveNewMap,
 	rmSaveNewVersion,
 } from "./maps";
@@ -421,7 +422,7 @@ export function rmBuildPanelBody() {
 		'<div class="seidr-rm-row" style="margin-top:6px;">',
 		'<button type="button" data-rm="map-save-as">Save as…</button>',
 		'<button type="button" data-rm="map-save-ver">Save new Version</button>',
-		'<button type="button" data-rm="map-overwrite">Overwrite Default</button>',
+		'<button type="button" data-rm="map-overwrite">Overwrite selected version</button>',
 		'<button type="button" data-rm="map-load" id="seidr-rm-map-load">Load</button>',
 		'<button type="button" data-rm="map-delete-ver">Delete version</button>',
 		'<button type="button" data-rm="map-delete">Delete map</button>',
@@ -586,7 +587,7 @@ export function rmBuildPanelBody() {
 				});
 				if (!verName) return;
 				if (verName === RM_MAP_DEFAULT_NAME) {
-					setMsg("Use Overwrite Default to update Default");
+					setMsg("Select Default and use Overwrite selected version");
 					return;
 				}
 				const r = rmSaveNewVersion(mapId, verName);
@@ -595,13 +596,16 @@ export function rmBuildPanelBody() {
 				fillVersionSelect(mapId, r.version && r.version.id);
 			} else if (act === "map-overwrite") {
 				const mapId = selectedRmMapId();
-				if (!mapId) { setMsg("Select a map"); return; }
-				if (!(await rmConfirm("Overwrite Default with the current room map?", {
-					title: "Overwrite Default",
+				const verId = selectedRmVersionId();
+				if (!mapId || !verId) { setMsg("Select a map and version"); return; }
+				const version = rmListVersions(mapId).find(function (v) { return v.id === verId; });
+				if (!version) { setMsg("Version not found"); return; }
+				if (!(await rmConfirm("Overwrite version “" + version.name + "” with the current room map?", {
+					title: "Overwrite version",
 					confirmLabel: "Overwrite",
 				}))) return;
-				const r = rmOverwriteDefault(mapId);
-				setMsg(r.ok ? "Default overwritten" : (r.error || "Failed"));
+				const r = rmOverwriteVersion(mapId, verId);
+				setMsg(r.ok ? "Version overwritten" : (r.error || "Failed"));
 				rmRefreshUi();
 				fillVersionSelect(mapId, r.version && r.version.id);
 			} else if (act === "map-load") {

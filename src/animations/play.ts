@@ -97,9 +97,6 @@ export function seidrPlayAnimation(ref: number | string): Promise<{ ok: boolean;
 	}
 
 	if (seidrAnimIsWiggle(anim)) {
-		if (anim.chatText && String(anim.chatText).trim()) {
-			seidrPublishActionText(String(anim.chatText).trim(), Player, Player);
-		}
 		// Slot-local cancel only — other slots may keep wiggling
 		return seidrPlayWiggle(anim).catch(function () {
 			return { ok: false, error: "Wiggle interrupted" };
