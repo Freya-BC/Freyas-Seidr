@@ -6,6 +6,7 @@ import type { RmLauncherPosition } from "../settings/model";
 import type { SeidrAnimation, SeidrWiggleSlot } from "./model";
 import { seidrPlayAnimation } from "./play";
 import { seidrReadyWiggleBySlot } from "./wiggleSlots";
+import { seidrWiggleIsPlaying } from "./wigglePlay";
 
 declare const MainCanvas: { canvas?: HTMLCanvasElement } | undefined;
 declare const CurrentScreen: string | undefined;
@@ -15,11 +16,14 @@ let root: HTMLElement | null = null;
 let btn: HTMLButtonElement | null = null;
 let menu: HTMLElement | null = null;
 let sessionBtnPos: { fx: number; fy: number } | null = null;
+let sessionPositionSetting: RmLauncherPosition | null = null;
 let chatAnchorY: number | null = null;
 let dragMoved = false;
+let dragging = false;
 let chatLogObserver: ResizeObserver | null = null;
 let installed = false;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let lastReady: Partial<Record<SeidrWiggleSlot, SeidrAnimation>> = {};
 
 const BTN_BASE = 44;
 const PAD = 16;
@@ -79,6 +83,7 @@ function fwStylesCss(): string {
 		"  display: none; place-items: center; padding: 0;",
 		"  border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);",
 		"  background: rgb(var(--seidr-rgb-241c30, 36 28 48) / 0.92); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: grab;",
+		"  background-clip: padding-box;",
 		"  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
 		"  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
 		"  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
@@ -107,6 +112,7 @@ function fwStylesCss(): string {
 		"#seidr-fw-menu button {",
 		"  flex: 0 0 auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);",
 		"  background: rgb(var(--seidr-rgb-2a2238, 42 34 56) / 0.9); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: pointer;",
+		"  background-clip: padding-box;",
 		"  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
 		"  letter-spacing: 0.04em; text-transform: uppercase;",
 		"  display: grid; place-items: center; padding: 0;",
@@ -304,7 +310,7 @@ function placeFromFractions(fx: number, fy: number) {
 }
 
 function placeBtnDefault() {
-	if (!btn) return;
+	if (!btn || dragging) return;
 	applyBtnSize();
 	if (sessionBtnPos) {
 		placeFromFractions(sessionBtnPos.fx, sessionBtnPos.fy);
@@ -373,6 +379,7 @@ function makeDraggable(el: HTMLElement, onEnd?: () => void) {
 		const t = ev.target as HTMLElement;
 		if (t !== el && t.closest && t.closest("button") && t.closest("button") !== el) return;
 		dragMoved = false;
+		dragging = true;
 		startX = ev.clientX;
 		startY = ev.clientY;
 		const r = el.getBoundingClientRect();
@@ -384,6 +391,7 @@ function makeDraggable(el: HTMLElement, onEnd?: () => void) {
 	function move(ev: PointerEvent) {
 		if (!el.hasPointerCapture(ev.pointerId)) return;
 		if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) dragMoved = true;
+		if (!dragMoved) return;
 		el.style.left = (ev.clientX - ox) + "px";
 		el.style.top = (ev.clientY - oy) + "px";
 		el.style.right = "auto";
@@ -392,7 +400,8 @@ function makeDraggable(el: HTMLElement, onEnd?: () => void) {
 	function up(ev: PointerEvent) {
 		if (!el.hasPointerCapture(ev.pointerId)) return;
 		el.releasePointerCapture(ev.pointerId);
-		if (onEnd) onEnd();
+		dragging = false;
+		if (dragMoved && onEnd) onEnd();
 	}
 	el.addEventListener("pointerdown", down);
 	el.addEventListener("pointermove", move);
@@ -400,7 +409,8 @@ function makeDraggable(el: HTMLElement, onEnd?: () => void) {
 	el.addEventListener("pointercancel", up);
 }
 
-function playReady(anim: SeidrAnimation) {
+function playReady(slot: SeidrWiggleSlot, anim: SeidrAnimation) {
+	if (seidrWiggleIsPlaying(slot)) return;
 	closeMenu();
 	seidrPlayAnimation(anim.id).catch(function () { /* ignore */ });
 }
@@ -433,7 +443,7 @@ function openSlotMenu(ready: Partial<Record<SeidrWiggleSlot, SeidrAnimation>>) {
 		b.title = slot;
 		b.addEventListener("click", function (ev) {
 			ev.stopPropagation();
-			playReady(anim);
+			playReady(slot, anim);
 		});
 		menu.appendChild(b);
 	}
@@ -445,11 +455,11 @@ function openSlotMenu(ready: Partial<Record<SeidrWiggleSlot, SeidrAnimation>>) {
 
 function onBtnActivate() {
 	if (dragMoved) return;
-	const ready = seidrReadyWiggleBySlot();
+	const ready = readyWithPlaying();
 	const slots = Object.keys(ready) as SeidrWiggleSlot[];
 	if (!slots.length) return;
 	if (slots.length === 1) {
-		playReady(ready[slots[0]]!);
+		playReady(slots[0], ready[slots[0]]!);
 		return;
 	}
 	if (menu && menu.classList.contains("seidr-fw-open")) closeMenu();
@@ -487,6 +497,7 @@ function ensureShell() {
 		const fx = x / Math.max(1, window.innerWidth);
 		const fy = y / Math.max(1, window.innerHeight);
 		sessionBtnPos = { fx: fx, fy: fy };
+		sessionPositionSetting = seidrGetSettings().fastWigglePosition || "chatBottom";
 		disconnectChatLogObserver();
 	});
 	btn.addEventListener("pointerup", function () {
@@ -524,12 +535,22 @@ function syncChatLogObserver() {
 
 export function seidrFwRelayout() {
 	if (!btn) return;
+	if (dragging) return;
 	if (!btn.classList.contains("seidr-fw-visible")) {
 		applyBtnSize();
 		return;
 	}
 	placeBtnDefault();
 	syncChatLogObserver();
+}
+
+function readyWithPlaying(): Partial<Record<SeidrWiggleSlot, SeidrAnimation>> {
+	const ready = seidrReadyWiggleBySlot();
+	for (const slot of ["ear", "tail", "wing"] as SeidrWiggleSlot[]) {
+		if (seidrWiggleIsPlaying(slot) && !ready[slot] && lastReady[slot]) ready[slot] = lastReady[slot];
+	}
+	lastReady = ready;
+	return ready;
 }
 
 export function seidrFwUpdateVisibility() {
@@ -540,15 +561,16 @@ export function seidrFwUpdateVisibility() {
 		disconnectChatLogObserver();
 		return;
 	}
-	const ready = seidrReadyWiggleBySlot();
+	const ready = readyWithPlaying();
 	const slots = Object.keys(ready) as SeidrWiggleSlot[];
 	const show = onChatRoomScreen() && noCharacterDialog() && slots.length > 0;
 	ensureShell();
 	if (btn) {
+		const wasVisible = btn.classList.contains("seidr-fw-visible");
 		btn.classList.toggle("seidr-fw-visible", show);
 		if (show) {
 			updateBtnIcon(ready);
-			seidrFwRelayout();
+			if (!wasVisible) seidrFwRelayout();
 		} else {
 			closeMenu();
 			disconnectChatLogObserver();
@@ -557,9 +579,14 @@ export function seidrFwUpdateVisibility() {
 }
 
 export function seidrFwOnSettingsChanged() {
-	sessionBtnPos = null;
-	chatAnchorY = null;
+	const position = seidrGetSettings().fastWigglePosition || "chatBottom";
+	if (sessionBtnPos && position !== sessionPositionSetting) {
+		sessionBtnPos = null;
+		sessionPositionSetting = null;
+		chatAnchorY = null;
+	}
 	seidrFwUpdateVisibility();
+	seidrFwRelayout();
 }
 
 function onResize() {
@@ -575,8 +602,8 @@ export function seidrInstallFastWiggle() {
 	ensureShell();
 	Seidr.tryHook("FastWiggle:ChatRoomLoad", "ChatRoomLoad", 11, function (args: unknown[], next: (a: unknown[]) => unknown) {
 		const r = next(args);
-		sessionBtnPos = null;
 		seidrFwUpdateVisibility();
+		seidrFwRelayout();
 		return r;
 	});
 	Seidr.tryHook("FastWiggle:ChatRoomSync", "ChatRoomSync", 11, function (args: unknown[], next: (a: unknown[]) => unknown) {
@@ -613,6 +640,8 @@ export function seidrInstallFastWiggle() {
 }
 
 export function seidrDestroyFastWiggle() {
+	dragging = false;
+	lastReady = {};
 	disconnectChatLogObserver();
 	if (pollTimer) {
 		clearInterval(pollTimer);

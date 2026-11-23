@@ -10,6 +10,7 @@ declare const Player: any;
 declare var ChatRoomData: any;
 declare var ChatRoomMapViewPerceptionRange: number;
 declare const ChatRoomMapViewIsActive: (() => boolean) | undefined;
+declare const CharacterAppearsInverted: ((character: any) => boolean) | undefined;
 declare const DrawCharacter: ((...args: any[]) => any) | undefined;
 
 /** Walk-away grace before a satellite seat is cleared (ms). */
@@ -569,18 +570,29 @@ export function seidrApplyMapSimplePose(args: any[]): any[] | null {
 
 	// Map Cuddle is normal Pull/Cuddle only (no Advanced Mode).
 	const off = seidrMapLiveOffsets();
+	// Preserve the spacing of saved settings from when the original draw and
+	// replay each applied the offset. Compute it once from the natural seat.
+	const poseScale = 2 * mapZoom;
 	if (cluster.left === C.MemberNumber || cluster.right === C.MemberNumber) {
 		const gapX = Math.abs(natX - hubX);
-		const pullX = Math.min(off.pull.x * mapZoom * 2, gapX);
+		const pullX = Math.min(off.pull.x * poseScale * 2, gapX);
 		args[1] = seidrMapMoveToward(natX, hubX, pullX);
-		args[2] = natY + off.pull.y * mapZoom;
+		args[2] = natY + off.pull.y * poseScale;
 		return args;
 	}
 	if (cluster.cuddle === C.MemberNumber) {
-		const nx = natX + off.cuddle.x * mapZoom;
-		const ny = natY + off.cuddle.y * mapZoom;
+		const nx = natX + off.cuddle.x * poseScale;
+		const ny = natY + off.cuddle.y * poseScale;
 		args[1] = seidrMapClampSegment(nx, natX, hubX);
-		args[2] = seidrMapClampSegment(ny, natY, hubY);
+		const uprightY = seidrMapClampSegment(ny, natY, hubY);
+		// Club flips character art for inverted viewers, but map tiles remain
+		// upright. Mirror the cuddle around the hub when both appear inverted.
+		const hub = seidrFindChar(cluster.hub);
+		let inverted = false;
+		if (hub && typeof CharacterAppearsInverted === "function") {
+			try { inverted = CharacterAppearsInverted(hub) && CharacterAppearsInverted(C); } catch (_) { /* use normal placement */ }
+		}
+		args[2] = inverted ? 2 * hubY - uprightY : uprightY;
 		return args;
 	}
 	return null;
@@ -686,8 +698,9 @@ Seidr.installMapHolds = function () {
 				return next(args);
 			}
 			if (seidrMapInGridDraw) {
-				seidrApplyMapSimplePose(args);
+				// Capture Club's natural position; replay applies the pose once.
 				if (seidrMapHoldFrontCharacter(args)) return;
+				seidrApplyMapSimplePose(args);
 			}
 		} catch (e) { /* ignore */ }
 		return next(args);

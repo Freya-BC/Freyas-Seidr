@@ -43,6 +43,8 @@ function readLastWheel(): number {
  return lastWheel;
 }
 let abort: AbortController | null = null;
+let contextualPlugin: { unload: () => void } | null = null;
+let contextualClick: { x: number; y: number } | null = null;
 let mapDrawing = false;
 let mapHitboxes: { character: any; x: number; y: number; width: number; height: number }[] = [];
 export function radialMapTargetAt(x: number, y: number): any {
@@ -144,14 +146,18 @@ function openFromClick(e: MouseEvent): boolean {
   ChatRoomCharacterViewLoopCharacters((idx:number,cx:number,cy:number,space:number,zoom:number)=>{if(x>=cx && x<cx+space && y>=cy && y<cy+1000*zoom) {found=ChatRoomCharacterDrawlist[idx];return true;} return false;});
  }
  if(!found) return false;
- e.preventDefault(); e.stopPropagation(); close(); target=found; wheel=seidrGetSettings().radial.reopenLastWheel ? readLastWheel() : 0; submenu=false;
+ e.preventDefault(); e.stopPropagation();
+ openWheel(found, e.clientX, e.clientY, map);
+ return true;
+}
+function openWheel(character: any, clientX: number, clientY: number, inMap: boolean) {
+ close(); target=character; map=inMap; wheel=seidrGetSettings().radial.reopenLastWheel ? readLastWheel() : 0; submenu=false;
  if (map && typeof ChatRoomMapViewKeysPressed === "object" && ChatRoomMapViewKeysPressed) {
   for (const direction of ["North", "South", "East", "West"]) ChatRoomMapViewKeysPressed[direction] = false;
  }
  const root=el("div","sr-root"); root.id="seidr-radial-root"; root.setAttribute("role","dialog"); root.setAttribute("aria-label","Quick actions"); document.body.appendChild(root);
  for (const type of ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"]) root.addEventListener(type, event => event.stopPropagation());
- const size=Math.max(180,Math.min(470,window.innerWidth-16,window.innerHeight-60)); root.style.width=size+"px"; root.style.left=Math.max(8,Math.min(e.clientX-size/2,window.innerWidth-size-8))+"px"; root.style.top=Math.max(8,Math.min(e.clientY-size/2,window.innerHeight-size-8))+"px"; render();
- return true;
+ const size=Math.max(180,Math.min(470,window.innerWidth-16,window.innerHeight-60)); root.style.width=size+"px"; root.style.left=Math.max(8,Math.min(clientX-size/2,window.innerWidth-size-8))+"px"; root.style.top=Math.max(8,Math.min(clientY-size/2,window.innerHeight-size-8))+"px"; render();
 }
 // Wrap the map-hold grid hook to track the original Club draw pass.
 // Install this after map holds so fallback hooks nest in the same order as ModSDK.
@@ -163,15 +169,43 @@ export function installRadialMapGrid() {
  });
 }
 export function installRadial() {
- abort?.abort(); abort=new AbortController(); const signal=abort.signal;
+ abort?.abort(); contextualPlugin?.unload(); contextualPlugin=null;
+ abort=new AbortController(); const signal=abort.signal;
+ // New Club builds own right-click targeting; older builds retain the listener below.
+ const menu = (window as any).ContextualMenu;
+ if (menu && typeof menu.registerPlugin === "function") {
+  try {
+   const plugin = menu.registerPlugin("Seidr", "Seidr");
+   if (plugin && typeof plugin.registerItems === "function" && typeof plugin.unload === "function") {
+    plugin.registerItems("character", ({character}: {character: any}) => {
+     contextualClick = null;
+     if (!character || !seidrGetSettings().radial.enabled) return [];
+     return [{type:"button", label:"Action Wheel", icon:Seidr.LOGO_URL, callback:() => {
+      if (CurrentScreen !== "ChatRoom" || !seidrGetSettings().radial.enabled || !ChatRoomCharacter.includes(character)) return;
+      const rect = document.querySelector<HTMLElement>(".contextual-menu:not(.contextual-menu-submenu)")?.getBoundingClientRect();
+      openWheel(character, contextualClick?.x ?? (rect ? rect.left : window.innerWidth / 2), contextualClick?.y ?? (rect ? rect.top : window.innerHeight / 2),
+       typeof ChatRoomIsViewActive === "function" && ChatRoomIsViewActive("Map" as any));
+     }}];
+    });
+    contextualPlugin = plugin;
+   }
+  } catch (error) { console.warn("[Seidr] contextual menu registration", error); }
+ }
  Seidr.tryHook("radialMapCharacter", "DrawCharacter", 4, (args, next) => {
   if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && !mapHitboxes.some(hit => hit.character === args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
    mapHitboxes.push({character: args[0], x: args[1], y: args[2], width: 500 * args[3], height: 1000 * args[3]});
   }
   return next(args);
  });
+ // Capture the menu selection before Club invokes its callback. Keyboard
+ // activation has no pointer position, so it falls back to the menu location.
+ document.addEventListener("click", e => {
+  if (contextualPlugin && e.detail > 0 && e.target instanceof Element && e.target.closest(".contextual-menu")) {
+   contextualClick = {x:e.clientX, y:e.clientY};
+  }
+ }, {capture:true,signal});
  let consumedPointer: number | null = null;
- document.addEventListener("contextmenu", e => { if (seidrGetSettings().radial.trigger === "right") openFromClick(e); }, {capture:true,signal});
+ document.addEventListener("contextmenu", e => { if (!contextualPlugin && seidrGetSettings().radial.trigger === "right") openFromClick(e); }, {capture:true,signal});
  document.addEventListener("pointerdown", e => {
   const config = seidrGetSettings().radial;
   const modifier = {Shift:e.shiftKey, Ctrl:e.ctrlKey, Alt:e.altKey, Meta:e.metaKey}[config.modifier];
@@ -204,4 +238,4 @@ export function installRadial() {
  }, {capture:true,signal});
  Seidr.tryHook("radialLeave","ChatRoomLeave",0,(args,next)=>{close();mapHitboxes=[];return next(args);});
 }
-export function uninstallRadial(){abort?.abort();abort=null;close();}
+export function uninstallRadial(){abort?.abort();abort=null;contextualPlugin?.unload();contextualPlugin=null;contextualClick=null;close();}

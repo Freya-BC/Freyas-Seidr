@@ -1,4 +1,4 @@
-/* Seidr v2.2.6 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
+/* Seidr v2.2.20 — page-context IIFE. Dev gist / Pages / FUSAM sibling. */
 (function () {
 	"use strict";
 	if (window.__SeidrPageLoaded) return;
@@ -42,7 +42,7 @@
   window.Seidr = Seidr;
 
   // src/defaults.ts
-  Seidr.VERSION = "2.2.6";
+  Seidr.VERSION = "2.2.20";
   Seidr.FULL_NAME = "Seidr";
   Seidr.PREFIX = "Seidr_";
   Seidr.HIDDEN = "Seidr";
@@ -5890,18 +5890,28 @@
     const hubX = natX + (hubTile.X - satTile.X) * tile;
     const hubY = natY + (hubTile.Y - satTile.Y) * tile;
     const off = seidrMapLiveOffsets();
+    const poseScale = 2 * mapZoom;
     if (cluster.left === C.MemberNumber || cluster.right === C.MemberNumber) {
       const gapX = Math.abs(natX - hubX);
-      const pullX = Math.min(off.pull.x * mapZoom * 2, gapX);
+      const pullX = Math.min(off.pull.x * poseScale * 2, gapX);
       args[1] = seidrMapMoveToward(natX, hubX, pullX);
-      args[2] = natY + off.pull.y * mapZoom;
+      args[2] = natY + off.pull.y * poseScale;
       return args;
     }
     if (cluster.cuddle === C.MemberNumber) {
-      const nx = natX + off.cuddle.x * mapZoom;
-      const ny = natY + off.cuddle.y * mapZoom;
+      const nx = natX + off.cuddle.x * poseScale;
+      const ny = natY + off.cuddle.y * poseScale;
       args[1] = seidrMapClampSegment(nx, natX, hubX);
-      args[2] = seidrMapClampSegment(ny, natY, hubY);
+      const uprightY = seidrMapClampSegment(ny, natY, hubY);
+      const hub = seidrFindChar(cluster.hub);
+      let inverted = false;
+      if (hub && typeof CharacterAppearsInverted === "function") {
+        try {
+          inverted = CharacterAppearsInverted(hub) && CharacterAppearsInverted(C);
+        } catch (_) {
+        }
+      }
+      args[2] = inverted ? 2 * hubY - uprightY : uprightY;
       return args;
     }
     return null;
@@ -5997,8 +6007,8 @@
           return next(args);
         }
         if (seidrMapInGridDraw) {
-          seidrApplyMapSimplePose(args);
           if (seidrMapHoldFrontCharacter(args)) return;
+          seidrApplyMapSimplePose(args);
         }
       } catch (e) {
       }
@@ -7757,6 +7767,13 @@
     for (let i = 0; i < s.timers.length; i++) clearTimeout(s.timers[i]);
     s.timers = [];
     s.playing = false;
+  }
+  function seidrWiggleIsPlaying(slot) {
+    if (slot) return bySlot[slot].playing;
+    for (let i = 0; i < SEIDR_WIGGLE_SLOTS.length; i++) {
+      if (bySlot[SEIDR_WIGGLE_SLOTS[i].id].playing) return true;
+    }
+    return false;
   }
   function seidrCancelWiggle(slot) {
     if (slot) {
@@ -12387,11 +12404,14 @@
   var btn = null;
   var menu = null;
   var sessionBtnPos = null;
+  var sessionPositionSetting = null;
   var chatAnchorY = null;
   var dragMoved = false;
+  var dragging = false;
   var chatLogObserver = null;
   var installed2 = false;
   var pollTimer = null;
+  var lastReady = {};
   var BTN_BASE = 44;
   var PAD = 16;
   var GAP2 = 8;
@@ -12442,6 +12462,7 @@
       "  display: none; place-items: center; padding: 0;",
       "  border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);",
       "  background: rgb(var(--seidr-rgb-241c30, 36 28 48) / 0.92); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: grab;",
+      "  background-clip: padding-box;",
       "  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);",
       "  box-shadow: 0 4px 18px rgba(0,0,0,0.4);",
       "  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
@@ -12470,6 +12491,7 @@
       "#seidr-fw-menu button {",
       "  flex: 0 0 auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14);",
       "  background: rgb(var(--seidr-rgb-2a2238, 42 34 56) / 0.9); color: var(--seidr-color-f0e6d4, #f0e6d4); cursor: pointer;",
+      "  background-clip: padding-box;",
       "  font: 600 0.72em/1 system-ui, -apple-system, Segoe UI, sans-serif;",
       "  letter-spacing: 0.04em; text-transform: uppercase;",
       "  display: grid; place-items: center; padding: 0;",
@@ -12620,7 +12642,7 @@
     setBtnXY(fx * window.innerWidth, fy * window.innerHeight);
   }
   function placeBtnDefault() {
-    if (!btn) return;
+    if (!btn || dragging) return;
     applyBtnSize();
     if (sessionBtnPos) {
       placeFromFractions(sessionBtnPos.fx, sessionBtnPos.fy);
@@ -12677,6 +12699,7 @@
       const t = ev.target;
       if (t !== el3 && t.closest && t.closest("button") && t.closest("button") !== el3) return;
       dragMoved = false;
+      dragging = true;
       startX = ev.clientX;
       startY = ev.clientY;
       const r = el3.getBoundingClientRect();
@@ -12688,6 +12711,7 @@
     function move(ev) {
       if (!el3.hasPointerCapture(ev.pointerId)) return;
       if (Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY) > 4) dragMoved = true;
+      if (!dragMoved) return;
       el3.style.left = ev.clientX - ox + "px";
       el3.style.top = ev.clientY - oy + "px";
       el3.style.right = "auto";
@@ -12696,14 +12720,16 @@
     function up(ev) {
       if (!el3.hasPointerCapture(ev.pointerId)) return;
       el3.releasePointerCapture(ev.pointerId);
-      if (onEnd) onEnd();
+      dragging = false;
+      if (dragMoved && onEnd) onEnd();
     }
     el3.addEventListener("pointerdown", down);
     el3.addEventListener("pointermove", move);
     el3.addEventListener("pointerup", up);
     el3.addEventListener("pointercancel", up);
   }
-  function playReady(anim) {
+  function playReady(slot, anim) {
+    if (seidrWiggleIsPlaying(slot)) return;
     closeMenu();
     seidrPlayAnimation(anim.id).catch(function() {
     });
@@ -12735,7 +12761,7 @@
       b.title = slot;
       b.addEventListener("click", function(ev) {
         ev.stopPropagation();
-        playReady(anim);
+        playReady(slot, anim);
       });
       menu.appendChild(b);
     }
@@ -12747,11 +12773,11 @@
   }
   function onBtnActivate() {
     if (dragMoved) return;
-    const ready2 = seidrReadyWiggleBySlot();
+    const ready2 = readyWithPlaying();
     const slots = Object.keys(ready2);
     if (!slots.length) return;
     if (slots.length === 1) {
-      playReady(ready2[slots[0]]);
+      playReady(slots[0], ready2[slots[0]]);
       return;
     }
     if (menu && menu.classList.contains("seidr-fw-open")) closeMenu();
@@ -12788,6 +12814,7 @@
       const fx = x / Math.max(1, window.innerWidth);
       const fy = y / Math.max(1, window.innerHeight);
       sessionBtnPos = { fx, fy };
+      sessionPositionSetting = seidrGetSettings().fastWigglePosition || "chatBottom";
       disconnectChatLogObserver();
     });
     btn.addEventListener("pointerup", function() {
@@ -12822,12 +12849,21 @@
   }
   function seidrFwRelayout() {
     if (!btn) return;
+    if (dragging) return;
     if (!btn.classList.contains("seidr-fw-visible")) {
       applyBtnSize();
       return;
     }
     placeBtnDefault();
     syncChatLogObserver();
+  }
+  function readyWithPlaying() {
+    const ready2 = seidrReadyWiggleBySlot();
+    for (const slot of ["ear", "tail", "wing"]) {
+      if (seidrWiggleIsPlaying(slot) && !ready2[slot] && lastReady[slot]) ready2[slot] = lastReady[slot];
+    }
+    lastReady = ready2;
+    return ready2;
   }
   function seidrFwUpdateVisibility() {
     const s = seidrGetSettings();
@@ -12837,15 +12873,16 @@
       disconnectChatLogObserver();
       return;
     }
-    const ready2 = seidrReadyWiggleBySlot();
+    const ready2 = readyWithPlaying();
     const slots = Object.keys(ready2);
     const show = onChatRoomScreen() && noCharacterDialog() && slots.length > 0;
     ensureShell();
     if (btn) {
+      const wasVisible = btn.classList.contains("seidr-fw-visible");
       btn.classList.toggle("seidr-fw-visible", show);
       if (show) {
         updateBtnIcon(ready2);
-        seidrFwRelayout();
+        if (!wasVisible) seidrFwRelayout();
       } else {
         closeMenu();
         disconnectChatLogObserver();
@@ -12853,9 +12890,14 @@
     }
   }
   function seidrFwOnSettingsChanged() {
-    sessionBtnPos = null;
-    chatAnchorY = null;
+    const position = seidrGetSettings().fastWigglePosition || "chatBottom";
+    if (sessionBtnPos && position !== sessionPositionSetting) {
+      sessionBtnPos = null;
+      sessionPositionSetting = null;
+      chatAnchorY = null;
+    }
     seidrFwUpdateVisibility();
+    seidrFwRelayout();
   }
   function onResize() {
     seidrFwRelayout();
@@ -12869,8 +12911,8 @@
     ensureShell();
     Seidr.tryHook("FastWiggle:ChatRoomLoad", "ChatRoomLoad", 11, function(args, next) {
       const r = next(args);
-      sessionBtnPos = null;
       seidrFwUpdateVisibility();
+      seidrFwRelayout();
       return r;
     });
     Seidr.tryHook("FastWiggle:ChatRoomSync", "ChatRoomSync", 11, function(args, next) {
@@ -22205,6 +22247,8 @@
     return lastWheel;
   }
   var abort = null;
+  var contextualPlugin = null;
+  var contextualClick = null;
   var mapDrawing = false;
   var mapHitboxes = [];
   function radialMapTargetAt(x, y) {
@@ -22429,8 +22473,13 @@
     if (!found) return false;
     e.preventDefault();
     e.stopPropagation();
+    openWheel(found, e.clientX, e.clientY, map);
+    return true;
+  }
+  function openWheel(character, clientX, clientY, inMap) {
     close();
-    target = found;
+    target = character;
+    map = inMap;
     wheel = seidrGetSettings().radial.reopenLastWheel ? readLastWheel() : 0;
     submenu = false;
     if (map && typeof ChatRoomMapViewKeysPressed === "object" && ChatRoomMapViewKeysPressed) {
@@ -22444,10 +22493,9 @@
     for (const type of ["pointerdown", "mousedown", "mouseup", "click", "wheel", "touchstart"]) root4.addEventListener(type, (event) => event.stopPropagation());
     const size = Math.max(180, Math.min(470, window.innerWidth - 16, window.innerHeight - 60));
     root4.style.width = size + "px";
-    root4.style.left = Math.max(8, Math.min(e.clientX - size / 2, window.innerWidth - size - 8)) + "px";
-    root4.style.top = Math.max(8, Math.min(e.clientY - size / 2, window.innerHeight - size - 8)) + "px";
+    root4.style.left = Math.max(8, Math.min(clientX - size / 2, window.innerWidth - size - 8)) + "px";
+    root4.style.top = Math.max(8, Math.min(clientY - size / 2, window.innerHeight - size - 8)) + "px";
     render2();
-    return true;
   }
   function installRadialMapGrid() {
     Seidr.tryHook("radialMapGrid", "ChatRoomMapViewDrawGrid", 6, (args, next) => {
@@ -22462,17 +22510,49 @@
   }
   function installRadial() {
     abort?.abort();
+    contextualPlugin?.unload();
+    contextualPlugin = null;
     abort = new AbortController();
     const signal = abort.signal;
+    const menu2 = window.ContextualMenu;
+    if (menu2 && typeof menu2.registerPlugin === "function") {
+      try {
+        const plugin = menu2.registerPlugin("Seidr", "Seidr");
+        if (plugin && typeof plugin.registerItems === "function" && typeof plugin.unload === "function") {
+          plugin.registerItems("character", ({ character }) => {
+            contextualClick = null;
+            if (!character || !seidrGetSettings().radial.enabled) return [];
+            return [{ type: "button", label: "Action Wheel", icon: Seidr.LOGO_URL, callback: () => {
+              if (CurrentScreen !== "ChatRoom" || !seidrGetSettings().radial.enabled || !ChatRoomCharacter.includes(character)) return;
+              const rect = document.querySelector(".contextual-menu:not(.contextual-menu-submenu)")?.getBoundingClientRect();
+              openWheel(
+                character,
+                contextualClick?.x ?? (rect ? rect.left : window.innerWidth / 2),
+                contextualClick?.y ?? (rect ? rect.top : window.innerHeight / 2),
+                typeof ChatRoomIsViewActive === "function" && ChatRoomIsViewActive("Map")
+              );
+            } }];
+          });
+          contextualPlugin = plugin;
+        }
+      } catch (error) {
+        console.warn("[Seidr] contextual menu registration", error);
+      }
+    }
     Seidr.tryHook("radialMapCharacter", "DrawCharacter", 4, (args, next) => {
       if (mapDrawing && Array.isArray(ChatRoomCharacter) && ChatRoomCharacter.includes(args[0]) && !mapHitboxes.some((hit) => hit.character === args[0]) && typeof args[1] === "number" && typeof args[2] === "number" && typeof args[3] === "number") {
         mapHitboxes.push({ character: args[0], x: args[1], y: args[2], width: 500 * args[3], height: 1e3 * args[3] });
       }
       return next(args);
     });
+    document.addEventListener("click", (e) => {
+      if (contextualPlugin && e.detail > 0 && e.target instanceof Element && e.target.closest(".contextual-menu")) {
+        contextualClick = { x: e.clientX, y: e.clientY };
+      }
+    }, { capture: true, signal });
     let consumedPointer = null;
     document.addEventListener("contextmenu", (e) => {
-      if (seidrGetSettings().radial.trigger === "right") openFromClick(e);
+      if (!contextualPlugin && seidrGetSettings().radial.trigger === "right") openFromClick(e);
     }, { capture: true, signal });
     document.addEventListener("pointerdown", (e) => {
       const config = seidrGetSettings().radial;
@@ -22535,6 +22615,9 @@
   function uninstallRadial() {
     abort?.abort();
     abort = null;
+    contextualPlugin?.unload();
+    contextualPlugin = null;
+    contextualClick = null;
     close();
   }
 
